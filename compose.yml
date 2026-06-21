@@ -7,7 +7,7 @@ services:
       CADDYFILE_PATH: /etc/caddy/Caddyfile
       CADDY_ROUTES_DIR: /etc/caddy/routes
     volumes:
-      - caddy_etc:/etc/caddy
+      - etc:/etc/caddy
     restart: "no"
     networks:
       - proxy
@@ -30,10 +30,10 @@ services:
       NETCUP_API_KEY: ${NETCUP_API_KEY}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
     volumes:
-      - caddy_etc:/etc/caddy
-      - caddy_data:/data
-      - caddy_config:/config
-      - caddy_logs:/var/log/caddy
+      - etc:/etc/caddy
+      - data:/data
+      - config:/config
+      - logs:/var/log/caddy
     restart: unless-stopped
     networks:
       - proxy
@@ -47,14 +47,17 @@ services:
     ports:
       - "8098:8098"
     environment:
+      DOMAIN: ${DOMAIN}
       CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
       CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
       CADDY_ADMIN_URL: ${CADDY_ADMIN_URL:-http://caddy:2019}
       CADDYFILE_PATH: ${CADDYFILE_PATH:-/etc/caddy/Caddyfile}
       CADDY_ROUTES_DIR: ${CADDY_ROUTES_DIR:-/etc/caddy/routes}
+      CADDY_DATA_PATH: ${CADDY_DATA_PATH:-/data}
       CADDY_AUTO_RELOAD: ${CADDY_AUTO_RELOAD:-true}
     volumes:
-      - caddy_etc:/etc/caddy
+      - etc:/etc/caddy
+      - data:/data:ro
     restart: unless-stopped
     networks:
       - proxy
@@ -75,10 +78,10 @@ services:
     restart: unless-stopped
 
 volumes:
-  caddy_etc:
-  caddy_data:
-  caddy_config:
-  caddy_logs:
+  etc:
+  data:
+  config:
+  logs:
 
 networks:
   proxy:

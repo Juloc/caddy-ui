@@ -6,6 +6,7 @@ Public home-lab Caddy image with:
 - wildcard certificates through ACME DNS-01
 - Netcup DDNS for changing home WAN IPv4 addresses
 - a small web UI for managed reverse proxy routes
+- status views for Caddy admin, route count and stored certificates
 
 The published image is:
 
@@ -111,16 +112,20 @@ The DDNS updater keeps those records pointed at the current public IPv4.
 
 The UI writes managed snippets to `/etc/caddy/routes/*.caddy` in a shared Docker volume. Caddy imports those snippets and reloads through its internal admin API.
 
+When `DOMAIN` is set, the route host is optional. A route named `app` defaults to `app.example.com`.
+
 Example route:
 
 ```caddyfile
 # managed-by caddy-ui
-# caddy-ui-route: {"host":"overseerr.example.com","name":"overseerr","tls_skip_verify":false,"upstream":"overseerr.internal:5055"}
-@overseerr host overseerr.example.com
-handle @overseerr {
-    reverse_proxy overseerr.internal:5055
+# caddy-ui-route: {"host":"","name":"app","tls_skip_verify":false,"upstream":"app.internal:5055"}
+@app host app.example.com
+handle @app {
+    reverse_proxy app.internal:5055
 }
 ```
+
+The UI also reads Caddy certificate metadata from `/data` and shows useful non-secret status information: Caddy admin reachability, storage paths, route counts, certificate names, wildcard certificates and expiry dates.
 
 ## Publishing
 
