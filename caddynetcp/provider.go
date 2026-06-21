@@ -71,28 +71,27 @@ func (p Provider) Validate() error {
 }
 
 func (p *Provider) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	for d.Next() {
-		for d.NextBlock(0) {
-			key := d.Val()
-			if !d.NextArg() {
-				return d.ArgErr()
-			}
-			value := d.Val()
-			switch key {
-			case "customer_number":
-				p.CustomerNumber = value
-			case "api_key":
-				p.APIKey = value
-			case "api_password":
-				p.APIPassword = value
-			case "endpoint":
-				p.Endpoint = value
-			default:
-				return d.Errf("unknown netcup DNS provider option %q", key)
-			}
-			if d.NextArg() {
-				return d.ArgErr()
-			}
+	d.Next()
+	for nesting := d.Nesting(); d.NextBlock(nesting); {
+		key := d.Val()
+		if !d.NextArg() {
+			return d.ArgErr()
+		}
+		value := d.Val()
+		switch key {
+		case "customer_number":
+			p.CustomerNumber = value
+		case "api_key":
+			p.APIKey = value
+		case "api_password":
+			p.APIPassword = value
+		case "endpoint":
+			p.Endpoint = value
+		default:
+			return d.Errf("unknown netcup DNS provider option %q", key)
+		}
+		if d.NextArg() {
+			return d.ArgErr()
 		}
 	}
 	return nil
@@ -317,4 +316,3 @@ var (
 	_ libdns.RecordAppender = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
 )
-

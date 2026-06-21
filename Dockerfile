@@ -7,7 +7,7 @@ COPY go.mod ./
 COPY cmd ./cmd
 COPY caddynetcp ./caddynetcp
 
-RUN go mod download
+RUN go mod tidy
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/bin/caddy ./cmd/caddy
 
 FROM python:3.13-alpine
