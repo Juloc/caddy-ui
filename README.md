@@ -76,6 +76,8 @@ CADDY_UI_PASSWORD=change-me
 CADDY_UI_REACHABILITY_TIMEOUT=3
 ```
 
+The `caddy-ui` service also needs the Netcup variables for the DNS management page. If those variables are only configured on the `caddy` service, certificate issuance can work while the UI cannot list or edit Netcup DNS records.
+
 Create the Netcup DNS records once before starting DDNS:
 
 | Host | Type | Destination |

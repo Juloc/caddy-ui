@@ -46,6 +46,7 @@ ROUTE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
 DNS_LABEL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 HOST_RE = re.compile(r"^[A-Za-z0-9*_.-]{1,253}$")
 UPSTREAM_RE = re.compile(r"^(https?://)?[A-Za-z0-9_.:-]+$")
+ENV_REF_RE = re.compile(r"\{env\.([A-Za-z_][A-Za-z0-9_]*)\}")
 META_PREFIX = "# caddy-ui-route:"
 DNS_TYPES = ("A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS")
 APP_TEMPLATES = [
@@ -593,10 +594,53 @@ def collect_reachability() -> dict:
 
 def expand_env(value: str) -> str:
     value = str(value or "")
-    match = re.fullmatch(r"\{env\.([A-Za-z_][A-Za-z0-9_]*)\}", value)
-    if match:
-        return os.getenv(match.group(1), "")
+    name = env_ref_name(value)
+    if name:
+        return os.getenv(name, "")
     return value
+
+
+def env_ref_name(value: object) -> str:
+    match = ENV_REF_RE.fullmatch(str(value or ""))
+    return match.group(1) if match else ""
+
+
+def credential_input_value(provider: dict, key: str, is_edit: bool) -> str:
+    if is_edit:
+        return ""
+    value = str(provider.get(key, "") or "")
+    return "" if env_ref_name(value) else value
+
+
+def credential_placeholder(provider: dict, key: str, is_edit: bool) -> str:
+    if not is_edit:
+        return "Required for Netcup API access."
+    value = str(provider.get(key, "") or "")
+    name = env_ref_name(value)
+    if name:
+        return f"Using ${name}; leave blank to keep."
+    if value:
+        return "Stored value configured; leave blank to keep."
+    return "Enter a value."
+
+
+def credential_status_row(label: str, provider: dict, key: str) -> str:
+    value = str(provider.get(key, "") or "")
+    name = env_ref_name(value)
+    if name:
+        exists = bool(os.getenv(name, ""))
+        state_class = "ok" if exists else "bad"
+        state_text = "set" if exists else "missing"
+        source = f"environment <code>${escape(name)}</code>"
+    elif value:
+        state_class = "ok"
+        state_text = "configured"
+        source = "stored in UI config"
+    else:
+        state_class = "bad"
+        state_text = "missing"
+        source = "not configured"
+    return f"<tr><th>{escape(label)}</th><td><span class=\"pill {state_class}\">{state_text}</span> {source}</td></tr>"
 
 
 def default_provider_config() -> dict:
@@ -1665,9 +1709,12 @@ def render_provider_form_page(provider: dict | None = None, message: str = "", e
     title = "Edit Provider" if is_edit else "Create Provider"
     submit = "Save Provider" if is_edit else "Create Provider"
     original = f'<input type="hidden" name="original_id" value="{escape(provider["id"])}">' if is_edit else ""
-    secret_required = "" if is_edit else "required"
-    secret_hint = "Leave blank to keep the stored value." if is_edit else "Required for Netcup API access."
+    credential_required = "" if is_edit else "required"
     configured = '<span class="pill ok">configured</span>' if is_edit else '<span class="pill warn">new</span>'
+    customer_number_value = credential_input_value(provider, "customer_number", is_edit)
+    customer_number_hint = credential_placeholder(provider, "customer_number", is_edit)
+    api_key_hint = credential_placeholder(provider, "api_key", is_edit)
+    api_password_hint = credential_placeholder(provider, "api_password", is_edit)
 
     body = f"""
 <div class="grid form-grid">
@@ -1695,13 +1742,13 @@ def render_provider_form_page(provider: dict | None = None, message: str = "", e
         <input name="domains" type="text" value="{escape(", ".join(provider.get("domains", [])))}" placeholder="example.com, example.net">
       </label>
       <label>Netcup Customer Number
-        <input name="customer_number" type="text" value="{escape(provider.get("customer_number", ""))}" autocomplete="off" required>
+        <input name="customer_number" type="text" value="{escape(customer_number_value)}" autocomplete="off" placeholder="{escape(customer_number_hint)}" {credential_required}>
       </label>
       <label>Netcup API Key
-        <input name="api_key" type="password" autocomplete="new-password" placeholder="{escape(secret_hint)}" {secret_required}>
+        <input name="api_key" type="password" autocomplete="new-password" placeholder="{escape(api_key_hint)}" {credential_required}>
       </label>
       <label>Netcup API Password
-        <input name="api_password" type="password" autocomplete="new-password" placeholder="{escape(secret_hint)}" {secret_required}>
+        <input name="api_password" type="password" autocomplete="new-password" placeholder="{escape(api_password_hint)}" {credential_required}>
       </label>
       <button type="submit">{submit}</button>
     </form>
@@ -1712,7 +1759,10 @@ def render_provider_form_page(provider: dict | None = None, message: str = "", e
     <table>
       <tbody>
         <tr><th>Current State</th><td>{configured}</td></tr>
-        <tr><th>Secrets</th><td>API key and password are never rendered back into the browser. Empty edit fields keep the stored values.</td></tr>
+        <tr><th>Customer Number</th><td>Netcup credentials are not rendered back into edit fields. Empty edit fields keep the stored value or environment reference.</td></tr>
+        {credential_status_row("Customer Number Source", provider, "customer_number")}
+        {credential_status_row("API Key Source", provider, "api_key")}
+        {credential_status_row("API Password Source", provider, "api_password")}
         <tr><th>Domains</th><td>Used by the DNS page for quick domain selection.</td></tr>
         <tr><th>Future Providers</th><td>The config model supports multiple provider accounts; only Netcup is implemented right now.</td></tr>
       </tbody>
