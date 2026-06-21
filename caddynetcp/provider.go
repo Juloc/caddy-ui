@@ -184,7 +184,7 @@ func containsExactRecord(records []dnsRecord, want dnsRecord) bool {
 	for _, record := range records {
 		if record.HostName == want.HostName &&
 			strings.EqualFold(record.RecType, want.RecType) &&
-			record.Destination == want.Destination {
+			normalizedDestination(record) == normalizedDestination(want) {
 			return true
 		}
 	}
@@ -195,7 +195,15 @@ func recordMatches(candidate, want dnsRecord) bool {
 	if candidate.HostName != want.HostName || !strings.EqualFold(candidate.RecType, want.RecType) {
 		return false
 	}
-	return want.Destination == "" || candidate.Destination == want.Destination
+	return normalizedDestination(want) == "" || normalizedDestination(candidate) == normalizedDestination(want)
+}
+
+func normalizedDestination(record dnsRecord) string {
+	value := strings.TrimSpace(record.Destination)
+	if strings.EqualFold(record.RecType, "TXT") {
+		value = strings.Trim(value, `"`)
+	}
+	return value
 }
 
 func cleanZone(zone string) string {

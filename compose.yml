@@ -50,14 +50,18 @@ services:
       DOMAIN: ${DOMAIN}
       CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
       CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
+      CADDY_UI_SESSION_TTL: ${CADDY_UI_SESSION_TTL:-86400}
       CADDY_ADMIN_URL: ${CADDY_ADMIN_URL:-http://caddy:2019}
       CADDYFILE_PATH: ${CADDYFILE_PATH:-/etc/caddy/Caddyfile}
       CADDY_ROUTES_DIR: ${CADDY_ROUTES_DIR:-/etc/caddy/routes}
       CADDY_DATA_PATH: ${CADDY_DATA_PATH:-/data}
+      CADDY_LOG_PATH: ${CADDY_LOG_PATH:-/var/log/caddy/access.log}
+      CADDY_UI_CONFIG_PATH: ${CADDY_UI_CONFIG_PATH:-/etc/caddy/caddy-ui.json}
       CADDY_AUTO_RELOAD: ${CADDY_AUTO_RELOAD:-true}
     volumes:
       - etc:/etc/caddy
       - data:/data:ro
+      - logs:/var/log/caddy:ro
     restart: unless-stopped
     networks:
       - proxy

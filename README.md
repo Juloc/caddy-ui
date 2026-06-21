@@ -7,6 +7,9 @@ Public home-lab Caddy image with:
 - Netcup DDNS for changing home WAN IPv4 addresses
 - a small web UI for managed reverse proxy routes
 - status views for Caddy admin, route count and stored certificates
+- form-based UI login
+- manual DNS record management for provider accounts
+- optional per-route basic auth
 
 The published image is:
 
@@ -126,6 +129,29 @@ handle @app {
 ```
 
 The UI also reads Caddy certificate metadata from `/data` and shows useful non-secret status information: Caddy admin reachability, storage paths, route counts, certificate names, wildcard certificates and expiry dates.
+
+## DNS Management
+
+Provider accounts are stored in `/etc/caddy/caddy-ui.json`. The schema is provider-oriented so more providers can be added later:
+
+```json
+{
+  "providers": [
+    {
+      "id": "netcup-main",
+      "type": "netcup",
+      "label": "Netcup Main",
+      "domains": ["example.com"]
+    }
+  ]
+}
+```
+
+Only `netcup` is implemented right now. The DNS UI can list, add, update and delete records for configured Netcup domains.
+
+## Access Stats
+
+The UI samples Caddy's JSON access log from `/var/log/caddy/access.log` and shows top hosts, top paths, status codes and recent requests.
 
 ## Publishing
 
