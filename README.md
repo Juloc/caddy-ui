@@ -162,6 +162,20 @@ Provider accounts have explicit create and edit pages. Editing keeps the stored 
 
 The UI samples Caddy's JSON access log from `/var/log/caddy/access.log` and shows top hosts, top paths, status codes and recent requests.
 
+## TLS Troubleshooting
+
+If a browser shows `ERR_SSL_PROTOCOL_ERROR` or the UI shows `tlsv1 alert internal error`, check whether the route has a stored certificate in the reachability table. A missing matching certificate usually means Caddy could not issue or load the wildcard certificate.
+
+Useful checks on the server:
+
+```sh
+docker compose logs --tail=200 caddy
+docker compose exec caddy caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile
+docker compose exec caddy caddy list-modules | grep netcup
+```
+
+Also verify that the public router forwards `443/tcp` to the Caddy container host and not to another service.
+
 ## App Templates
 
 The Apps page contains starter templates for common self-hosted services. Each template shows:

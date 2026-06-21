@@ -400,6 +400,31 @@ def list_certificates() -> list[dict]:
     return certificates
 
 
+def cert_name_matches_host(name: str, host: str) -> bool:
+    name = name.strip().lower()
+    host = host.strip().lower()
+    if not name or not host:
+        return False
+    if name == host:
+        return True
+    if name.startswith("*."):
+        suffix = name[1:]
+        return host.endswith(suffix) and host.count(".") == suffix.count(".")
+    return False
+
+
+def certificate_for_host(host: str, certificates: list[dict] | None = None) -> dict | None:
+    certs = certificates if certificates is not None else list_certificates()
+    for cert in certs:
+        names = list(cert.get("sans") or [])
+        subject = cert.get("subject")
+        if subject:
+            names.append(str(subject))
+        if any(cert_name_matches_host(name, host) for name in names):
+            return cert
+    return None
+
+
 def tail_lines(path: Path, max_bytes: int = 512 * 1024) -> list[str]:
     if not path.exists() or not path.is_file():
         return []
@@ -522,7 +547,34 @@ def probe_https(host: str) -> dict:
         return {"ok": False, "status": None, "url": url, "error": str(exc)}
 
 
-def check_route_reachability(route: Route) -> dict:
+def tls_diagnosis(host: str, dns: dict, https: dict, certificate: dict | None) -> str:
+    if not dns.get("ok"):
+        return "DNS does not resolve, so Caddy cannot be reached for this host."
+    if certificate is None:
+        return "No stored certificate covers this host. Check wildcard certificate issuance and Caddy logs."
+    if https.get("ok"):
+        return "DNS, stored certificate and HTTPS probe look good."
+    error = str(https.get("error") or "")
+    if "TLSV1_ALERT_INTERNAL_ERROR" in error or "tlsv1 alert internal error" in error.lower():
+        return "Caddy returned a TLS internal alert. This usually means no matching certificate is loaded or issuance failed."
+    if "CERTIFICATE_VERIFY_FAILED" in error:
+        return "A certificate was served, but this client could not validate it."
+    return "HTTPS failed after DNS resolved; check Caddy logs and the route target."
+
+
+def certificate_summary(cert: dict | None) -> dict:
+    if not cert:
+        return {"ok": False, "subject": "", "expires_at": "", "days_remaining": None}
+    days = cert.get("days_remaining")
+    return {
+        "ok": days is None or days >= 0,
+        "subject": cert.get("subject", ""),
+        "expires_at": cert.get("expires_at", ""),
+        "days_remaining": days,
+    }
+
+
+def check_route_reachability(route: Route, certificates: list[dict] | None = None) -> dict:
     checked_at = dt.datetime.now(dt.timezone.utc).isoformat()
     try:
         host, derived = display_host(route)
@@ -533,6 +585,8 @@ def check_route_reachability(route: Route) -> dict:
             "derived": False,
             "dns": {"ok": False, "addresses": [], "error": ""},
             "https": {"ok": False, "status": None, "url": "", "error": str(exc)},
+            "certificate": {"ok": False, "subject": "", "expires_at": "", "days_remaining": None},
+            "diagnosis": str(exc),
             "checked_at": checked_at,
         }
 
@@ -543,10 +597,13 @@ def check_route_reachability(route: Route) -> dict:
             "derived": derived,
             "dns": {"ok": False, "addresses": [], "error": "Wildcard host cannot be resolved directly."},
             "https": {"ok": False, "status": None, "url": "", "error": "Use a concrete subdomain for reachability checks."},
+            "certificate": {"ok": False, "subject": "", "expires_at": "", "days_remaining": None},
+            "diagnosis": "Use a concrete host, not a wildcard, for route reachability checks.",
             "checked_at": checked_at,
         }
 
     dns = resolve_public_host(host)
+    cert = certificate_for_host(host, certificates)
     https = probe_https(host) if dns["ok"] else {"ok": False, "status": None, "url": "", "error": "DNS did not resolve."}
     return {
         "name": route.name,
@@ -554,19 +611,22 @@ def check_route_reachability(route: Route) -> dict:
         "derived": derived,
         "dns": dns,
         "https": https,
+        "certificate": certificate_summary(cert),
+        "diagnosis": tls_diagnosis(host, dns, https, cert),
         "checked_at": checked_at,
     }
 
 
 def collect_reachability() -> dict:
     routes = list_routes()
+    certificates = list_certificates()
     selected_routes = routes[:REACHABILITY_LIMIT]
     checks: list[dict | None] = [None] * len(selected_routes)
     if selected_routes:
         workers = min(8, len(selected_routes))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(check_route_reachability, route): index
+                executor.submit(check_route_reachability, route, certificates): index
                 for index, route in enumerate(selected_routes)
             }
             for future in as_completed(futures):
@@ -581,6 +641,8 @@ def collect_reachability() -> dict:
                         "derived": False,
                         "dns": {"ok": False, "addresses": [], "error": ""},
                         "https": {"ok": False, "status": None, "url": "", "error": str(exc)},
+                        "certificate": {"ok": False, "subject": "", "expires_at": "", "days_remaining": None},
+                        "diagnosis": str(exc),
                         "checked_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                     }
     return {
@@ -1471,9 +1533,9 @@ def render_reachability_panel() -> str:
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Route</th><th>Host</th><th>DNS</th><th>HTTPS</th><th>Checked</th></tr></thead>
+      <thead><tr><th>Route</th><th>Host</th><th>DNS</th><th>Stored Cert</th><th>HTTPS</th><th>Diagnosis</th><th>Checked</th></tr></thead>
       <tbody data-reachability-body>
-        <tr><td colspan="5" class="muted">Checks are loaded after the page opens.</td></tr>
+        <tr><td colspan="7" class="muted">Checks are loaded after the page opens.</td></tr>
       </tbody>
     </table>
   </div>
@@ -1493,30 +1555,35 @@ def render_reachability_panel() -> str:
   const pill = (ok, text) => `<span class="pill ${ok ? "ok" : "bad"}">${esc(text)}</span>`;
 
   async function loadReachability() {
-    body.innerHTML = '<tr><td colspan="5" class="muted">Checking DNS and HTTPS...</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="muted">Checking DNS and HTTPS...</td></tr>';
     try {
       const response = await fetch("/api/reachability", { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (!data.checks.length) {
-        body.innerHTML = '<tr><td colspan="5" class="muted">No routes configured yet.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="muted">No routes configured yet.</td></tr>';
         return;
       }
       body.innerHTML = data.checks.map((item) => {
         const dnsText = item.dns.ok ? item.dns.addresses.join(", ") : item.dns.error || "failed";
         const httpsText = item.https.status ? `HTTP ${item.https.status}` : item.https.error || "failed";
+        const cert = item.certificate || {};
+        const certText = cert.subject || cert.expires_at || "not found";
+        const certDays = Number.isInteger(cert.days_remaining) ? ` (${cert.days_remaining} days)` : "";
         const checked = item.checked_at ? new Date(item.checked_at).toLocaleString() : "";
         const hostNote = item.derived ? ' <span class="muted">(derived)</span>' : "";
         return `<tr>
           <td><strong>${esc(item.name)}</strong></td>
           <td><code>${esc(item.host)}</code>${hostNote}</td>
           <td>${pill(item.dns.ok, item.dns.ok ? "resolved" : "failed")} <code>${esc(dnsText)}</code></td>
+          <td>${pill(cert.ok, cert.ok ? "covers host" : "missing")} <code>${esc(certText)}${esc(certDays)}</code></td>
           <td>${pill(item.https.ok, item.https.ok ? "reachable" : "failed")} <code>${esc(httpsText)}</code></td>
+          <td class="muted">${esc(item.diagnosis || "")}</td>
           <td class="muted">${esc(checked)}</td>
         </tr>`;
       }).join("");
     } catch (error) {
-      body.innerHTML = `<tr><td colspan="5" class="error">Reachability check failed: ${esc(error.message || error)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="error">Reachability check failed: ${esc(error.message || error)}</td></tr>`;
     }
   }
 
