@@ -1,0 +1,85 @@
+services:
+  caddy-init:
+    image: ghcr.io/juloc/caddy-ui:latest
+    command: init-caddyfile
+    environment:
+      DOMAIN: ${DOMAIN}
+      CADDYFILE_PATH: /etc/caddy/Caddyfile
+      CADDY_ROUTES_DIR: /etc/caddy/routes
+    volumes:
+      - caddy_etc:/etc/caddy
+    restart: "no"
+    networks:
+      - proxy
+
+  caddy:
+    image: ghcr.io/juloc/caddy-ui:latest
+    container_name: caddy
+    command: caddy
+    depends_on:
+      caddy-init:
+        condition: service_completed_successfully
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      DOMAIN: ${DOMAIN}
+      NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
+      NETCUP_API_KEY: ${NETCUP_API_KEY}
+      NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
+    volumes:
+      - caddy_etc:/etc/caddy
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    restart: unless-stopped
+    networks:
+      - proxy
+
+  caddy-ui:
+    image: ghcr.io/juloc/caddy-ui:latest
+    container_name: caddy-ui
+    command: web
+    depends_on:
+      - caddy
+    ports:
+      - "8080:8080"
+    environment:
+      CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
+      CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
+      CADDY_ADMIN_URL: ${CADDY_ADMIN_URL:-http://caddy:2019}
+      CADDYFILE_PATH: ${CADDYFILE_PATH:-/etc/caddy/Caddyfile}
+      CADDY_ROUTES_DIR: ${CADDY_ROUTES_DIR:-/etc/caddy/routes}
+      CADDY_AUTO_RELOAD: ${CADDY_AUTO_RELOAD:-true}
+    volumes:
+      - caddy_etc:/etc/caddy
+    restart: unless-stopped
+    networks:
+      - proxy
+
+  netcup-ddns:
+    image: ghcr.io/juloc/caddy-ui:latest
+    container_name: netcup-ddns
+    command: ddns
+    environment:
+      DOMAIN: ${DOMAIN}
+      NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
+      NETCUP_API_KEY: ${NETCUP_API_KEY}
+      NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
+      NETCUP_DDNS_DOMAIN: ${NETCUP_DDNS_DOMAIN:-}
+      NETCUP_DDNS_HOSTS: ${NETCUP_DDNS_HOSTS:-@,*}
+      NETCUP_DDNS_INTERVAL: ${NETCUP_DDNS_INTERVAL:-300s}
+      PUBLIC_IP_URL: ${PUBLIC_IP_URL:-https://api64.ipify.org}
+    restart: unless-stopped
+
+volumes:
+  caddy_etc:
+  caddy_data:
+  caddy_config:
+  caddy_logs:
+
+networks:
+  proxy:
+    external: true
