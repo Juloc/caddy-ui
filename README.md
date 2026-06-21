@@ -6,10 +6,12 @@ Public home-lab Caddy image with:
 - wildcard certificates through ACME DNS-01
 - Netcup DDNS for changing home WAN IPv4 addresses
 - a small web UI for managed reverse proxy routes
-- status views for Caddy admin, route count and stored certificates
+- status views for Caddy admin, route count, stored certificates and public route reachability
 - form-based UI login
 - manual DNS record management for provider accounts
+- explicit create/edit flows for routes and provider accounts
 - optional per-route basic auth
+- app templates that generate Docker Compose snippets and matching Caddy routes
 
 The published image is:
 
@@ -71,6 +73,7 @@ NETCUP_DDNS_INTERVAL=300s
 
 CADDY_UI_USERNAME=admin
 CADDY_UI_PASSWORD=change-me
+CADDY_UI_REACHABILITY_TIMEOUT=3
 ```
 
 Create the Netcup DNS records once before starting DDNS:
@@ -130,6 +133,8 @@ handle @app {
 
 The UI also reads Caddy certificate metadata from `/data` and shows useful non-secret status information: Caddy admin reachability, storage paths, route counts, certificate names, wildcard certificates and expiry dates.
 
+The route overview includes a website reachability check. It resolves each managed route host and probes `https://host/` from inside the UI container. This is useful for checking whether the public name works, but local router NAT-loopback behavior can differ from a real external client.
+
 ## DNS Management
 
 Provider accounts are stored in `/etc/caddy/caddy-ui.json`. The schema is provider-oriented so more providers can be added later:
@@ -149,9 +154,22 @@ Provider accounts are stored in `/etc/caddy/caddy-ui.json`. The schema is provid
 
 Only `netcup` is implemented right now. The DNS UI can list, add, update and delete records for configured Netcup domains.
 
+Provider accounts have explicit create and edit pages. Editing keeps the stored API key and password when the secret fields are left empty, and secrets are not rendered back into the browser.
+
 ## Access Stats
 
 The UI samples Caddy's JSON access log from `/var/log/caddy/access.log` and shows top hosts, top paths, status codes and recent requests.
+
+## App Templates
+
+The Apps page contains starter templates for common self-hosted services. Each template shows:
+
+- the container image
+- the default upstream for Caddy
+- a Docker Compose snippet
+- a button to create the matching Caddy route
+
+The UI does not mount or control the Docker socket. This is intentional: Docker socket access would give the web UI host-level control. Copy the generated snippet into your private Compose file and deploy it yourself.
 
 ## Publishing
 

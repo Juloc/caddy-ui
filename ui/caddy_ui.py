@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import ssl
 import subprocess
 import sys
@@ -15,6 +16,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -37,6 +39,8 @@ CSRF_TOKEN = secrets.token_urlsafe(32)
 SESSION_COOKIE = "caddy_ui_session"
 SESSION_TTL_SECONDS = int(os.getenv("CADDY_UI_SESSION_TTL", "86400"))
 SESSIONS: dict[str, float] = {}
+REACHABILITY_TIMEOUT_SECONDS = float(os.getenv("CADDY_UI_REACHABILITY_TIMEOUT", "3"))
+REACHABILITY_LIMIT = int(os.getenv("CADDY_UI_REACHABILITY_LIMIT", "20"))
 
 ROUTE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
 DNS_LABEL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
@@ -44,6 +48,62 @@ HOST_RE = re.compile(r"^[A-Za-z0-9*_.-]{1,253}$")
 UPSTREAM_RE = re.compile(r"^(https?://)?[A-Za-z0-9_.:-]+$")
 META_PREFIX = "# caddy-ui-route:"
 DNS_TYPES = ("A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS")
+APP_TEMPLATES = [
+    {
+        "id": "whoami",
+        "name": "Whoami",
+        "image": "traefik/whoami:latest",
+        "description": "Tiny HTTP test service for checking DNS, TLS and reverse proxy routing.",
+        "port": 80,
+        "volumes": [],
+        "environment": {},
+    },
+    {
+        "id": "static-site",
+        "name": "Static Site",
+        "image": "nginx:alpine",
+        "description": "Simple static web server. Mount your site files into the container.",
+        "port": 80,
+        "volumes": ["./site:/usr/share/nginx/html:ro"],
+        "environment": {},
+    },
+    {
+        "id": "uptime-kuma",
+        "name": "Uptime Kuma",
+        "image": "louislam/uptime-kuma:1",
+        "description": "Service monitoring dashboard for HTTP checks and uptime alerts.",
+        "port": 3001,
+        "volumes": ["uptime-kuma-data:/app/data"],
+        "environment": {},
+    },
+    {
+        "id": "vaultwarden",
+        "name": "Vaultwarden",
+        "image": "vaultwarden/server:latest",
+        "description": "Lightweight Bitwarden-compatible password manager.",
+        "port": 80,
+        "volumes": ["vaultwarden-data:/data"],
+        "environment": {"SIGNUPS_ALLOWED": "false"},
+    },
+    {
+        "id": "gitea",
+        "name": "Gitea",
+        "image": "gitea/gitea:latest",
+        "description": "Self-hosted Git service.",
+        "port": 3000,
+        "volumes": ["gitea-data:/data"],
+        "environment": {},
+    },
+    {
+        "id": "homepage",
+        "name": "Homepage",
+        "image": "ghcr.io/gethomepage/homepage:latest",
+        "description": "Home-lab dashboard for links and service widgets.",
+        "port": 3000,
+        "volumes": ["homepage-config:/app/config"],
+        "environment": {},
+    },
+]
 
 
 @dataclass
@@ -180,6 +240,25 @@ def save_route(route: Route) -> None:
     tmp.replace(path)
 
 
+def create_route(route: Route) -> None:
+    if route_path(route.name).exists():
+        raise ValueError(f"Route {route.name} already exists. Open it with Edit instead.")
+    save_route(route)
+
+
+def update_route(original_name: str, route: Route) -> None:
+    validate_name(original_name)
+    original_path = route_path(original_name)
+    if not original_path.exists():
+        raise ValueError(f"Route {original_name} does not exist.")
+    target_path = route_path(route.name)
+    if route.name != original_name and target_path.exists():
+        raise ValueError(f"Route {route.name} already exists.")
+    save_route(route)
+    if route.name != original_name:
+        original_path.unlink(missing_ok=True)
+
+
 def hash_basic_auth_password(password: str) -> str:
     result = subprocess.run(
         ["/usr/bin/caddy", "hash-password", "--plaintext", password],
@@ -194,6 +273,24 @@ def hash_basic_auth_password(password: str) -> str:
 def delete_route(name: str) -> None:
     path = route_path(name)
     path.unlink(missing_ok=True)
+
+
+def route_from_form(form: dict[str, list[str]], existing: Route | None = None) -> Route:
+    basic_auth_user = form.get("basic_auth_user", [""])[0].strip()
+    basic_auth_password = form.get("basic_auth_password", [""])[0]
+    basic_auth_hash = ""
+    if basic_auth_user and basic_auth_password:
+        basic_auth_hash = hash_basic_auth_password(basic_auth_password)
+    elif basic_auth_user and existing and existing.basic_auth_user == basic_auth_user:
+        basic_auth_hash = existing.basic_auth_hash
+    return Route(
+        name=form.get("name", [""])[0].strip(),
+        host=form.get("host", [""])[0].strip(),
+        upstream=form.get("upstream", [""])[0].strip(),
+        tls_skip_verify=form.get("tls_skip_verify", [""])[0] == "1",
+        basic_auth_user=basic_auth_user,
+        basic_auth_hash=basic_auth_hash,
+    )
 
 
 def request_caddy_get(path: str) -> tuple[int, str]:
@@ -389,6 +486,111 @@ def collect_status() -> dict:
     }
 
 
+def resolve_public_host(host: str) -> dict:
+    try:
+        infos = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    except Exception as exc:
+        return {"ok": False, "addresses": [], "error": str(exc)}
+
+    addresses = sorted({info[4][0] for info in infos if info and info[4]})
+    return {"ok": bool(addresses), "addresses": addresses, "error": ""}
+
+
+def probe_https(host: str) -> dict:
+    url = f"https://{host}/"
+    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "caddy-ui/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=REACHABILITY_TIMEOUT_SECONDS) as response:
+            return {
+                "ok": True,
+                "status": response.status,
+                "url": response.geturl(),
+                "error": "",
+            }
+    except urllib.error.HTTPError as exc:
+        return {
+            "ok": exc.code < 500,
+            "status": exc.code,
+            "url": url,
+            "error": "",
+        }
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        return {"ok": False, "status": None, "url": url, "error": str(reason)}
+    except Exception as exc:
+        return {"ok": False, "status": None, "url": url, "error": str(exc)}
+
+
+def check_route_reachability(route: Route) -> dict:
+    checked_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    try:
+        host, derived = display_host(route)
+    except Exception as exc:
+        return {
+            "name": route.name,
+            "host": "",
+            "derived": False,
+            "dns": {"ok": False, "addresses": [], "error": ""},
+            "https": {"ok": False, "status": None, "url": "", "error": str(exc)},
+            "checked_at": checked_at,
+        }
+
+    if "*" in host:
+        return {
+            "name": route.name,
+            "host": host,
+            "derived": derived,
+            "dns": {"ok": False, "addresses": [], "error": "Wildcard host cannot be resolved directly."},
+            "https": {"ok": False, "status": None, "url": "", "error": "Use a concrete subdomain for reachability checks."},
+            "checked_at": checked_at,
+        }
+
+    dns = resolve_public_host(host)
+    https = probe_https(host) if dns["ok"] else {"ok": False, "status": None, "url": "", "error": "DNS did not resolve."}
+    return {
+        "name": route.name,
+        "host": host,
+        "derived": derived,
+        "dns": dns,
+        "https": https,
+        "checked_at": checked_at,
+    }
+
+
+def collect_reachability() -> dict:
+    routes = list_routes()
+    selected_routes = routes[:REACHABILITY_LIMIT]
+    checks: list[dict | None] = [None] * len(selected_routes)
+    if selected_routes:
+        workers = min(8, len(selected_routes))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(check_route_reachability, route): index
+                for index, route in enumerate(selected_routes)
+            }
+            for future in as_completed(futures):
+                index = futures[future]
+                try:
+                    checks[index] = future.result()
+                except Exception as exc:
+                    route = selected_routes[index]
+                    checks[index] = {
+                        "name": route.name,
+                        "host": "",
+                        "derived": False,
+                        "dns": {"ok": False, "addresses": [], "error": ""},
+                        "https": {"ok": False, "status": None, "url": "", "error": str(exc)},
+                        "checked_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                    }
+    return {
+        "timeout_seconds": REACHABILITY_TIMEOUT_SECONDS,
+        "limit": REACHABILITY_LIMIT,
+        "route_count": len(routes),
+        "checked_count": len([check for check in checks if check]),
+        "checks": [check for check in checks if check],
+    }
+
+
 def expand_env(value: str) -> str:
     value = str(value or "")
     match = re.fullmatch(r"\{env\.([A-Za-z_][A-Za-z0-9_]*)\}", value)
@@ -480,6 +682,59 @@ def provider_public(provider: dict) -> dict:
     }
 
 
+def get_app_template(template_id: str) -> dict:
+    for template in APP_TEMPLATES:
+        if template["id"] == template_id:
+            return template
+    raise ValueError("App template not found.")
+
+
+def compose_quote(value: str) -> str:
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def render_compose_snippet(template: dict, service_name: str | None = None) -> str:
+    service = service_name or template["id"]
+    lines = [
+        "services:",
+        f"  {service}:",
+        f"    image: {template['image']}",
+        f"    container_name: {service}",
+        "    restart: unless-stopped",
+    ]
+    environment = template.get("environment") or {}
+    if environment:
+        lines.append("    environment:")
+        for key, value in environment.items():
+            lines.append(f"      {key}: {compose_quote(value)}")
+    volumes = template.get("volumes") or []
+    if volumes:
+        lines.append("    volumes:")
+        for volume in volumes:
+            lines.append(f"      - {volume}")
+    lines.extend(
+        [
+            "    networks:",
+            "      - proxy",
+            "",
+            "networks:",
+            "  proxy:",
+            "    external: true",
+        ]
+    )
+    named_volumes = [
+        volume.split(":", 1)[0]
+        for volume in volumes
+        if ":" in volume and not volume.startswith(".") and not volume.startswith("/")
+    ]
+    if named_volumes:
+        lines.extend(["", "volumes:"])
+        for volume in named_volumes:
+            lines.append(f"  {volume}:")
+    return "\n".join(lines)
+
+
 def get_provider(provider_id: str) -> dict:
     for provider in list_providers():
         if provider["id"] == provider_id:
@@ -487,7 +742,11 @@ def get_provider(provider_id: str) -> dict:
     raise ValueError("Provider account not found.")
 
 
-def save_provider(provider: dict) -> None:
+def provider_exists(provider_id: str) -> bool:
+    return any(provider["id"] == provider_id for provider in list_providers())
+
+
+def save_provider(provider: dict, original_id: str = "") -> None:
     provider_id = str(provider.get("id", "")).strip()
     if not re.match(r"^[A-Za-z0-9_-]{1,48}$", provider_id):
         raise ValueError("Provider ID may only contain letters, numbers, underscores and dashes.")
@@ -495,10 +754,58 @@ def save_provider(provider: dict) -> None:
     if provider_type != "netcup":
         raise ValueError("Only netcup providers are implemented right now.")
     data = read_ui_config()
-    providers = [item for item in data.get("providers", []) if isinstance(item, dict) and item.get("id") != provider_id]
+    remove_ids = {provider_id}
+    if original_id:
+        remove_ids.add(original_id)
+    providers = [item for item in data.get("providers", []) if isinstance(item, dict) and item.get("id") not in remove_ids]
     providers.append(provider)
     data["providers"] = providers
     write_ui_config(data)
+
+
+def create_provider(provider: dict) -> None:
+    if provider_exists(str(provider.get("id", "")).strip()):
+        raise ValueError(f"Provider {provider.get('id')} already exists. Open it with Edit instead.")
+    save_provider(provider)
+
+
+def update_provider(provider: dict, original_id: str) -> None:
+    original_id = original_id.strip()
+    if not original_id:
+        raise ValueError("Original provider ID is required.")
+    if not provider_exists(original_id):
+        raise ValueError(f"Provider {original_id} does not exist.")
+    provider_id = str(provider.get("id", "")).strip()
+    if provider_id != original_id and provider_exists(provider_id):
+        raise ValueError(f"Provider {provider_id} already exists.")
+    save_provider(provider, original_id)
+
+
+def provider_from_form(form: dict[str, list[str]]) -> tuple[dict, str]:
+    original_id = form.get("original_id", [""])[0].strip()
+    existing = get_provider(original_id) if original_id else {}
+
+    provider = {
+        "id": form.get("id", [""])[0].strip(),
+        "type": form.get("type", ["netcup"])[0].strip().lower(),
+        "label": form.get("label", [""])[0].strip(),
+        "customer_number": form.get("customer_number", [""])[0].strip() or existing.get("customer_number", ""),
+        "api_key": form.get("api_key", [""])[0].strip() or existing.get("api_key", ""),
+        "api_password": form.get("api_password", [""])[0].strip() or existing.get("api_password", ""),
+        "domains": [
+            domain.strip().rstrip(".")
+            for domain in form.get("domains", [""])[0].split(",")
+            if domain.strip()
+        ],
+    }
+    if not provider["label"]:
+        raise ValueError("Provider label is required.")
+    if provider["type"] != "netcup":
+        raise ValueError("Only netcup providers are implemented right now.")
+    for key in ("customer_number", "api_key", "api_password"):
+        if not provider[key]:
+            raise ValueError(f"Provider {key.replace('_', ' ')} is required.")
+    return provider, original_id
 
 
 def delete_provider(provider_id: str) -> None:
@@ -630,44 +937,94 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
   <style>
     :root {{
       color-scheme: light;
-      --bg: #f6f7f8;
+      --bg: #f4f6f8;
       --panel: #ffffff;
       --text: #171717;
       --muted: #666f76;
-      --line: #d9dee3;
-      --accent: #107c41;
+      --line: #d7dde3;
+      --soft: #eef2f5;
+      --accent: #0f766e;
+      --accent-strong: #115e59;
       --danger: #b42318;
+      --shadow: 0 8px 24px rgba(18, 25, 38, .06);
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--text);
     }}
     main {{
-      width: min(1180px, calc(100vw - 32px));
+      width: min(1560px, calc(100vw - 32px));
       margin: 24px auto 48px;
     }}
     header {{
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
+      align-items: center;
       gap: 16px;
-      margin-bottom: 18px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--line);
     }}
-    h1 {{ font-size: 24px; margin: 0; }}
+    h1 {{ font-size: 24px; line-height: 1.15; margin: 0; }}
     h2 {{ font-size: 17px; margin: 0 0 12px; }}
+    h3 {{ font-size: 14px; margin: 0 0 8px; }}
     .muted {{ color: var(--muted); }}
+    .brand {{
+      display: grid;
+      gap: 4px;
+      min-width: 260px;
+    }}
+    .toolbar {{
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #e9edf1;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 4px;
+    }}
+    .nav a {{
+      color: #2f3942;
+      padding: 7px 10px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 700;
+    }}
+    .nav a:hover {{ background: white; }}
+    .actions {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }}
     .grid {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-columns: minmax(0, 1.65fr) minmax(360px, .7fr);
       gap: 18px;
       align-items: start;
     }}
+    .wide-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }}
+    .form-grid {{
+      grid-template-columns: minmax(0, 720px) minmax(320px, 1fr);
+    }}
     .status-grid {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 10px;
       margin-bottom: 18px;
     }}
@@ -677,6 +1034,7 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
       border-radius: 8px;
       padding: 12px;
       min-width: 0;
+      box-shadow: var(--shadow);
     }}
     .stat strong {{
       display: block;
@@ -712,6 +1070,20 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 16px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }}
+    .table-wrap {{
+      width: 100%;
+      overflow-x: auto;
     }}
     table {{
       width: 100%;
@@ -731,20 +1103,30 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
     }}
     tr:last-child td {{ border-bottom: 0; }}
     code {{
-      background: #edf0f2;
+      background: var(--soft);
       border-radius: 5px;
       padding: 2px 5px;
       font-size: 13px;
     }}
     form.stack {{ display: grid; gap: 10px; }}
     label {{ display: grid; gap: 5px; font-weight: 600; }}
-    input[type="text"], input[type="url"], input[type="password"], select {{
+    input[type="text"], input[type="url"], input[type="password"], select, textarea {{
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
       padding: 9px 10px;
       font: inherit;
       background: white;
+    }}
+    input:focus, select:focus, textarea:focus {{
+      border-color: var(--accent);
+      outline: 3px solid rgba(15, 118, 110, .14);
+    }}
+    textarea {{
+      min-height: 220px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
     }}
     .row {{
       display: flex;
@@ -765,10 +1147,25 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      min-height: 36px;
     }}
-    button.secondary {{ background: #505a62; }}
-    button.danger {{ background: var(--danger); }}
+    button:hover, .button:hover {{ background: var(--accent-strong); }}
+    button.secondary, .button.secondary {{ background: #4b5563; }}
+    button.danger, .button.danger {{ background: var(--danger); }}
+    .button.linkish {{
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--line);
+    }}
+    .button.linkish:hover {{ background: #eef7f6; }}
     .inline {{ display: inline; }}
+    .actions-cell {{
+      white-space: nowrap;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }}
     .notice, .error {{
       border-radius: 8px;
       margin-bottom: 14px;
@@ -778,31 +1175,38 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
     .notice {{ background: #ecf8f0; border-color: #9ed8b5; }}
     .error {{ background: #fff0ee; border-color: #f0a29a; }}
     @media (max-width: 900px) {{
-      .grid, .status-grid {{ grid-template-columns: 1fr; }}
+      main {{ width: min(100vw - 20px, 720px); margin-top: 14px; }}
+      .grid, .wide-grid, .form-grid, .status-grid {{ grid-template-columns: 1fr; }}
       header {{ align-items: flex-start; flex-direction: column; }}
-      table {{ display: block; overflow-x: auto; }}
+      .toolbar, .actions {{ justify-content: flex-start; }}
+      .nav {{ width: 100%; overflow-x: auto; }}
     }}
   </style>
 </head>
 <body>
 <main>
   <header>
-    <div>
+    <div class="brand">
       <h1>Caddy UI</h1>
       <div class="muted">Managed reverse proxy routes in <code>{escape(str(ROUTES_DIR))}</code></div>
     </div>
-    <div class="row">
-      <a class="button secondary" href="/">Routes</a>
-      <a class="button secondary" href="/dns">DNS</a>
-      <a class="button secondary" href="/settings">Settings</a>
-      <form method="post" action="/reload" class="inline">
-        <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
-        <button class="secondary" type="submit">Reload</button>
-      </form>
-      <form method="post" action="/logout" class="inline">
-        <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
-        <button class="secondary" type="submit">Logout</button>
-      </form>
+    <div class="toolbar">
+      <nav class="nav" aria-label="Main navigation">
+        <a href="/">Routes</a>
+        <a href="/dns">DNS</a>
+        <a href="/apps">Apps</a>
+        <a href="/settings">Settings</a>
+      </nav>
+      <div class="actions">
+        <form method="post" action="/reload" class="inline">
+          <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
+          <button class="secondary" type="submit">Reload</button>
+        </form>
+        <form method="post" action="/logout" class="inline">
+          <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
+          <button class="secondary" type="submit">Logout</button>
+        </form>
+      </div>
     </div>
   </header>
   {message_html}
@@ -975,6 +1379,7 @@ def render_status(status: dict) -> str:
 {admin_error}
 <section>
   <h2>Status</h2>
+  <div class="table-wrap">
   <table>
     <tbody>
       <tr><th>Domain</th><td><code>{escape(status["domain"] or "not set")}</code></td></tr>
@@ -987,6 +1392,7 @@ def render_status(status: dict) -> str:
       <tr><th>Wildcard Certs</th><td>{escape(wildcard_text)}</td></tr>
     </tbody>
   </table>
+  </div>
 </section>
 <section>
   <h2>Certificates</h2>
@@ -999,11 +1405,81 @@ def render_status(status: dict) -> str:
     <div class="cert"><strong>Top Paths</strong>{render_count_list(access_stats.get("top_paths", []))}</div>
     <div class="cert"><strong>Status Codes</strong>{render_count_list(access_stats.get("statuses", []))}</div>
   </div>
+  <div class="table-wrap">
   <table>
     <thead><tr><th>Status</th><th>Method</th><th>Host</th><th>Path</th></tr></thead>
     <tbody>{recent_rows}</tbody>
   </table>
+  </div>
 </section>
+"""
+
+
+def render_reachability_panel() -> str:
+    return """
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Website Reachability</h2>
+      <div class="muted">Checks DNS and HTTPS from this container for each managed route host.</div>
+    </div>
+    <button class="secondary" type="button" data-reachability-refresh>Refresh Checks</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Route</th><th>Host</th><th>DNS</th><th>HTTPS</th><th>Checked</th></tr></thead>
+      <tbody data-reachability-body>
+        <tr><td colspan="5" class="muted">Checks are loaded after the page opens.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">This tests the public name from inside the Caddy UI container. If your network blocks NAT loopback, an external device can still behave differently.</p>
+</section>
+<script>
+(() => {
+  const body = document.querySelector("[data-reachability-body]");
+  const refresh = document.querySelector("[data-reachability-refresh]");
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[ch]);
+  const pill = (ok, text) => `<span class="pill ${ok ? "ok" : "bad"}">${esc(text)}</span>`;
+
+  async function loadReachability() {
+    body.innerHTML = '<tr><td colspan="5" class="muted">Checking DNS and HTTPS...</td></tr>';
+    try {
+      const response = await fetch("/api/reachability", { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (!data.checks.length) {
+        body.innerHTML = '<tr><td colspan="5" class="muted">No routes configured yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = data.checks.map((item) => {
+        const dnsText = item.dns.ok ? item.dns.addresses.join(", ") : item.dns.error || "failed";
+        const httpsText = item.https.status ? `HTTP ${item.https.status}` : item.https.error || "failed";
+        const checked = item.checked_at ? new Date(item.checked_at).toLocaleString() : "";
+        const hostNote = item.derived ? ' <span class="muted">(derived)</span>' : "";
+        return `<tr>
+          <td><strong>${esc(item.name)}</strong></td>
+          <td><code>${esc(item.host)}</code>${hostNote}</td>
+          <td>${pill(item.dns.ok, item.dns.ok ? "resolved" : "failed")} <code>${esc(dnsText)}</code></td>
+          <td>${pill(item.https.ok, item.https.ok ? "reachable" : "failed")} <code>${esc(httpsText)}</code></td>
+          <td class="muted">${esc(checked)}</td>
+        </tr>`;
+      }).join("");
+    } catch (error) {
+      body.innerHTML = `<tr><td colspan="5" class="error">Reachability check failed: ${esc(error.message || error)}</td></tr>`;
+    }
+  }
+
+  refresh?.addEventListener("click", loadReachability);
+  loadReachability();
+})();
+</script>
 """
 
 
@@ -1026,7 +1502,8 @@ def render_home(message: str = "", error: str = "") -> bytes:
   <td><code>{escape(route.upstream)}</code></td>
   <td>{'yes' if route.tls_skip_verify else 'no'}</td>
   <td>{'yes' if route.basic_auth_user else 'no'}</td>
-  <td>
+  <td class="actions-cell">
+    <a class="button secondary" href="/routes/edit?name={urllib.parse.quote(route.name)}">Edit</a>
     <form method="post" action="/routes/delete" class="inline">
       <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
       <input type="hidden" name="name" value="{escape(route.name)}">
@@ -1041,9 +1518,16 @@ def render_home(message: str = "", error: str = "") -> bytes:
 
     body = f"""
 {render_status(status)}
-<div class="grid">
-  <section>
-    <h2>Routes</h2>
+{render_reachability_panel()}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Routes</h2>
+      <div class="muted">Routes are stored as individual Caddy snippets and can be edited explicitly.</div>
+    </div>
+    <a class="button" href="/routes/new">Create Route</a>
+  </div>
+  <div class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -1059,37 +1543,184 @@ def render_home(message: str = "", error: str = "") -> bytes:
         {rows}
       </tbody>
     </table>
-  </section>
+  </div>
+</section>
+"""
+    return page("Caddy UI", body, message, error)
 
+
+def render_route_form_page(route: Route | None = None, message: str = "", error: str = "") -> bytes:
+    is_edit = route is not None
+    route = route or Route(name="", host="", upstream="")
+    action = "/routes/update" if is_edit else "/routes/create"
+    title = "Edit Route" if is_edit else "Create Route"
+    submit = "Save Route" if is_edit else "Create Route"
+    checked = "checked" if route.tls_skip_verify else ""
+    original = f'<input type="hidden" name="original_name" value="{escape(route.name)}">' if is_edit else ""
+    password_hint = "Leave empty to keep the existing password hash. Clear username to disable Basic Auth." if is_edit else "Leave empty to keep Basic Auth disabled."
+
+    body = f"""
+<div class="grid form-grid">
   <section>
-    <h2>Create or replace route</h2>
-    <form method="post" action="/routes" class="stack">
+    <div class="section-head">
+      <div>
+        <h2>{title}</h2>
+        <div class="muted">Create and edit are separate actions; existing routes are never overwritten by the create form.</div>
+      </div>
+      <a class="button secondary" href="/">Back to Routes</a>
+    </div>
+    <form method="post" action="{action}" class="stack">
       <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
+      {original}
       <label>Name
-        <input name="name" type="text" placeholder="app" required>
+        <input name="name" type="text" value="{escape(route.name)}" placeholder="app" required>
       </label>
       <label>Host (optional)
-        <input name="host" type="text" placeholder="optional; defaults to name + DOMAIN">
+        <input name="host" type="text" value="{escape(route.host)}" placeholder="optional; defaults to name + DOMAIN">
       </label>
       <label>Upstream
-        <input name="upstream" type="text" placeholder="app.internal:5055" required>
+        <input name="upstream" type="text" value="{escape(route.upstream)}" placeholder="app.internal:5055" required>
       </label>
       <label class="row">
-        <input name="tls_skip_verify" type="checkbox" value="1">
+        <input name="tls_skip_verify" type="checkbox" value="1" {checked}>
         Do not verify the upstream TLS certificate
       </label>
       <label>Basic Auth Username
-        <input name="basic_auth_user" type="text" placeholder="optional">
+        <input name="basic_auth_user" type="text" value="{escape(route.basic_auth_user)}" placeholder="optional">
       </label>
       <label>Basic Auth Password
-        <input name="basic_auth_password" type="password" placeholder="leave empty to disable">
+        <input name="basic_auth_password" type="password" placeholder="{escape(password_hint)}">
       </label>
-      <button type="submit">Save</button>
+      <button type="submit">{submit}</button>
     </form>
+  </section>
+
+  <section>
+    <h2>Route Behavior</h2>
+    <table>
+      <tbody>
+        <tr><th>Host</th><td>If empty, the UI derives <code>name.DOMAIN</code>.</td></tr>
+        <tr><th>Upstream</th><td>Use a service name on the Docker network, for example <code>homepage:3000</code>.</td></tr>
+        <tr><th>Basic Auth</th><td>Caddy hashes the password before it is written to the route file.</td></tr>
+        <tr><th>Reload</th><td>When auto reload is enabled, changes are validated against Caddy before they stick.</td></tr>
+      </tbody>
+    </table>
   </section>
 </div>
 """
-    return page("Caddy UI", body, message, error)
+    return page(title, body, message, error)
+
+
+def render_provider_table(providers: list[dict], include_id: bool = True) -> str:
+    headers = "<th>Label</th><th>Type</th>"
+    if include_id:
+        headers += "<th>ID</th>"
+    headers += "<th>Domains</th><th></th>"
+
+    rows = []
+    for provider in providers:
+        id_cell = f'<td><code>{escape(provider["id"])}</code></td>' if include_id else ""
+        rows.append(
+            f"""<tr>
+  <td><strong>{escape(provider["label"])}</strong></td>
+  <td>{escape(provider["type"])}</td>
+  {id_cell}
+  <td><code>{escape(", ".join(provider.get("domains", [])))}</code></td>
+  <td class="actions-cell">
+    <a class="button secondary" href="/providers/edit?id={urllib.parse.quote(provider["id"])}">Edit</a>
+    <form method="post" action="/providers/delete" class="inline">
+      <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
+      <input type="hidden" name="provider_id" value="{escape(provider["id"])}">
+      <button class="danger" type="submit">Delete</button>
+    </form>
+  </td>
+</tr>"""
+        )
+    if not rows:
+        colspan = 5 if include_id else 4
+        rows.append(f'<tr><td colspan="{colspan}" class="muted">No provider accounts configured.</td></tr>')
+
+    return f"""
+<div class="table-wrap">
+  <table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table>
+</div>
+"""
+
+
+def render_provider_form_page(provider: dict | None = None, message: str = "", error: str = "") -> bytes:
+    is_edit = provider is not None
+    provider = provider or {
+        "id": "",
+        "type": "netcup",
+        "label": "",
+        "domains": [],
+        "customer_number": "",
+        "api_key": "",
+        "api_password": "",
+    }
+    action = "/providers/update" if is_edit else "/providers/create"
+    title = "Edit Provider" if is_edit else "Create Provider"
+    submit = "Save Provider" if is_edit else "Create Provider"
+    original = f'<input type="hidden" name="original_id" value="{escape(provider["id"])}">' if is_edit else ""
+    secret_required = "" if is_edit else "required"
+    secret_hint = "Leave blank to keep the stored value." if is_edit else "Required for Netcup API access."
+    configured = '<span class="pill ok">configured</span>' if is_edit else '<span class="pill warn">new</span>'
+
+    body = f"""
+<div class="grid form-grid">
+  <section>
+    <div class="section-head">
+      <div>
+        <h2>{title}</h2>
+        <div class="muted">Provider accounts are explicit: create adds a new account, edit changes an existing one.</div>
+      </div>
+      <a class="button secondary" href="/settings">Back to Settings</a>
+    </div>
+    <form method="post" action="{action}" class="stack">
+      <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
+      {original}
+      <label>ID
+        <input name="id" type="text" value="{escape(provider["id"])}" placeholder="netcup-main" required>
+      </label>
+      <label>Label
+        <input name="label" type="text" value="{escape(provider["label"])}" placeholder="Netcup Main" required>
+      </label>
+      <label>Type
+        <select name="type"><option value="netcup" selected>netcup</option></select>
+      </label>
+      <label>Domains
+        <input name="domains" type="text" value="{escape(", ".join(provider.get("domains", [])))}" placeholder="example.com, example.net">
+      </label>
+      <label>Netcup Customer Number
+        <input name="customer_number" type="text" value="{escape(provider.get("customer_number", ""))}" autocomplete="off" required>
+      </label>
+      <label>Netcup API Key
+        <input name="api_key" type="password" autocomplete="new-password" placeholder="{escape(secret_hint)}" {secret_required}>
+      </label>
+      <label>Netcup API Password
+        <input name="api_password" type="password" autocomplete="new-password" placeholder="{escape(secret_hint)}" {secret_required}>
+      </label>
+      <button type="submit">{submit}</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Provider Details</h2>
+    <table>
+      <tbody>
+        <tr><th>Current State</th><td>{configured}</td></tr>
+        <tr><th>Secrets</th><td>API key and password are never rendered back into the browser. Empty edit fields keep the stored values.</td></tr>
+        <tr><th>Domains</th><td>Used by the DNS page for quick domain selection.</td></tr>
+        <tr><th>Future Providers</th><td>The config model supports multiple provider accounts; only Netcup is implemented right now.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+"""
+    return page(title, body, message, error)
 
 
 def render_dns_page(message: str = "", error: str = "", provider_id: str = "", domain: str = "") -> bytes:
@@ -1154,7 +1785,7 @@ def render_dns_page(message: str = "", error: str = "", provider_id: str = "", d
   <td><select form="{form_id}" name="type">{row_type_options}</select></td>
   <td><input form="{form_id}" name="priority" type="text" value="{escape(record.get("priority", ""))}"></td>
   <td><input form="{form_id}" name="destination" type="text" value="{escape(record.get("destination", ""))}"></td>
-  <td class="row">
+  <td class="actions-cell">
     <button form="{form_id}" type="submit">Save</button>
     <button form="{delete_form_id}" class="danger" type="submit">Delete</button>
   </td>
@@ -1163,47 +1794,9 @@ def render_dns_page(message: str = "", error: str = "", provider_id: str = "", d
     records_rows = "\n".join(rows) if rows else '<tr><td colspan="5" class="muted">No DNS records loaded.</td></tr>'
     records_error_html = f'<div class="error">{escape(records_error)}</div>' if records_error else ""
 
-    providers_rows = "\n".join(
-        f"""<tr>
-  <td><strong>{escape(provider["label"])}</strong></td>
-  <td>{escape(provider["type"])}</td>
-  <td><code>{escape(", ".join(provider.get("domains", [])))}</code></td>
-  <td>
-    <form method="post" action="/providers/delete" class="inline">
-      <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
-      <input type="hidden" name="provider_id" value="{escape(provider["id"])}">
-      <button class="danger" type="submit">Delete</button>
-    </form>
-  </td>
-</tr>"""
-        for provider in providers
-    )
-    if not providers_rows:
-        providers_rows = '<tr><td colspan="4" class="muted">No provider accounts configured.</td></tr>'
-
-    body = f"""
-<div class="grid">
-  <section>
-    <h2>DNS Records</h2>
-    <form method="get" action="/dns" class="stack">
-      <label>Provider Account
-        <select name="provider_id">{provider_options}</select>
-      </label>
-      <label>Domain
-        <input name="domain" type="text" list="dns-domains" value="{escape(domain)}" placeholder="example.com">
-        <datalist id="dns-domains">{domain_options}</datalist>
-      </label>
-      <button type="submit">Load Records</button>
-    </form>
-    {records_error_html}
-    <table>
-      <thead>
-        <tr><th>Host</th><th>Type</th><th>Priority</th><th>Destination</th><th></th></tr>
-      </thead>
-      <tbody>{records_rows}</tbody>
-    </table>
-  </section>
-
+    providers_table = render_provider_table(providers, include_id=False)
+    if selected_provider and domain:
+        add_record_section = f"""
   <section>
     <h2>Add DNS Record</h2>
     <form method="post" action="/dns/add" class="stack">
@@ -1225,43 +1818,52 @@ def render_dns_page(message: str = "", error: str = "", provider_id: str = "", d
       <button type="submit">Add Record</button>
     </form>
   </section>
+"""
+    else:
+        add_record_section = """
+  <section>
+    <h2>Add DNS Record</h2>
+    <p class="muted">Create or select a provider account and domain before adding DNS records.</p>
+    <a class="button" href="/providers/new">Create Provider</a>
+  </section>
+"""
+
+    body = f"""
+<div class="grid">
+  <section>
+    <h2>DNS Records</h2>
+    <form method="get" action="/dns" class="stack">
+      <label>Provider Account
+        <select name="provider_id">{provider_options}</select>
+      </label>
+      <label>Domain
+        <input name="domain" type="text" list="dns-domains" value="{escape(domain)}" placeholder="example.com">
+        <datalist id="dns-domains">{domain_options}</datalist>
+      </label>
+      <button type="submit">Load Records</button>
+    </form>
+    {records_error_html}
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Host</th><th>Type</th><th>Priority</th><th>Destination</th><th></th></tr>
+      </thead>
+      <tbody>{records_rows}</tbody>
+    </table>
+    </div>
+  </section>
+{add_record_section}
 </div>
 
 <section>
-  <h2>Provider Accounts</h2>
-  <table>
-    <thead><tr><th>Label</th><th>Type</th><th>Domains</th><th></th></tr></thead>
-    <tbody>{providers_rows}</tbody>
-  </table>
-</section>
-
-<section>
-  <h2>Add or Replace Provider Account</h2>
-  <form method="post" action="/providers" class="stack">
-    <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
-    <label>ID
-      <input name="id" type="text" placeholder="netcup-main" required>
-    </label>
-    <label>Label
-      <input name="label" type="text" placeholder="Netcup Main" required>
-    </label>
-    <label>Type
-      <select name="type"><option value="netcup">netcup</option></select>
-    </label>
-    <label>Domains
-      <input name="domains" type="text" placeholder="example.com, example.net">
-    </label>
-    <label>Netcup Customer Number
-      <input name="customer_number" type="text" autocomplete="off" required>
-    </label>
-    <label>Netcup API Key
-      <input name="api_key" type="text" autocomplete="off" required>
-    </label>
-    <label>Netcup API Password
-      <input name="api_password" type="password" autocomplete="new-password" required>
-    </label>
-    <button type="submit">Save Provider</button>
-  </form>
+  <div class="section-head">
+    <div>
+      <h2>Provider Accounts</h2>
+      <div class="muted">Edit provider credentials and domain lists from a dedicated form.</div>
+    </div>
+    <a class="button" href="/providers/new">Create Provider</a>
+  </div>
+  {providers_table}
 </section>
 """
     return page("Caddy DNS", body, message, error)
@@ -1271,24 +1873,7 @@ def render_settings_page(message: str = "", error: str = "") -> bytes:
     config = read_ui_config()
     settings = config.get("settings", {}) if isinstance(config.get("settings"), dict) else {}
     providers = list_providers()
-    providers_rows = "\n".join(
-        f"""<tr>
-  <td><strong>{escape(provider["label"])}</strong></td>
-  <td>{escape(provider["type"])}</td>
-  <td><code>{escape(provider["id"])}</code></td>
-  <td><code>{escape(", ".join(provider.get("domains", [])))}</code></td>
-  <td>
-    <form method="post" action="/providers/delete" class="inline">
-      <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
-      <input type="hidden" name="provider_id" value="{escape(provider["id"])}">
-      <button class="danger" type="submit">Delete</button>
-    </form>
-  </td>
-</tr>"""
-        for provider in providers
-    )
-    if not providers_rows:
-        providers_rows = '<tr><td colspan="5" class="muted">No provider accounts configured.</td></tr>'
+    providers_table = render_provider_table(providers, include_id=True)
 
     body = f"""
 <div class="grid">
@@ -1305,44 +1890,77 @@ def render_settings_page(message: str = "", error: str = "") -> bytes:
   </section>
 
   <section>
-    <h2>Add or Replace Provider Account</h2>
-    <form method="post" action="/providers" class="stack">
-      <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
-      <label>ID
-        <input name="id" type="text" placeholder="netcup-main" required>
-      </label>
-      <label>Label
-        <input name="label" type="text" placeholder="Netcup Main" required>
-      </label>
-      <label>Type
-        <select name="type"><option value="netcup">netcup</option></select>
-      </label>
-      <label>Domains
-        <input name="domains" type="text" placeholder="example.com, example.net">
-      </label>
-      <label>Netcup Customer Number
-        <input name="customer_number" type="text" autocomplete="off" required>
-      </label>
-      <label>Netcup API Key
-        <input name="api_key" type="text" autocomplete="off" required>
-      </label>
-      <label>Netcup API Password
-        <input name="api_password" type="password" autocomplete="new-password" required>
-      </label>
-      <button type="submit">Save Provider</button>
-    </form>
+    <h2>Runtime Paths</h2>
+    <table>
+      <tbody>
+        <tr><th>Caddyfile</th><td><code>{escape(CADDYFILE_PATH)}</code></td></tr>
+        <tr><th>Routes</th><td><code>{escape(ROUTES_DIR)}</code></td></tr>
+        <tr><th>Caddy Data</th><td><code>{escape(CADDY_DATA_PATH)}</code></td></tr>
+        <tr><th>Access Log</th><td><code>{escape(CADDY_LOG_PATH)}</code></td></tr>
+      </tbody>
+    </table>
   </section>
 </div>
 
 <section>
-  <h2>Provider Accounts</h2>
-  <table>
-    <thead><tr><th>Label</th><th>Type</th><th>ID</th><th>Domains</th><th></th></tr></thead>
-    <tbody>{providers_rows}</tbody>
-  </table>
+  <div class="section-head">
+    <div>
+      <h2>Provider Accounts</h2>
+      <div class="muted">Use Create for new accounts and Edit for existing accounts. No silent replace behavior.</div>
+    </div>
+    <a class="button" href="/providers/new">Create Provider</a>
+  </div>
+  {providers_table}
 </section>
 """
     return page("Caddy Settings", body, message, error)
+
+
+def render_apps_page(message: str = "", error: str = "") -> bytes:
+    cards = []
+    for template in APP_TEMPLATES:
+        service = template["id"]
+        upstream = f"{service}:{template['port']}"
+        snippet = render_compose_snippet(template, service)
+        cards.append(
+            f"""<section>
+  <h2>{escape(template["name"])}</h2>
+  <p class="muted">{escape(template["description"])}</p>
+  <table>
+    <tbody>
+      <tr><th>Image</th><td><code>{escape(template["image"])}</code></td></tr>
+      <tr><th>Default Upstream</th><td><code>{escape(upstream)}</code></td></tr>
+    </tbody>
+  </table>
+  <form method="post" action="/apps/create-route" class="stack">
+    <input type="hidden" name="csrf" value="{CSRF_TOKEN}">
+    <input type="hidden" name="template_id" value="{escape(template["id"])}">
+    <label>Route Name
+      <input name="name" type="text" value="{escape(service)}" required>
+    </label>
+    <label>Host (optional)
+      <input name="host" type="text" placeholder="optional; defaults to name + DOMAIN">
+    </label>
+    <label>Upstream
+      <input name="upstream" type="text" value="{escape(upstream)}" required>
+    </label>
+    <button type="submit">Create Route</button>
+  </form>
+  <label>Compose Snippet
+    <textarea readonly rows="14">{escape(snippet)}</textarea>
+  </label>
+</section>"""
+        )
+    body = f"""
+<section>
+  <h2>App Templates</h2>
+  <p class="muted">These templates generate Compose snippets and Caddy routes. They do not control Docker directly and do not require mounting the Docker socket.</p>
+</section>
+<div class="grid">
+  {"".join(cards)}
+</div>
+"""
+    return page("Caddy Apps", body, message, error)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1363,6 +1981,21 @@ class Handler(BaseHTTPRequestHandler):
             query = urllib.parse.parse_qs(parsed.query)
             self.send_html(render_home(query.get("message", [""])[0], query.get("error", [""])[0]))
             return
+        if parsed.path == "/routes/new":
+            query = urllib.parse.parse_qs(parsed.query)
+            self.send_html(render_route_form_page(None, query.get("message", [""])[0], query.get("error", [""])[0]))
+            return
+        if parsed.path == "/routes/edit":
+            query = urllib.parse.parse_qs(parsed.query)
+            name = query.get("name", [""])[0]
+            try:
+                route = parse_route_file(route_path(name))
+                if not route:
+                    raise ValueError("Route not found.")
+                self.send_html(render_route_form_page(route, query.get("message", [""])[0], query.get("error", [""])[0]))
+            except Exception as exc:
+                self.redirect("/", error=str(exc))
+            return
         if parsed.path == "/dns":
             query = urllib.parse.parse_qs(parsed.query)
             self.send_html(
@@ -1374,9 +2007,31 @@ class Handler(BaseHTTPRequestHandler):
                 )
             )
             return
+        if parsed.path == "/apps":
+            query = urllib.parse.parse_qs(parsed.query)
+            self.send_html(render_apps_page(query.get("message", [""])[0], query.get("error", [""])[0]))
+            return
         if parsed.path == "/settings":
             query = urllib.parse.parse_qs(parsed.query)
             self.send_html(render_settings_page(query.get("message", [""])[0], query.get("error", [""])[0]))
+            return
+        if parsed.path == "/providers/new":
+            query = urllib.parse.parse_qs(parsed.query)
+            self.send_html(render_provider_form_page(None, query.get("message", [""])[0], query.get("error", [""])[0]))
+            return
+        if parsed.path == "/providers/edit":
+            query = urllib.parse.parse_qs(parsed.query)
+            provider_id = query.get("id", [""])[0]
+            try:
+                self.send_html(
+                    render_provider_form_page(
+                        get_provider(provider_id),
+                        query.get("message", [""])[0],
+                        query.get("error", [""])[0],
+                    )
+                )
+            except Exception as exc:
+                self.redirect("/settings", error=str(exc))
             return
         if parsed.path == "/api/routes":
             self.send_json([route.__dict__ for route in list_routes()])
@@ -1392,6 +2047,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/status":
             self.send_json(collect_status())
+            return
+        if parsed.path == "/api/reachability":
+            self.send_json(collect_reachability())
             return
         if parsed.path == "/api/health":
             self.send_json({"ok": True, "routes_dir": str(ROUTES_DIR), "caddyfile": str(CADDYFILE_PATH)})
@@ -1421,8 +2079,10 @@ class Handler(BaseHTTPRequestHandler):
         if form.get("csrf", [""])[0] != CSRF_TOKEN:
             self.redirect(error="Invalid CSRF token.")
             return
+        error_target = "/"
         try:
             if parsed.path == "/settings":
+                error_target = "/settings"
                 data = read_ui_config()
                 settings = data.get("settings", {}) if isinstance(data.get("settings"), dict) else {}
                 settings["domain"] = form.get("domain", [""])[0].strip().rstrip(".")
@@ -1430,24 +2090,35 @@ class Handler(BaseHTTPRequestHandler):
                 write_ui_config(data)
                 self.redirect("/settings", message="Settings saved.")
                 return
-            if parsed.path == "/providers":
-                provider = {
-                    "id": form.get("id", [""])[0].strip(),
-                    "type": form.get("type", ["netcup"])[0].strip().lower(),
-                    "label": form.get("label", [""])[0].strip(),
-                    "customer_number": form.get("customer_number", [""])[0].strip(),
-                    "api_key": form.get("api_key", [""])[0].strip(),
-                    "api_password": form.get("api_password", [""])[0].strip(),
-                    "domains": [
-                        domain.strip().rstrip(".")
-                        for domain in form.get("domains", [""])[0].split(",")
-                        if domain.strip()
-                    ],
-                }
-                save_provider(provider)
+            if parsed.path == "/apps/create-route":
+                error_target = "/apps"
+                template = get_app_template(form.get("template_id", [""])[0].strip())
+                route = Route(
+                    name=form.get("name", [template["id"]])[0].strip(),
+                    host=form.get("host", [""])[0].strip(),
+                    upstream=form.get("upstream", [f"{template['id']}:{template['port']}"])[0].strip(),
+                )
+                change_with_rollback(lambda: create_route(route))
+                self.redirect("/apps", message=f"Route {route.name} created.")
+                return
+            if parsed.path == "/providers/create":
+                error_target = "/providers/new"
+                provider, _ = provider_from_form(form)
+                create_provider(provider)
+                self.redirect("/settings", message=f"Provider {provider['id']} created.")
+                return
+            if parsed.path == "/providers/update":
+                original_id = form.get("original_id", [""])[0].strip()
+                error_target = f"/providers/edit?id={urllib.parse.quote(original_id)}"
+                provider, original_id = provider_from_form(form)
+                update_provider(provider, original_id)
                 self.redirect("/settings", message=f"Provider {provider['id']} saved.")
                 return
+            if parsed.path == "/providers":
+                self.redirect("/settings", error="Use Create Provider or Edit on an existing provider.")
+                return
             if parsed.path == "/providers/delete":
+                error_target = "/settings"
                 provider_id = form.get("provider_id", [""])[0].strip()
                 delete_provider(provider_id)
                 self.redirect("/settings", message=f"Provider {provider_id} deleted.")
@@ -1461,8 +2132,9 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     record = dns_record_from_form(form)
                     action = "saved" if parsed.path == "/dns/update" else "added"
-                netcup_update_records(provider_id, domain, [record])
                 target = f"/dns?{urllib.parse.urlencode({'provider_id': provider_id, 'domain': domain})}"
+                error_target = target
+                netcup_update_records(provider_id, domain, [record])
                 self.redirect(target, message=f"DNS record {action}.")
                 return
             if parsed.path == "/logout":
@@ -1474,32 +2146,38 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Set-Cookie", f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
                 self.end_headers()
                 return
-            if parsed.path == "/routes":
-                basic_auth_user = form.get("basic_auth_user", [""])[0].strip()
-                basic_auth_password = form.get("basic_auth_password", [""])[0]
-                basic_auth_hash = hash_basic_auth_password(basic_auth_password) if basic_auth_user and basic_auth_password else ""
-                route = Route(
-                    name=form.get("name", [""])[0].strip(),
-                    host=form.get("host", [""])[0].strip(),
-                    upstream=form.get("upstream", [""])[0].strip(),
-                    tls_skip_verify=form.get("tls_skip_verify", [""])[0] == "1",
-                    basic_auth_user=basic_auth_user,
-                    basic_auth_hash=basic_auth_hash,
-                )
-                change_with_rollback(lambda: save_route(route))
+            if parsed.path == "/routes/create":
+                error_target = "/routes/new"
+                route = route_from_form(form)
+                change_with_rollback(lambda: create_route(route))
+                self.redirect(message=f"Route {route.name} created.")
+                return
+            if parsed.path == "/routes/update":
+                original_name = form.get("original_name", [""])[0].strip()
+                error_target = f"/routes/edit?name={urllib.parse.quote(original_name)}"
+                existing = parse_route_file(route_path(original_name))
+                if not existing:
+                    raise ValueError("Route not found.")
+                route = route_from_form(form, existing)
+                change_with_rollback(lambda: update_route(original_name, route))
                 self.redirect(message=f"Route {route.name} saved.")
                 return
+            if parsed.path == "/routes":
+                self.redirect("/routes/new", error="Use Create Route or Edit on an existing route.")
+                return
             if parsed.path == "/routes/delete":
+                error_target = "/"
                 name = form.get("name", [""])[0].strip()
                 change_with_rollback(lambda: delete_route(name))
                 self.redirect(message=f"Route {name} deleted.")
                 return
             if parsed.path == "/reload":
+                error_target = "/"
                 reload_caddy()
                 self.redirect(message="Caddy reloaded.")
                 return
         except Exception as exc:
-            self.redirect(error=str(exc))
+            self.redirect(error_target, error=str(exc))
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
