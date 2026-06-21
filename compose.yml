@@ -45,7 +45,7 @@ services:
     depends_on:
       - caddy
     ports:
-      - "8080:8080"
+      - "8098:8098"
     environment:
       CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
       CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}

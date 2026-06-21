@@ -46,7 +46,7 @@ docker compose --env-file .env up -d
 Open the UI:
 
 ```text
-http://<server-ip>:8080
+http://<server-ip>:8098
 ```
 
 Only forward ports `80/tcp` and `443/tcp` from the router to the Caddy host. Forward `443/udp` only if you want HTTP/3.

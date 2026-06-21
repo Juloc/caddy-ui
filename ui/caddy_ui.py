@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 HOST = os.getenv("UI_HOST", "0.0.0.0")
-PORT = int(os.getenv("UI_PORT", "8080"))
+PORT = int(os.getenv("UI_PORT", "8098"))
 CADDYFILE_PATH = Path(os.getenv("CADDYFILE_PATH", "/etc/caddy/Caddyfile"))
 ROUTES_DIR = Path(os.getenv("CADDY_ROUTES_DIR", "/etc/caddy/routes"))
 CADDY_ADMIN_URL = os.getenv("CADDY_ADMIN_URL", "http://caddy:2019").rstrip("/")
