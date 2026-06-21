@@ -1113,6 +1113,41 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
       gap: 6px;
       flex-wrap: wrap;
     }}
+    .page-toolbar {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+    }}
+    .page-menu {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
+    .page-menu a {{
+      color: #2f3942;
+      background: #eef2f5;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 11px;
+      text-decoration: none;
+      font-weight: 700;
+    }}
+    .page-menu a:hover {{ background: white; color: var(--accent); }}
+    .quick-actions {{
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
     .grid {{
       display: grid;
       grid-template-columns: minmax(0, 1.65fr) minmax(360px, .7fr);
@@ -1187,6 +1222,7 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
       flex-wrap: wrap;
       margin-bottom: 12px;
     }}
+    .section-anchor {{ scroll-margin-top: 18px; }}
     .table-wrap {{
       width: 100%;
       overflow-x: auto;
@@ -1284,6 +1320,8 @@ def page(title: str, body: str, message: str = "", error: str = "") -> bytes:
       main {{ width: min(100vw - 20px, 720px); margin-top: 14px; }}
       .grid, .wide-grid, .form-grid, .status-grid {{ grid-template-columns: 1fr; }}
       header {{ align-items: flex-start; flex-direction: column; }}
+      .page-toolbar {{ grid-template-columns: 1fr; }}
+      .quick-actions {{ justify-content: flex-start; }}
       .toolbar, .actions {{ justify-content: flex-start; }}
       .nav {{ width: 100%; overflow-x: auto; }}
     }}
@@ -1476,15 +1514,14 @@ def render_status(status: dict) -> str:
         recent_rows = '<tr><td colspan="4" class="muted">No recent requests in sampled log.</td></tr>'
 
     return f"""
-<div class="status-grid">
-  <div class="stat"><span class="muted">Caddy Admin</span><strong><span class="pill {admin_class}">{admin_text}</span></strong></div>
-  <div class="stat"><span class="muted">Routes</span><strong>{escape(status["route_count"])}</strong></div>
-  <div class="stat"><span class="muted">Certificates</span><strong>{escape(status["certificate_count"])}</strong></div>
-  <div class="stat"><span class="muted">Sampled Requests</span><strong>{escape(access_stats.get("total_sampled", 0))}</strong></div>
-</div>
 {admin_error}
-<section>
-  <h2>Status</h2>
+<section id="status" class="section-anchor">
+  <div class="section-head">
+    <div>
+      <h2>Caddy Status</h2>
+      <div class="muted">Runtime paths and Caddy admin health.</div>
+    </div>
+  </div>
   <div class="table-wrap">
   <table>
     <tbody>
@@ -1500,12 +1537,22 @@ def render_status(status: dict) -> str:
   </table>
   </div>
 </section>
-<section>
-  <h2>Certificates</h2>
+<section id="certificates" class="section-anchor">
+  <div class="section-head">
+    <div>
+      <h2>Certificates</h2>
+      <div class="muted">Stored certificates found in the configured Caddy data volume.</div>
+    </div>
+  </div>
   <div class="cert-grid">{cert_rows}</div>
 </section>
-<section>
-  <h2>Access Stats</h2>
+<section id="access" class="section-anchor">
+  <div class="section-head">
+    <div>
+      <h2>Access Logs</h2>
+      <div class="muted">Sampled JSON access log activity.</div>
+    </div>
+  </div>
   <div class="cert-grid">
     <div class="cert"><strong>Top Hosts</strong>{render_count_list(access_stats.get("top_hosts", []))}</div>
     <div class="cert"><strong>Top Paths</strong>{render_count_list(access_stats.get("top_paths", []))}</div>
@@ -1521,9 +1568,37 @@ def render_status(status: dict) -> str:
 """
 
 
+def render_route_page_toolbar(status: dict) -> str:
+    access_stats = status.get("access_stats", {})
+    admin_class = "ok" if status["caddy_admin_ok"] else "bad"
+    admin_text = "online" if status["caddy_admin_ok"] else "offline"
+    return f"""
+<div class="status-grid">
+  <div class="stat"><span class="muted">Caddy Admin</span><strong><span class="pill {admin_class}">{admin_text}</span></strong></div>
+  <div class="stat"><span class="muted">Routes</span><strong>{escape(status["route_count"])}</strong></div>
+  <div class="stat"><span class="muted">Certificates</span><strong>{escape(status["certificate_count"])}</strong></div>
+  <div class="stat"><span class="muted">Sampled Requests</span><strong>{escape(access_stats.get("total_sampled", 0))}</strong></div>
+</div>
+<div class="page-toolbar">
+  <nav class="page-menu" aria-label="Routes sections">
+    <a href="#routes">Routes</a>
+    <a href="#reachability">Reachability</a>
+    <a href="#status">Caddy Status</a>
+    <a href="#certificates">Certificates</a>
+    <a href="#access">Access Logs</a>
+  </nav>
+  <div class="quick-actions">
+    <a class="button" href="/routes/new">Create Route</a>
+    <a class="button secondary" href="/dns">DNS Records</a>
+    <a class="button secondary" href="/apps">App Templates</a>
+  </div>
+</div>
+"""
+
+
 def render_reachability_panel() -> str:
     return """
-<section>
+<section id="reachability" class="section-anchor">
   <div class="section-head">
     <div>
       <h2>Website Reachability</h2>
@@ -1628,9 +1703,8 @@ def render_home(message: str = "", error: str = "") -> bytes:
         rows = '<tr><td colspan="6" class="muted">No managed routes yet.</td></tr>'
 
     body = f"""
-{render_status(status)}
-{render_reachability_panel()}
-<section>
+{render_route_page_toolbar(status)}
+<section id="routes" class="section-anchor">
   <div class="section-head">
     <div>
       <h2>Routes</h2>
@@ -1656,6 +1730,8 @@ def render_home(message: str = "", error: str = "") -> bytes:
     </table>
   </div>
 </section>
+{render_reachability_panel()}
+{render_status(status)}
 """
     return page("Caddy UI", body, message, error)
 
