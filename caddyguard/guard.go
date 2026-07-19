@@ -405,16 +405,16 @@ func (g *Guard) emitLimited(kind, severity, clientIP string, r *http.Request, re
 
 // UnmarshalCaddyfile implements caddyfile.Unmarshaler.
 //
-// caddy_ui_guard {
-//     requests 300
-//     window 1m
-//     burst 60
-//     block 15m
-//     blocklist_file /etc/caddy/security-blocklist.txt
-//     event_log /var/log/caddy/security.log
-//     trusted_proxy 10.0.0.0/8
-//     allowlist 192.168.0.0/16
-// }
+//	caddy_ui_guard {
+//	    requests 300
+//	    window 1m
+//	    burst 60
+//	    block 15m
+//	    blocklist_file /etc/caddy/security-blocklist.txt
+//	    event_log /var/log/caddy/security.log
+//	    trusted_proxy 10.0.0.0/8
+//	    allowlist 192.168.0.0/16
+//	}
 func (g *Guard) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	d.Next()
 	for nesting := d.Nesting(); d.NextBlock(nesting); {
