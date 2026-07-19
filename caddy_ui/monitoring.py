@@ -40,7 +40,17 @@ def parse_access_logs(path: Path, limit: int = 500) -> list[dict[str, Any]]:
         uri = str(request.get("uri", ""))
         parsed_uri = urllib.parse.urlsplit(uri)
         query = urllib.parse.parse_qsl(parsed_uri.query, keep_blank_values=True)
-        safe_query = urllib.parse.urlencode((key, "[redacted]" if any(word in key.lower() for word in ("token", "secret", "password", "key", "code")) else item) for key, item in query)
+        safe_query = urllib.parse.urlencode(
+            [
+                (
+                    key,
+                    "[redacted]"
+                    if any(word in key.lower() for word in ("token", "secret", "password", "key", "code"))
+                    else value,
+                )
+                for key, value in query
+            ]
+        )
         safe_uri = urllib.parse.urlunsplit((parsed_uri.scheme, parsed_uri.netloc, parsed_uri.path, safe_query, parsed_uri.fragment))
         values.append(
             {
