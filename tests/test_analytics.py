@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from caddy_ui.analytics import AnalyticsFilters, normalize_endpoint, redact_uri
@@ -103,6 +103,47 @@ class AnalyticsTests(unittest.TestCase):
         rows = self.app.analytics.saved_views(user_id, "logs")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "Server errors")
+
+    def test_compaction_preserves_large_old_traffic_without_raw_client_data(self) -> None:
+        old = datetime.now(UTC) - timedelta(days=31, hours=2)
+        lines = []
+        for index in range(5000):
+            lines.append(
+                json.dumps(
+                    {
+                        "ts": old.timestamp() + index / 10,
+                        "request": {
+                            "host": "archive.example.com",
+                            "method": "GET",
+                            "uri": f"/api/orders/{index}",
+                            "remote_ip": f"203.0.113.{(index % 200) + 1}",
+                            "headers": {"User-Agent": ["SyntheticLoad/1.0"]},
+                        },
+                        "status": 500 if index % 50 == 0 else 200,
+                        "size": 256,
+                        "duration": 0.05 + (index % 20) / 1000,
+                    },
+                    separators=(",", ":"),
+                )
+            )
+        self.settings.access_log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.assertEqual(self.app.analytics.ingest(self.settings.access_log_path), 5000)
+
+        self.app.analytics.compact()
+
+        with self.app.database.connect() as connection:
+            raw_count = connection.execute("SELECT COUNT(*) FROM request_events WHERE host='archive.example.com'").fetchone()[0]
+            daily_count = connection.execute(
+                "SELECT COALESCE(SUM(requests),0) FROM analytics_buckets WHERE granularity='day' AND host='archive.example.com'"
+            ).fetchone()[0]
+        self.assertEqual(raw_count, 0)
+        self.assertEqual(daily_count, 5000)
+
+        start, end = self.app.analytics.resolve_range("1y")
+        summary = self.app.analytics.summary(AnalyticsFilters(host="archive.example.com"), start, end)
+        self.assertEqual(summary["requests"], 5000)
+        self.assertEqual(summary["errors_5xx"], 100)
+        self.assertEqual(self.app.analytics.events(AnalyticsFilters(host="archive.example.com"), start, end), [])
 
 
 if __name__ == "__main__":
