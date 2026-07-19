@@ -80,6 +80,10 @@ class AnalyticsTests(unittest.TestCase):
         self.assertIn("code=%5Bredacted%5D", events[0]["uri"])
         self.assertNotIn("private", events[0]["uri"])
 
+        errors = self.app.analytics.events(AnalyticsFilters(status="errors"), start, end)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["status"], 503)
+
         bot = self.app.analytics.events(AnalyticsFilters(client_type="bot"), start, end)
         self.assertEqual(len(bot), 1)
         self.assertEqual(bot[0]["category"], "asset")
