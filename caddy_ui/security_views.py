@@ -12,6 +12,13 @@ def _q(values: dict[str, Any]) -> str:
     return urllib.parse.urlencode({key: value for key, value in values.items() if value not in (None, "")})
 
 
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _metric(label: str, value: str, detail: str = "") -> str:
     extra = f'<div class="muted metric-detail">{views.e(detail)}</div>' if detail else ""
     return f'<section class="card span-3"><div class="muted">{views.e(label)}</div><div class="stat-value">{views.e(value)}</div>{extra}</section>'
@@ -82,7 +89,7 @@ def security_page(
         content = f'<section class="panel"><div class="panel-header"><h2>Threats</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Severity</th><th>Type</th><th>Client</th><th>Host</th><th>Endpoint</th><th>Reason</th></tr></thead><tbody>{event_rows}</tbody></table></div></section>'
     else:
         bars = views.bars([(str(ip), int(count)) for ip, count in summary.get("top_ips", [])])
-        content = f'<div class="grid metrics-grid">{_metric("Security events",f"{int(summary.get('events',0)):,}","Last 24 hours")}{_metric("Blocked events",f"{int(summary.get('blocked',0)):,}",f"{int(summary.get('active_bans',0))} active")}{_metric("Brute-force events",f"{int(summary.get('brute_force',0)):,}","Last 24 hours")}{_metric("Observed clients",f"{int(summary.get('clients',0)):,}","Security events")}</div><div class="grid analytics-grid"><section class="panel span-8"><div class="panel-header"><h2>Recent threats</h2><a href="/security?tab=threats">View all</a></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Severity</th><th>Type</th><th>Client</th><th>Host</th><th>Endpoint</th><th>Reason</th></tr></thead><tbody>{event_rows}</tbody></table></div></section><section class="panel span-4"><div class="panel-header"><h2>Top attacking IPs</h2></div>{bars}</section></div>'
+        content = f'<div class="grid metrics-grid">{_metric("Security events",f"{_safe_int(summary.get('events')):,}","Last 24 hours")}{_metric("Blocked events",f"{_safe_int(summary.get('blocked')):,}",f"{_safe_int(summary.get('active_bans'))} active")}{_metric("Brute-force events",f"{_safe_int(summary.get('brute_force')):,}","Last 24 hours")}{_metric("Observed clients",f"{_safe_int(summary.get('clients')):,}","Security events")}</div><div class="grid analytics-grid"><section class="panel span-8"><div class="panel-header"><h2>Recent threats</h2><a href="/security?tab=threats">View all</a></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Severity</th><th>Type</th><th>Client</th><th>Host</th><th>Endpoint</th><th>Reason</th></tr></thead><tbody>{event_rows}</tbody></table></div></section><section class="panel span-4"><div class="panel-header"><h2>Top attacking IPs</h2></div>{bars}</section></div>'
     body = f'<div class="commandbar"><div><span class="status {"ok" if settings["level"] != "off" else "warn"}">Protection {views.e(settings["level"].title())}</span></div><div class="commands"><a class="button" href="/logs?status=4xx&range=24h">Open related logs</a></div></div>{tabs}{content}'
     return views.layout("Security", "security", session, csrf, body, message, error)
 
