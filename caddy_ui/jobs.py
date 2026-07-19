@@ -161,7 +161,7 @@ class JobRunner:
                 if not route.enabled:
                     continue
                 checks = (
-                    ("public", "route.dns.down", "Public DNS unavailable"),
+                    ("public", "route.tls.down", "Public DNS/TLS unavailable"),
                     ("upstream", "route.upstream.down", "Upstream unavailable"),
                 )
                 for kind, event, title in checks:
