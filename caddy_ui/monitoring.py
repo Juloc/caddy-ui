@@ -111,20 +111,20 @@ def probe_upstream(route: ManagedRoute, timeout: float) -> dict[str, Any]:
 
 
 def probe_public(route: ManagedRoute, timeout: float) -> dict[str, Any]:
+    """Check public DNS only.
+
+    A service running on the same host cannot reliably prove public HTTPS reachability:
+    hairpin NAT, split DNS, and firewall reflection can all make a healthy public route
+    fail when called from inside Docker. DNS resolution is deterministic here; Caddy
+    availability and the upstream are monitored separately.
+    """
+    del timeout
     host = route.effective_host
     try:
         addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
     except OSError as exc:
         return {"ok": False, "status": 0, "addresses": [], "detail": f"DNS: {exc}"}
-    context = ssl.create_default_context()
-    try:
-        request = urllib.request.Request(f"https://{host}/", method="HEAD", headers={"User-Agent": "caddy-ui-health/1.0"})
-        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
-            return {"ok": response.status < 500, "status": response.status, "addresses": addresses, "detail": f"HTTP {response.status}"}
-    except urllib.error.HTTPError as exc:
-        return {"ok": exc.code < 500, "status": exc.code, "addresses": addresses, "detail": f"HTTP {exc.code}"}
-    except Exception as exc:
-        return {"ok": False, "status": 0, "addresses": addresses, "detail": str(exc)}
+    return {"ok": bool(addresses), "status": 0, "addresses": addresses, "detail": ", ".join(addresses)}
 
 
 def route_health(routes: list[ManagedRoute], settings: Settings) -> dict[str, dict[str, Any]]:
@@ -145,17 +145,28 @@ def route_health(routes: list[ManagedRoute], settings: Settings) -> dict[str, di
 
 
 def certificate_files(data_path: Path) -> list[dict[str, Any]]:
+    """Return managed end-entity certificates, excluding Caddy's local CA files.
+
+    The Caddy data volume also contains root/intermediate CA certificates and may retain
+    historical files. Only certificates with DNS SANs under Caddy's certificate storage
+    are useful for the managed-site certificate view.
+    """
     now = dt.datetime.now(dt.UTC)
     certificates: list[dict[str, Any]] = []
-    for path in data_path.glob("**/*.crt"):
+    candidates = list(data_path.glob("caddy/certificates/**/*.crt"))
+    if not candidates:
+        candidates = [path for path in data_path.glob("**/*.crt") if "pki" not in path.parts]
+    for path in candidates:
         try:
             decoded = ssl._ssl._test_decode_cert(str(path))
             expiry = dt.datetime.strptime(decoded["notAfter"], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=dt.UTC)
             subject = dict(item[0] for item in decoded.get("subject", []))
             san = [value for kind, value in decoded.get("subjectAltName", []) if kind == "DNS"]
+            if not san:
+                continue
             certificates.append(
                 {
-                    "name": subject.get("commonName", san[0] if san else path.stem),
+                    "name": subject.get("commonName", san[0]),
                     "names": san,
                     "expires_at": expiry.isoformat(),
                     "days": (expiry - now).days,
@@ -163,4 +174,10 @@ def certificate_files(data_path: Path) -> list[dict[str, Any]]:
             )
         except (OSError, KeyError, ValueError, ssl.SSLError):
             continue
-    return sorted(certificates, key=lambda item: (item["days"], item["name"]))
+    unique: dict[tuple[str, ...], dict[str, Any]] = {}
+    for certificate in certificates:
+        key = tuple(sorted(certificate["names"]))
+        current = unique.get(key)
+        if current is None or certificate["expires_at"] > current["expires_at"]:
+            unique[key] = certificate
+    return sorted(unique.values(), key=lambda item: (item["days"], item["name"]))
