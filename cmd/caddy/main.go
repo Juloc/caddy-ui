@@ -10,4 +10,3 @@ import (
 func main() {
 	caddycmd.Main()
 }
-
