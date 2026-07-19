@@ -11,14 +11,14 @@ Completed on 2026-07-19:
 - YAML parsing for both GitHub Actions workflows.
 - SemVer promotion rehearsal from alpha to beta.
 
-## CI verification required
+## CI verification
 
-The pull-request workflow is configured to complete the checks unavailable in the local environment:
+GitHub Actions run 9 completed successfully on 2026-07-19 for pull request #1:
 
-- Go formatting and `go test ./...` using Go 1.25.1, the minimum required by Caddy 2.11.4.
-- Companion container build.
-- Bundle container build including Caddy 2.11.4 and the Netcup module.
-- Caddyfile adaptation as part of the bundle build/smoke path.
+- Python compilation and all 23 unit/integration tests.
+- Go formatting, committed module graph, and `go test ./...` using Go 1.25.1.
+- Companion container image build.
+- Bundle container image build including Caddy 2.11.4 and the Netcup module.
 
 ## Manual acceptance checklist
 
@@ -28,4 +28,4 @@ The pull-request workflow is configured to complete the checks unavailable in th
 - Accessibility: verify keyboard navigation, visible focus, labels, dialog close controls, reduced motion, and useful status text.
 - Deployment: start `compose.yml`, confirm exactly `caddy` and `caddy-ui`, create a route, validate/reload it, and exercise rollback with an intentionally invalid administrator-only Custom Route.
 
-The final three checks stay open in `docs/BACKLOG.md` until GitHub CI and the deployed visual/smoke pass complete.
+The remaining checks stay open in `docs/BACKLOG.md` until the deployed visual, accessibility, and two-container smoke passes complete.

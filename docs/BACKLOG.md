@@ -74,11 +74,12 @@ This file is the persistent implementation ledger. Update status and verificatio
 ## Phase 8 - Verification and cleanup
 
 - [x] Python unit/integration tests.
-- [ ] Go tests and formatting.
+- [x] Go tests, formatting, and committed module graph on Go 1.25.1.
 - [x] Caddy rendering, failure, and rollback tests; live validation runs in container CI.
 - [x] Migration and restore tests using current production-format fixtures.
 - [x] Role/permission, CSRF, session, password, TOTP, and redaction tests.
 - [ ] Desktop/mobile, light/dark, keyboard, accessibility, and visual checks.
-- [ ] Container builds and two-container smoke test.
+- [x] Companion and bundled Caddy container builds.
+- [ ] Deployed two-container smoke test.
 - [x] Remove dead code, unused configuration, obsolete docs, and duplicated behavior.
 - [ ] Confirm every product requirement has implementation and verification evidence.
