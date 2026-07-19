@@ -28,6 +28,13 @@ def format_bytes(value: Any) -> str:
     return f"{number:.1f} {units[index]}" if index else f"{int(number)} B"
 
 
+def safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def metric(label: str, value: str, detail: str = "", href: str = "") -> str:
     inner = f'<div class="muted">{views.e(label)}</div><div class="stat-value">{views.e(value)}</div>'
     if detail:
@@ -101,14 +108,15 @@ def _ranked_rows(items: list[tuple[str, int, float]], dimension: str, base: dict
 
 def analytics_page(session: sqlite3.Row, csrf: str, tab: str, range_name: str, filters: AnalyticsFilters, summary: dict[str, Any], series: list[dict[str, Any]], top_hosts: list[tuple[str, int, float]], top_endpoints: list[tuple[str, int, float]], slow_endpoints: list[tuple[str, int, float]], top_clients: list[tuple[str, int, float]], dimensions: dict[str, list[str]], saved: Iterable[sqlite3.Row], message: str = "", error: str = "") -> bytes:
     base = {**filters.as_query(), "range": range_name}
-    requests = int(summary.get("requests", 0) or 0)
-    errors = int(summary.get("errors_4xx", 0) or 0) + int(summary.get("errors_5xx", 0) or 0)
-    error_rate = errors / requests * 100 if requests else 0
+    requests = safe_int(summary.get("requests"))
+    errors_4xx = safe_int(summary.get("errors_4xx"))
+    errors_5xx = safe_int(summary.get("errors_5xx"))
+    error_rate = (errors_4xx + errors_5xx) / requests * 100 if requests else 0
     cards = "".join((
         metric("Requests", f"{requests:,}", "Selected range", "/logs?" + q(base)),
         metric("Average", format_ms(summary.get("avg_ms")), "Response time", "/logs?" + q({**base, "sort": "slow"})),
         metric("P95", format_ms(summary.get("p95_ms")), f"P99 {format_ms(summary.get('p99_ms'))}"),
-        metric("4xx / 5xx", f"{int(summary.get('errors_4xx',0)):,} / {int(summary.get('errors_5xx',0)):,}", f"{error_rate:.1f}% errors", "/logs?" + q({**base, "errors": "1"})),
+        metric("4xx / 5xx", f"{errors_4xx:,} / {errors_5xx:,}", f"{error_rate:.1f}% errors", "/logs?" + q({**base, "errors": "1"})),
         metric("Traffic", format_bytes(summary.get("bytes_sent")), "Response bytes"),
         metric("P50", format_ms(summary.get("p50_ms")), "Median response time"),
         metric("Maximum", format_ms(summary.get("max_ms")), "Slowest request"),
@@ -141,7 +149,8 @@ def filter_chips(filters: AnalyticsFilters, range_name: str) -> str:
     for key, value in values.items():
         if not value or (key == "range" and value == "24h"):
             continue
-        reduced = dict(values); reduced.pop(key, None)
+        reduced = dict(values)
+        reduced.pop(key, None)
         chips.append(f'<a class="filter-chip" href="/logs?{q(reduced)}"><span>{views.e(key)}: {views.e(value)}</span><span aria-hidden="true">×</span></a>')
     return '<div class="filter-chips">' + "".join(chips) + "</div>" if chips else ""
 
@@ -152,8 +161,10 @@ def logs_page(session: sqlite3.Row, csrf: str, rows: Iterable[sqlite3.Row], filt
     quick_html = '<div class="quick-filters">' + "".join(f'<a class="button" href="/logs?{q(query)}">{views.e(label)}</a>' for label,query in quick) + '</div>'
     row_html = []
     for row in rows:
-        status = int(row["status"] or 0); state = "bad" if status >= 500 else "warn" if status >= 400 else "ok"
-        duration = float(row["duration_ms"] or 0); speed = "critical" if duration > 3000 else "slow" if duration > 1000 else "warn" if duration >= 500 else "normal"
+        status = int(row["status"] or 0)
+        state = "bad" if status >= 500 else "warn" if status >= 400 else "ok"
+        duration = float(row["duration_ms"] or 0)
+        speed = "critical" if duration > 3000 else "slow" if duration > 1000 else "warn" if duration >= 500 else "normal"
         ip_target = f'/analytics/client?{q({"ip":row["remote_ip"],"range":range_name})}' if row["remote_ip"] else ""
         ip_cell = f'<a href="{views.e(ip_target)}">{views.e(row["remote_ip"])}</a>' if ip_target else "—"
         row_html.append(f'<tr class="request-row"><td class="nowrap">{views.e(row["occurred_at"])}</td><td>{views.e(row["host"])}</td><td><span class="method-badge">{views.e(row["method"])}</span></td><td class="request-path"><a href="/logs?{q({**base,"endpoint":row["endpoint"]})}" title="{views.e(row["uri"])}">{views.e(row["uri"])}</a><div class="muted">{views.e(row["endpoint"])}</div></td><td><span class="status {state}">{status}</span></td><td><span class="latency {speed}">{views.e(format_ms(duration))}</span></td><td>{views.e(format_bytes(row["bytes_sent"]))}</td><td>{ip_cell}</td><td><span class="badge">{views.e(row["client_type"])}</span><div class="muted">{views.e(row["category"])}</div></td><td class="ua-cell" title="{views.e(row["user_agent"])}">{views.e(row["user_agent"] or "—")}</td></tr>')
@@ -163,8 +174,10 @@ def logs_page(session: sqlite3.Row, csrf: str, rows: Iterable[sqlite3.Row], filt
     export = f'<a class="button" href="/logs/export?{q({**base,"format":"csv"})}">CSV</a><a class="button" href="/logs/export?{q({**base,"format":"json"})}">JSON</a>' if is_admin else ""
     pages = max(1, (total + 199) // 200)
     pagination = f'<div class="pagination"><span>{total:,} matching requests · Page {page} of {pages}</span>'
-    if page > 1: pagination += f'<a class="button" href="/logs?{q({**base,"page":page-1})}">Previous</a>'
-    if page < pages: pagination += f'<a class="button" href="/logs?{q({**base,"page":page+1})}">Next</a>'
+    if page > 1:
+        pagination += f'<a class="button" href="/logs?{q({**base,"page":page-1})}">Previous</a>'
+    if page < pages:
+        pagination += f'<a class="button" href="/logs?{q({**base,"page":page+1})}">Next</a>'
     pagination += '</div>'
     body = f"""
 <div class="commandbar">{range_nav('/logs', range_name, filters)}<div class="commands"><button type="button" data-live-requests>Live</button>{export}<a class="button" href="/logs?tab=system">Caddy/System logs</a></div></div>
@@ -177,7 +190,8 @@ def logs_page(session: sqlite3.Row, csrf: str, rows: Iterable[sqlite3.Row], filt
 
 
 def client_page(session: sqlite3.Row, csrf: str, detail: dict[str, Any], range_name: str, security_events: Iterable[sqlite3.Row], banned: bool, is_admin: bool, message: str = "", error: str = "") -> bytes:
-    summary = detail["summary"]; ip = detail["ip"]
+    summary = detail["summary"]
+    ip = detail["ip"]
     security_rows = "".join(f'<tr><td>{views.e(row["occurred_at"])}</td><td><span class="badge">{views.e(row["kind"])}</span></td><td>{views.e(row["reason"])}</td></tr>' for row in security_events) or '<tr><td colspan="3" class="empty">No security events for this client.</td></tr>'
     requests = "".join(f'<tr><td>{views.e(row["occurred_at"])}</td><td>{views.e(row["host"])}</td><td>{views.e(row["method"])}</td><td>{views.e(row["uri"])}</td><td>{views.e(row["status"])}</td><td>{views.e(format_ms(row["duration_ms"]))}</td></tr>' for row in detail["events"]) or '<tr><td colspan="6" class="empty">No requests in this range.</td></tr>'
     action = ""
@@ -187,5 +201,5 @@ def client_page(session: sqlite3.Row, csrf: str, detail: dict[str, Any], range_n
         else:
             action = f'<form method="post" action="/security/ban" class="inline-form"><input type="hidden" name="csrf" value="{views.e(csrf)}"><input type="hidden" name="ip" value="{views.e(ip)}"><input type="hidden" name="duration" value="86400"><input name="reason" value="Manual administrator block" required><button class="danger" type="submit">Temporarily block</button></form>'
     endpoint_rows = "".join(f'<tr><td><a href="/logs?{q({"ip":ip,"endpoint":item[0],"range":range_name})}">{views.e(item[0])}</a></td><td>{item[1]:,}</td><td>{views.e(format_ms(item[2]))}</td></tr>' for item in detail["endpoints"])
-    body = f'<div class="commandbar"><div><a href="/analytics?tab=clients">← Clients</a><h2 class="page-inline-title">{views.e(ip)}</h2></div><div class="commands"><a class="button" href="/logs?{q({"ip":ip,"range":range_name})}">Open filtered logs</a>{action}</div></div><div class="grid metrics-grid">{metric("Requests",f"{int(summary.get('requests',0)):,}")}{metric("Average",format_ms(summary.get("avg_ms")))}{metric("P95",format_ms(summary.get("p95_ms")))}{metric("5xx",f"{int(summary.get('errors_5xx',0)):,}")}</div><div class="grid analytics-grid">{chart("Request activity",detail["series"],"requests","requests",{"ip":ip,"range":range_name})}<section class="panel span-6"><div class="panel-header"><h2>Top endpoints</h2></div><div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Requests</th><th>Average</th></tr></thead><tbody>{endpoint_rows or "<tr><td colspan=\"3\" class=\"empty\">No data.</td></tr>"}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Security history</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Type</th><th>Reason</th></tr></thead><tbody>{security_rows}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Recent requests</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Host</th><th>Method</th><th>Path</th><th>Status</th><th>Response</th></tr></thead><tbody>{requests}</tbody></table></div></section></div>'
+    body = f'<div class="commandbar"><div><a href="/analytics?tab=clients">← Clients</a><h2 class="page-inline-title">{views.e(ip)}</h2></div><div class="commands"><a class="button" href="/logs?{q({"ip":ip,"range":range_name})}">Open filtered logs</a>{action}</div></div><div class="grid metrics-grid">{metric("Requests",f"{safe_int(summary.get('requests')):,}")}{metric("Average",format_ms(summary.get("avg_ms")))}{metric("P95",format_ms(summary.get("p95_ms")))}{metric("5xx",f"{safe_int(summary.get('errors_5xx')):,}")}</div><div class="grid analytics-grid">{chart("Request activity",detail["series"],"requests","requests",{"ip":ip,"range":range_name})}<section class="panel span-6"><div class="panel-header"><h2>Top endpoints</h2></div><div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Requests</th><th>Average</th></tr></thead><tbody>{endpoint_rows or "<tr><td colspan=\"3\" class=\"empty\">No data.</td></tr>"}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Security history</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Type</th><th>Reason</th></tr></thead><tbody>{security_rows}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Recent requests</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Host</th><th>Method</th><th>Path</th><th>Status</th><th>Response</th></tr></thead><tbody>{requests}</tbody></table></div></section></div>'
     return views.layout(f"Client {ip}", "analytics", session, csrf, body, message, error)
