@@ -3,6 +3,22 @@
   const theme = root.dataset.themePreference || "system";
   if (theme !== "system") root.dataset.theme = theme;
 
+  const versionTarget = document.querySelector(".sidebar-bottom");
+  if (versionTarget) {
+    fetch("/api/health", { cache: "no-store", credentials: "same-origin" })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+      .then((health) => {
+        if (!health.version) return;
+        const version = document.createElement("div");
+        version.className = "muted";
+        version.style.padding = "8px 10px 2px";
+        version.style.fontSize = "11px";
+        version.textContent = `Caddy UI v${health.version}`;
+        versionTarget.appendChild(version);
+      })
+      .catch(() => {});
+  }
+
   document.querySelector("[data-menu-toggle]")?.addEventListener("click", () => {
     document.body.classList.toggle("nav-open");
   });
