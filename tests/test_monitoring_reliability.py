@@ -11,16 +11,22 @@ from caddy_ui.monitoring import certificate_files, probe_public
 
 
 class MonitoringReliabilityTests(unittest.TestCase):
-    def test_public_probe_checks_dns_without_self_https_request(self) -> None:
+    def test_public_probe_resolves_dns_and_checks_caddy_directly(self) -> None:
         route = ManagedRoute(name="app", domain="example.com", upstreams=[Upstream("app:8080")])
         addresses = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("203.0.113.10", 443))]
         with patch("caddy_ui.monitoring.socket.getaddrinfo", return_value=addresses), patch(
-            "caddy_ui.monitoring.urllib.request.urlopen", side_effect=AssertionError("self HTTPS probe must not run")
+            "caddy_ui.monitoring._probe_caddy_tls",
+            return_value={"ok": True, "status": 502, "detail": "TLS valid, HTTP 502"},
+        ) as tls_probe, patch(
+            "caddy_ui.monitoring.urllib.request.urlopen", side_effect=AssertionError("public hairpin HTTPS request must not run")
         ):
-            result = probe_public(route, 3)
+            result = probe_public(route, 3, "caddy")
 
         self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], 502)
         self.assertEqual(result["addresses"], ["203.0.113.10"])
+        self.assertIn("TLS valid", result["detail"])
+        tls_probe.assert_called_once_with("caddy", "app.example.com", 3)
 
     def test_certificate_view_excludes_local_ca_and_keeps_newest_managed_certificate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
