@@ -5,6 +5,7 @@ WORKDIR /src
 
 COPY go.mod ./
 COPY cmd ./cmd
+COPY caddyguard ./caddyguard
 COPY caddynetcp ./caddynetcp
 
 RUN go mod tidy

@@ -7,7 +7,6 @@ from caddy_ui import __version__
 from caddy_ui.caddy import DEFAULT_CADDYFILE
 
 
-
 def init_caddyfile() -> int:
     caddyfile_path = Path(os.getenv("CADDYFILE_PATH", "/etc/caddy/Caddyfile"))
     routes_dir = Path(os.getenv("CADDY_ROUTES_DIR", "/etc/caddy/routes"))
@@ -49,7 +48,10 @@ def main() -> int:
     if command == "caddy":
         return run_caddy(args)
     if command == "web":
-        from caddy_ui.web import main as web_main
+        from caddy_ui.runtime_security import install as install_runtime_security
+
+        install_runtime_security()
+        from caddy_ui.enhanced_web import main as web_main
 
         return web_main()
     if command == "init-caddyfile":
