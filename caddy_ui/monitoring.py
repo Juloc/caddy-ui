@@ -174,11 +174,11 @@ def route_health(routes: list[ManagedRoute], settings: Settings) -> dict[str, di
 
 
 def certificate_files(data_path: Path) -> list[dict[str, Any]]:
-    """Return managed end-entity certificates, excluding Caddy's local CA files.
+    """Return current managed end-entity certificates.
 
-    The Caddy data volume also contains root/intermediate CA certificates and may retain
-    historical files. Only certificates with DNS SANs under Caddy's certificate storage
-    are useful for the managed-site certificate view.
+    Caddy's data volume can retain expired historical certificates and local CA files.
+    Active route TLS is verified separately against the certificate Caddy actually serves,
+    so this inventory only shows currently usable managed certificates.
     """
     now = dt.datetime.now(dt.UTC)
     certificates: list[dict[str, Any]] = []
@@ -191,7 +191,7 @@ def certificate_files(data_path: Path) -> list[dict[str, Any]]:
             expiry = dt.datetime.strptime(decoded["notAfter"], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=dt.UTC)
             subject = dict(item[0] for item in decoded.get("subject", []))
             san = [value for kind, value in decoded.get("subjectAltName", []) if kind == "DNS"]
-            if not san:
+            if not san or expiry <= now:
                 continue
             certificates.append(
                 {
