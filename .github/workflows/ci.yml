@@ -31,7 +31,7 @@ jobs:
           cache: false
       - name: Format and tidy
         run: |
-          UNFORMATTED="$(gofmt -l cmd caddynetcp)"
+          UNFORMATTED="$(gofmt -l cmd caddyguard caddynetcp)"
           if [ -n "$UNFORMATTED" ]; then
             printf 'Go files need formatting:\n%s\n' "$UNFORMATTED"
             exit 1
@@ -56,6 +56,14 @@ jobs:
           context: .
           target: ${{ matrix.target }}
           push: false
+          load: true
           tags: caddy-ui:${{ matrix.target }}-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Verify bundled Caddy protection module
+        if: matrix.target == 'bundle'
+        run: |
+          docker run --rm --entrypoint /usr/bin/caddy caddy-ui:bundle-test list-modules | grep -F 'http.handlers.caddy_ui_guard'
+          printf ':8080 {\n  caddy_ui_guard {\n    requests 10\n    window 1m\n    burst 2\n    block 15m\n  }\n  respond "ok"\n}\n' \
+            | docker run -i --rm --entrypoint /usr/bin/caddy caddy-ui:bundle-test adapt --adapter caddyfile --config /dev/stdin >/tmp/caddy-adapted.json
+          grep -F 'caddy_ui_guard' /tmp/caddy-adapted.json
