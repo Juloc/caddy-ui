@@ -110,30 +110,59 @@ def probe_upstream(route: ManagedRoute, timeout: float) -> dict[str, Any]:
         return {"ok": False, "status": 0, "detail": str(exc)}
 
 
-def probe_public(route: ManagedRoute, timeout: float) -> dict[str, Any]:
-    """Check public DNS only.
+def _probe_caddy_tls(connect_host: str, server_name: str, timeout: float) -> dict[str, Any]:
+    context = ssl.create_default_context()
+    try:
+        with socket.create_connection((connect_host, 443), timeout=timeout) as connection:
+            with context.wrap_socket(connection, server_hostname=server_name) as tls:
+                tls.settimeout(timeout)
+                request = (
+                    f"HEAD / HTTP/1.1\r\nHost: {server_name}\r\n"
+                    "User-Agent: caddy-ui-health/1.0\r\nConnection: close\r\n\r\n"
+                ).encode("ascii")
+                tls.sendall(request)
+                response = tls.recv(4096)
+        status_line = response.split(b"\r\n", 1)[0].decode("ascii", errors="replace")
+        parts = status_line.split(" ", 2)
+        if len(parts) < 2 or not parts[0].startswith("HTTP/"):
+            return {"ok": False, "status": 0, "detail": f"Invalid HTTPS response: {status_line[:120]}"}
+        status = int(parts[1])
+        return {"ok": True, "status": status, "detail": f"TLS valid, HTTP {status}"}
+    except ssl.SSLCertVerificationError as exc:
+        detail = getattr(exc, "verify_message", "") or str(exc)
+        return {"ok": False, "status": 0, "detail": f"TLS certificate: {detail}"}
+    except Exception as exc:
+        return {"ok": False, "status": 0, "detail": f"TLS endpoint: {exc}"}
 
-    A service running on the same host cannot reliably prove public HTTPS reachability:
-    hairpin NAT, split DNS, and firewall reflection can all make a healthy public route
-    fail when called from inside Docker. DNS resolution is deterministic here; Caddy
-    availability and the upstream are monitored separately.
+
+def probe_public(route: ManagedRoute, timeout: float, caddy_host: str = "caddy") -> dict[str, Any]:
+    """Verify public DNS plus the certificate Caddy actually serves for the host.
+
+    The HTTPS connection goes directly to the Caddy container while preserving SNI and
+    hostname verification. This avoids hairpin-NAT/split-DNS false negatives while still
+    detecting missing, expired, or mismatched certificates.
     """
-    del timeout
     host = route.effective_host
     try:
         addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
     except OSError as exc:
         return {"ok": False, "status": 0, "addresses": [], "detail": f"DNS: {exc}"}
-    return {"ok": bool(addresses), "status": 0, "addresses": addresses, "detail": ", ".join(addresses)}
+    tls = _probe_caddy_tls(caddy_host, host, timeout)
+    return {
+        **tls,
+        "addresses": addresses,
+        "detail": f"DNS {', '.join(addresses)}; {tls.get('detail', '')}",
+    }
 
 
 def route_health(routes: list[ManagedRoute], settings: Settings) -> dict[str, dict[str, Any]]:
     enabled = [route for route in routes if route.enabled][: settings.reachability_limit]
     values: dict[str, dict[str, Any]] = {route.id: {} for route in enabled}
+    caddy_host = urllib.parse.urlsplit(settings.caddy_admin_url).hostname or "caddy"
     with ThreadPoolExecutor(max_workers=min(12, max(1, len(enabled) * 2))) as executor:
         futures = {}
         for route in enabled:
-            futures[executor.submit(probe_public, route, settings.reachability_timeout_seconds)] = (route.id, "public")
+            futures[executor.submit(probe_public, route, settings.reachability_timeout_seconds, caddy_host)] = (route.id, "public")
             futures[executor.submit(probe_upstream, route, settings.reachability_timeout_seconds)] = (route.id, "upstream")
         for future in as_completed(futures):
             route_id, kind = futures[future]
