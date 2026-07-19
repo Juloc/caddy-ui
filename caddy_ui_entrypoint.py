@@ -3,6 +3,7 @@ import os
 import sys
 from pathlib import Path
 
+from caddy_ui import __version__
 from caddy_ui.caddy import DEFAULT_CADDYFILE
 
 
@@ -44,6 +45,7 @@ def run_caddy(args: list[str]) -> int:
 def main() -> int:
     command = sys.argv[1] if len(sys.argv) > 1 else "web"
     args = sys.argv[2:]
+    print(f"Caddy UI v{__version__} starting (command={command})", flush=True)
     if command == "caddy":
         return run_caddy(args)
     if command == "web":
