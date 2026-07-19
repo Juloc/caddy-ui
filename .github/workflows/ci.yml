@@ -1,0 +1,54 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Compile and test
+        run: |
+          python -m compileall -q caddy_ui caddy_ui_entrypoint.py scripts tests
+          python -m unittest discover -v
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Format and test
+        run: |
+          test -z "$(gofmt -l cmd caddynetcp)"
+          go mod tidy
+          go test ./...
+
+  containers:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [companion, bundle]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build ${{ matrix.target }} image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: false
+          tags: caddy-ui:${{ matrix.target }}-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
