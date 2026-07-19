@@ -110,30 +110,59 @@ def probe_upstream(route: ManagedRoute, timeout: float) -> dict[str, Any]:
         return {"ok": False, "status": 0, "detail": str(exc)}
 
 
-def probe_public(route: ManagedRoute, timeout: float) -> dict[str, Any]:
+def _probe_caddy_tls(connect_host: str, server_name: str, timeout: float) -> dict[str, Any]:
+    context = ssl.create_default_context()
+    try:
+        with socket.create_connection((connect_host, 443), timeout=timeout) as connection:
+            with context.wrap_socket(connection, server_hostname=server_name) as tls:
+                tls.settimeout(timeout)
+                request = (
+                    f"HEAD / HTTP/1.1\r\nHost: {server_name}\r\n"
+                    "User-Agent: caddy-ui-health/1.0\r\nConnection: close\r\n\r\n"
+                ).encode("ascii")
+                tls.sendall(request)
+                response = tls.recv(4096)
+        status_line = response.split(b"\r\n", 1)[0].decode("ascii", errors="replace")
+        parts = status_line.split(" ", 2)
+        if len(parts) < 2 or not parts[0].startswith("HTTP/"):
+            return {"ok": False, "status": 0, "detail": f"Invalid HTTPS response: {status_line[:120]}"}
+        status = int(parts[1])
+        return {"ok": True, "status": status, "detail": f"TLS valid, HTTP {status}"}
+    except ssl.SSLCertVerificationError as exc:
+        detail = getattr(exc, "verify_message", "") or str(exc)
+        return {"ok": False, "status": 0, "detail": f"TLS certificate: {detail}"}
+    except Exception as exc:
+        return {"ok": False, "status": 0, "detail": f"TLS endpoint: {exc}"}
+
+
+def probe_public(route: ManagedRoute, timeout: float, caddy_host: str = "caddy") -> dict[str, Any]:
+    """Verify public DNS plus the certificate Caddy actually serves for the host.
+
+    The HTTPS connection goes directly to the Caddy container while preserving SNI and
+    hostname verification. This avoids hairpin-NAT/split-DNS false negatives while still
+    detecting missing, expired, or mismatched certificates.
+    """
     host = route.effective_host
     try:
         addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
     except OSError as exc:
         return {"ok": False, "status": 0, "addresses": [], "detail": f"DNS: {exc}"}
-    context = ssl.create_default_context()
-    try:
-        request = urllib.request.Request(f"https://{host}/", method="HEAD", headers={"User-Agent": "caddy-ui-health/1.0"})
-        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
-            return {"ok": response.status < 500, "status": response.status, "addresses": addresses, "detail": f"HTTP {response.status}"}
-    except urllib.error.HTTPError as exc:
-        return {"ok": exc.code < 500, "status": exc.code, "addresses": addresses, "detail": f"HTTP {exc.code}"}
-    except Exception as exc:
-        return {"ok": False, "status": 0, "addresses": addresses, "detail": str(exc)}
+    tls = _probe_caddy_tls(caddy_host, host, timeout)
+    return {
+        **tls,
+        "addresses": addresses,
+        "detail": f"DNS {', '.join(addresses)}; {tls.get('detail', '')}",
+    }
 
 
 def route_health(routes: list[ManagedRoute], settings: Settings) -> dict[str, dict[str, Any]]:
     enabled = [route for route in routes if route.enabled][: settings.reachability_limit]
     values: dict[str, dict[str, Any]] = {route.id: {} for route in enabled}
+    caddy_host = urllib.parse.urlsplit(settings.caddy_admin_url).hostname or "caddy"
     with ThreadPoolExecutor(max_workers=min(12, max(1, len(enabled) * 2))) as executor:
         futures = {}
         for route in enabled:
-            futures[executor.submit(probe_public, route, settings.reachability_timeout_seconds)] = (route.id, "public")
+            futures[executor.submit(probe_public, route, settings.reachability_timeout_seconds, caddy_host)] = (route.id, "public")
             futures[executor.submit(probe_upstream, route, settings.reachability_timeout_seconds)] = (route.id, "upstream")
         for future in as_completed(futures):
             route_id, kind = futures[future]
@@ -145,17 +174,28 @@ def route_health(routes: list[ManagedRoute], settings: Settings) -> dict[str, di
 
 
 def certificate_files(data_path: Path) -> list[dict[str, Any]]:
+    """Return managed end-entity certificates, excluding Caddy's local CA files.
+
+    The Caddy data volume also contains root/intermediate CA certificates and may retain
+    historical files. Only certificates with DNS SANs under Caddy's certificate storage
+    are useful for the managed-site certificate view.
+    """
     now = dt.datetime.now(dt.UTC)
     certificates: list[dict[str, Any]] = []
-    for path in data_path.glob("**/*.crt"):
+    candidates = list(data_path.glob("caddy/certificates/**/*.crt"))
+    if not candidates:
+        candidates = [path for path in data_path.glob("**/*.crt") if "pki" not in path.parts]
+    for path in candidates:
         try:
             decoded = ssl._ssl._test_decode_cert(str(path))
             expiry = dt.datetime.strptime(decoded["notAfter"], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=dt.UTC)
             subject = dict(item[0] for item in decoded.get("subject", []))
             san = [value for kind, value in decoded.get("subjectAltName", []) if kind == "DNS"]
+            if not san:
+                continue
             certificates.append(
                 {
-                    "name": subject.get("commonName", san[0] if san else path.stem),
+                    "name": subject.get("commonName", san[0]),
                     "names": san,
                     "expires_at": expiry.isoformat(),
                     "days": (expiry - now).days,
@@ -163,4 +203,10 @@ def certificate_files(data_path: Path) -> list[dict[str, Any]]:
             )
         except (OSError, KeyError, ValueError, ssl.SSLError):
             continue
-    return sorted(certificates, key=lambda item: (item["days"], item["name"]))
+    unique: dict[tuple[str, ...], dict[str, Any]] = {}
+    for certificate in certificates:
+        key = tuple(sorted(certificate["names"]))
+        current = unique.get(key)
+        if current is None or certificate["expires_at"] > current["expires_at"]:
+            unique[key] = certificate
+    return sorted(unique.values(), key=lambda item: (item["days"], item["name"]))

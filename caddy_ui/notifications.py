@@ -49,6 +49,21 @@ class NotificationService:
         with self.database.transaction() as connection:
             connection.execute("UPDATE notifications SET acknowledged_at=? WHERE id=?", (utc_now(), notification_id))
 
+    def acknowledge_matching(self, event_type: str, object_type: str = "", object_id: str = "") -> None:
+        with self.database.transaction() as connection:
+            connection.execute(
+                """UPDATE notifications SET acknowledged_at=?
+                   WHERE acknowledged_at IS NULL AND event_type=? AND object_type=? AND object_id=?""",
+                (utc_now(), event_type, object_type, object_id),
+            )
+
+    def acknowledge_event_type(self, event_type: str) -> None:
+        with self.database.transaction() as connection:
+            connection.execute(
+                "UPDATE notifications SET acknowledged_at=? WHERE acknowledged_at IS NULL AND event_type=?",
+                (utc_now(), event_type),
+            )
+
     def _enabled(self, channel: str, event_type: str) -> bool:
         settings = self.database.setting("notifications", {}) or {}
         channel_settings = settings.get(channel, {}) if isinstance(settings, dict) else {}
