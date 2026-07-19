@@ -23,6 +23,88 @@
     document.body.classList.toggle("nav-open");
   });
 
+  const problemsPanel = [...document.querySelectorAll(".panel")].find(
+    (panel) => panel.querySelector(".panel-header h2")?.textContent.trim() === "Problems",
+  );
+  const problemBody = problemsPanel?.querySelector("tbody");
+  if (problemBody) {
+    const rows = [...problemBody.children].filter((element) => element.tagName === "TR");
+    const claimed = new Set();
+    const groups = [
+      {
+        key: "upstream",
+        singular: "Upstream unavailable",
+        plural: "Upstreams unavailable",
+        matches: (text) => text.includes("upstream is unavailable") || text.includes("upstream unavailable"),
+        identify: (text) => {
+          const current = text.match(/([A-Za-z0-9*._-]+)\s+upstream is unavailable/i)?.[1];
+          const notification = text.match(/upstream unavailable\s*([A-Za-z0-9*._-]+)/i)?.[1];
+          return (current || notification || "").split(".")[0];
+        },
+      },
+      {
+        key: "public",
+        singular: "Public route problem",
+        plural: "Public route problems",
+        matches: (text) => text.includes("not publicly reachable") || text.includes("public route unavailable") || text.includes("public dns unavailable"),
+        identify: (text) => text.match(/([A-Za-z0-9*._-]+)\s+is not publicly reachable/i)?.[1]
+          || text.match(/public (?:route|dns) unavailable\s*([A-Za-z0-9*._-]+)/i)?.[1]
+          || "",
+      },
+      {
+        key: "certificate",
+        singular: "Certificate warning",
+        plural: "Certificate warnings",
+        matches: (text) => text.includes("certificate") && (text.includes("expires") || text.includes("expiring")),
+        identify: (text) => text.match(/certificate\s*([A-Za-z0-9*._-]+)\s+(?:expires|expiring)/i)?.[1] || "",
+      },
+    ];
+
+    groups.forEach((group) => {
+      const members = rows.filter((row) => {
+        if (claimed.has(row)) return false;
+        return group.matches(row.textContent.toLowerCase().replace(/\s+/g, " "));
+      });
+      if (members.length < 2) return;
+
+      members.forEach((row) => claimed.add(row));
+      const names = [...new Set(
+        members
+          .map((row) => group.identify(row.textContent.replace(/\s+/g, " ").trim()))
+          .filter(Boolean),
+      )];
+      const count = names.length || members.length;
+      const preview = names.length
+        ? `${names.slice(0, 4).join(", ")}${names.length > 4 ? ` +${names.length - 4}` : ""}`
+        : `${members.length} entries`;
+
+      const groupRow = document.createElement("tr");
+      const statusCell = document.createElement("td");
+      statusCell.innerHTML = '<span class="status bad">Issue</span>';
+      const contentCell = document.createElement("td");
+      contentCell.colSpan = 3;
+      const details = document.createElement("details");
+      details.dataset.problemGroup = group.key;
+      const summary = document.createElement("summary");
+      summary.style.cursor = "pointer";
+      summary.innerHTML = `<strong>${count === 1 ? group.singular : group.plural}</strong> <span class="badge">${count}</span> <span class="muted">${preview}</span>`;
+      details.appendChild(summary);
+      contentCell.appendChild(details);
+      groupRow.append(statusCell, contentCell);
+
+      problemBody.insertBefore(groupRow, members[0]);
+      let anchor = groupRow;
+      members.forEach((row) => {
+        row.hidden = true;
+        problemBody.insertBefore(row, anchor.nextSibling);
+        anchor = row;
+      });
+      details.addEventListener("toggle", () => {
+        members.forEach((row) => { row.hidden = !details.open; });
+      });
+    });
+  }
+
   document.querySelectorAll("[data-dialog-open]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.dialogOpen)?.showModal());
   });
