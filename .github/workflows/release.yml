@@ -1,0 +1,181 @@
+name: Release after merge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+concurrency:
+  group: caddy-ui-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Determine release version
+        id: version
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT="$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
+          if [ -z "$CURRENT" ]; then CURRENT="v$(cat caddy_ui/VERSION)"; fi
+          LABELS="$(
+            curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+              --header "Accept: application/vnd.github+json" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+              | jq -c '.[0].labels // []'
+          )"
+          VERSION="$(python scripts/next_version.py --current "${CURRENT#v}" --labels-json "$LABELS")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then CHANNEL="${VERSION#*-}"; CHANNEL="${CHANNEL%%.*}"; else CHANNEL="latest"; fi
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+      - name: Verify source
+        run: |
+          python -m compileall -q caddy_ui caddy_ui_entrypoint.py scripts tests
+          python -m unittest discover -v
+          UNFORMATTED="$(gofmt -l cmd caddynetcp)"
+          if [ -n "$UNFORMATTED" ]; then
+            printf 'Go files need formatting:\n%s\n' "$UNFORMATTED"
+            exit 1
+          fi
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go test ./...
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish bundle
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: bundle
+          push: true
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/juloc/caddy-ui:${{ steps.version.outputs.version }}
+            ghcr.io/juloc/caddy-ui:${{ steps.version.outputs.channel }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build and publish companion
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: companion
+          push: true
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/juloc/caddy-ui-companion:${{ steps.version.outputs.version }}
+            ghcr.io/juloc/caddy-ui-companion:${{ steps.version.outputs.channel }}
+          cache-from: type=gha
+      - name: Create tag and GitHub release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git tag -a "v${VERSION}" -m "Caddy UI ${VERSION}"
+          git push origin "v${VERSION}"
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then PRERELEASE=true; fi
+          jq -n \
+            --arg tag "v${VERSION}" \
+            --arg title "Caddy UI ${VERSION}" \
+            --argjson prerelease "$PRERELEASE" \
+            '{tag_name: $tag, name: $title, generate_release_notes: true, prerelease: $prerelease}' \
+            > /tmp/release.json
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary @/tmp/release.json \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases"
+
+  downstream:
+    needs: release
+    if: ${{ needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: source
+      - name: Check downstream token
+        id: downstream-token
+        env:
+          TOKEN: ${{ secrets.DOCKER_REPO_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then echo "available=true" >> "$GITHUB_OUTPUT"; else echo "available=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v7
+        if: ${{ steps.downstream-token.outputs.available == 'true' }}
+        with:
+          repository: Juloc/docker
+          token: ${{ secrets.DOCKER_REPO_TOKEN }}
+          path: docker
+      - name: Update two-container deployment
+        if: ${{ steps.downstream-token.outputs.available == 'true' }}
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          sed "s/__CADDY_UI_VERSION__/${VERSION}/g" source/deploy/docker-compose.yml > docker/caddy/docker-compose.yml
+      - name: Open and auto-merge deployment PR
+        if: ${{ steps.downstream-token.outputs.available == 'true' }}
+        working-directory: docker
+        env:
+          GITHUB_TOKEN: ${{ secrets.DOCKER_REPO_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          BRANCH="automation/caddy-ui-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add caddy/docker-compose.yml
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore(caddy): update Caddy UI to ${VERSION}"
+          git push --set-upstream origin "$BRANCH"
+          jq -n \
+            --arg head "$BRANCH" \
+            --arg title "chore(caddy): update Caddy UI to ${VERSION}" \
+            --arg body "Automated two-container deployment update after the verified Caddy UI ${VERSION} release." \
+            '{base: "main", head: $head, title: $title, body: $body}' \
+            > /tmp/downstream-pr.json
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary @/tmp/downstream-pr.json \
+            "${GITHUB_API_URL}/repos/Juloc/docker/pulls" \
+            > /tmp/downstream-pr-response.json
+          PR_ID="$(jq -r '.node_id' /tmp/downstream-pr-response.json)"
+          jq -n \
+            --arg id "$PR_ID" \
+            '{query: "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: SQUASH}) { pullRequest { url } } }", variables: {id: $id}}' \
+            > /tmp/auto-merge.json
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data-binary @/tmp/auto-merge.json \
+            "https://api.github.com/graphql"

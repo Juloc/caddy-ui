@@ -1,207 +1,114 @@
 # Caddy UI
 
-Public home-lab Caddy image with:
+Caddy UI is a compact, server-rendered administration tool for Caddy. It focuses on routes, access portals, logs, system health, DNS, and Netcup DDNS without Docker socket access or a heavy SPA.
 
-- Caddy built with a local Netcup DNS provider module
-- wildcard certificates through ACME DNS-01
-- Netcup DDNS for changing home WAN IPv4 addresses
-- a small web UI for managed reverse proxy routes
-- status views for Caddy admin, route count, stored certificates and public route reachability
-- form-based UI login
-- manual DNS record management for provider accounts
-- explicit create/edit flows for routes and provider accounts
-- optional per-route basic auth
-- app templates that generate Docker Compose snippets and matching Caddy routes
+The interface follows a restrained Fluent 2 / Windows 11 style. Dashboard summaries use cards; route, DNS, audit, and log workspaces stay flat and dense. It supports System, Light, and Dark themes and turns dialogs into full-screen views on mobile.
 
-The published image is:
+## Features
 
-```text
-ghcr.io/juloc/caddy-ui:latest
-```
+- Managed proxy, redirect, and administrator-only Custom Routes
+- Multiple upstreams, load balancing, active health checks, paths, headers, and upstream TLS options
+- Validate, preview/diff, apply, reload, verify, automatic rollback, and immutable revisions
+- Enable, disable, duplicate, bulk delete, JSON import/export, and controlled unmanaged-snippet import
+- Reusable branded username/password access portals
+- Administrator, Editor, and Viewer roles; optional TOTP; CSRF-protected server-side sessions
+- Dedicated Access, Logs, System, and DNS workspaces
+- Netcup DNS record management and scheduled DDNS
+- Public and upstream health shown separately
+- SQLite persistence, audit history, traffic aggregation, daily backups, diagnostics, email, and webhook notifications
 
-The server deployment needs only `compose.yml` and `.env`. No local Dockerfile build is required.
+App templates and Docker management are intentionally not part of the product.
 
-## Architecture
+## Deployment
 
-The same image exposes four commands:
+The default deployment uses exactly two containers and one bundle image:
 
-| Command | Purpose |
-| --- | --- |
-| `caddy` | runs the custom Caddy binary |
-| `web` | runs the Caddy UI |
-| `ddns` | runs the Netcup DDNS updater |
-| `init-caddyfile` | writes the default wildcard Caddyfile into a Docker volume |
+| Container | Image | Purpose |
+| --- | --- | --- |
+| `caddy` | `ghcr.io/juloc/caddy-ui:<version>` | Caddy with the Netcup DNS module |
+| `caddy-ui` | `ghcr.io/juloc/caddy-ui:<version>` | UI, DDNS, migration, aggregation, and backup jobs |
 
-The custom Caddy module is registered as:
+For an existing official or custom Caddy container, use `ghcr.io/juloc/caddy-ui-companion:<version>` for the UI container. Both modes keep the two-container boundary.
 
-```text
-dns.providers.netcup
-```
-
-It is implemented in this repository and does not import `github.com/caddy-dns/netcup`.
-
-## Quick Start
-
-Create `.env` from `.env.example`, set real values, then run:
+Create the external network and start the stack:
 
 ```sh
+cp .env.example .env
 docker network create proxy
 docker compose --env-file .env up -d
 ```
 
-Open the UI:
+Open `http://<server-ip>:8098`. Do not expose the UI or Caddy admin port `2019` directly to the internet.
 
-```text
-http://<server-ip>:8098
-```
-
-Only forward ports `80/tcp` and `443/tcp` from the router to the Caddy host. Forward `443/udp` only if you want HTTP/3.
-
-## Environment
+## Required configuration
 
 ```env
-DOMAIN=example.com
 ACME_EMAIL=admin@example.com
+DOMAIN=example.com
 
 NETCUP_CUSTOMER_NUMBER=123456
-NETCUP_API_KEY=...
-NETCUP_API_PASSWORD=...
-
-NETCUP_DDNS_DOMAIN=example.com
-NETCUP_DDNS_HOSTS=@,*
-NETCUP_DDNS_INTERVAL=300s
+NETCUP_API_KEY=replace-me
+NETCUP_API_PASSWORD=replace-me
 
 CADDY_UI_USERNAME=admin
-CADDY_UI_PASSWORD=change-me
-CADDY_UI_REACHABILITY_TIMEOUT=3
+CADDY_UI_PASSWORD=use-a-long-unique-password
 ```
 
-The `caddy-ui` service also needs the Netcup variables for the DNS management page. If those variables are only configured on the `caddy` service, certificate issuance can work while the UI cannot list or edit Netcup DNS records.
+`CADDY_UI_PASSWORD` is required only when the first administrator is created. Passwords are stored as salted scrypt hashes. Provider records store environment-variable references, not the Netcup secret values.
 
-Create the Netcup DNS records once before starting DDNS:
+Set `CADDY_UI_SECURE_COOKIES=true` when the UI itself is served over HTTPS. `DOMAIN` provides the default domain but is optional after domains are configured in the UI.
 
-| Host | Type | Destination |
-| --- | --- | --- |
-| `@` | `A` | current WAN IPv4 |
-| `*` | `A` | current WAN IPv4 |
+## Persistence
 
-The DDNS updater keeps those records pointed at the current public IPv4.
+| Volume | Content |
+| --- | --- |
+| `etc` | Root Caddyfile and generated site files |
+| `data` | Caddy certificates and state |
+| `config` | Caddy runtime configuration |
+| `logs` | Rotated Caddy access logs |
+| `ui-data` | SQLite database and backups |
 
-## Generated Caddyfile
+The UI database uses WAL mode, foreign keys, explicit transactions, and integrity-checked backups. Traffic stays hourly for 30 days, then daily for one year, then monthly without an automatic expiry.
 
-`init-caddyfile` writes this structure to `/etc/caddy/Caddyfile`:
+## Upgrading from the legacy UI
 
-```caddyfile
-{
-    email {$ACME_EMAIL}
-    admin 0.0.0.0:2019
-}
+On first start Caddy UI:
 
-{$DOMAIN}, *.{$DOMAIN} {
-    tls {
-        dns netcup {
-            customer_number {env.NETCUP_CUSTOMER_NUMBER}
-            api_key {env.NETCUP_API_KEY}
-            api_password {env.NETCUP_API_PASSWORD}
-        }
-        propagation_timeout 600s
-        resolvers 1.1.1.1 8.8.8.8
-    }
+1. creates a pre-migration database backup when applicable;
+2. imports legacy provider JSON and route metadata once;
+3. recognizes the pre-1.0 generated wildcard Caddyfile;
+4. saves it as `Caddyfile.pre-1.0`; and
+5. replaces only that recognized generated shape with the new `site-*.caddy` managed-site import.
 
-    import /etc/caddy/routes/*.caddy
+Custom Caddyfiles and unmanaged snippets are never overwritten. They are not included by the new managed-only import; import their route directives through the administrator-only preview wizard instead.
 
-    handle {
-        respond "Service not configured" 404
-    }
-}
-```
+## Development and verification
 
-## How Routes Work
-
-The UI writes managed snippets to `/etc/caddy/routes/*.caddy` in a shared Docker volume. Caddy imports those snippets and reloads through its internal admin API.
-
-When `DOMAIN` is set, the route host is optional. A route named `app` defaults to `app.example.com`.
-
-Example route:
-
-```caddyfile
-# managed-by caddy-ui
-# caddy-ui-route: {"host":"","name":"app","tls_skip_verify":false,"upstream":"app.internal:5055"}
-@app host app.example.com
-handle @app {
-    reverse_proxy app.internal:5055
-}
-```
-
-The UI also reads Caddy certificate metadata from `/data` and shows useful non-secret status information: Caddy admin reachability, storage paths, route counts, certificate names, wildcard certificates and expiry dates.
-
-The route overview includes a website reachability check. It resolves each managed route host and probes `https://host/` from inside the UI container. This is useful for checking whether the public name works, but local router NAT-loopback behavior can differ from a real external client.
-
-## DNS Management
-
-Provider accounts are stored in `/etc/caddy/caddy-ui.json`. The schema is provider-oriented so more providers can be added later:
-
-```json
-{
-  "providers": [
-    {
-      "id": "netcup-main",
-      "type": "netcup",
-      "label": "Netcup Main",
-      "domains": ["example.com"]
-    }
-  ]
-}
-```
-
-Only `netcup` is implemented right now. The DNS UI can list, add, update and delete records for configured Netcup domains.
-
-Provider accounts have explicit create and edit pages. Editing keeps the stored API key and password when the secret fields are left empty, and secrets are not rendered back into the browser.
-
-## Access Stats
-
-The UI samples Caddy's JSON access log from `/var/log/caddy/access.log` and shows top hosts, top paths, status codes and recent requests.
-
-## TLS Troubleshooting
-
-If a browser shows `ERR_SSL_PROTOCOL_ERROR` or the UI shows `tlsv1 alert internal error`, check whether the route has a stored certificate in the reachability table. A missing matching certificate usually means Caddy could not issue or load the wildcard certificate.
-
-Useful checks on the server:
+The runtime uses Python's standard library and a small dependency-free JavaScript file. The Caddy DNS provider is written in Go.
 
 ```sh
-docker compose logs --tail=200 caddy
-docker compose exec caddy caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile
-docker compose exec caddy caddy list-modules | grep netcup
+python -m compileall -q caddy_ui caddy_ui_entrypoint.py scripts tests
+python -m unittest discover -v
+gofmt -w cmd caddynetcp
+go test ./...
+docker build --target companion -t caddy-ui:companion-test .
+docker build --target bundle -t caddy-ui:bundle-test .
 ```
 
-Also verify that the public router forwards `443/tcp` to the Caddy container host and not to another service.
+The CI workflow performs these checks for pull requests and `main`.
 
-## App Templates
+## Releases
 
-The Apps page contains starter templates for common self-hosted services. Each template shows:
+A successful merge to `main` creates the next SemVer release and publishes both images. During the pre-1.0 phase, releases advance `alpha.N` by default.
 
-- the container image
-- the default upstream for Caddy
-- a Docker Compose snippet
-- a button to create the matching Caddy route
+| Pull request label | Result |
+| --- | --- |
+| none | next patch, or next current prerelease sequence |
+| `minor` / `release:minor` | next minor version |
+| `major` / `release:major` | next major version |
+| `beta` / `release:beta` | promote to or advance beta |
+| `stable` / `release:stable` | publish the stable base version |
 
-The UI does not mount or control the Docker socket. This is intentional: Docker socket access would give the web UI host-level control. Copy the generated snippet into your private Compose file and deploy it yourself.
+After both images build successfully, the workflow creates the GitHub Release and opens an auto-merge PR updating `Juloc/docker/caddy/docker-compose.yml`. Repository secret `DOCKER_REPO_TOKEN` must have access to that private repository.
 
-## Publishing
-
-Pushing to `main` publishes:
-
-```text
-ghcr.io/juloc/caddy-ui:latest
-```
-
-Tags like `v1.0.0` publish matching image tags as well.
-
-After the first push, make the GHCR package public in GitHub if the server should pull it without `docker login`.
-
-## Security Notes
-
-- Set `CADDY_UI_PASSWORD`.
-- Do not port-forward the UI.
-- Do not port-forward Caddy's admin port `2019`.
-- Put admin apps like Proxmox, Portainer, SABnzBD, Radarr and Sonarr behind VPN or another strong auth layer.
+Detailed decisions and verification status are in [`docs/`](docs/).

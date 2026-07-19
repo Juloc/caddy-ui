@@ -40,4 +40,3 @@ type response struct {
 	LongMessage  string          `json:"longmessage"`
 	ResponseData json.RawMessage `json:"responsedata"`
 }
-

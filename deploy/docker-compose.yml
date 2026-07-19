@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: ghcr.io/juloc/caddy-ui:latest
+    image: ghcr.io/juloc/caddy-ui:__CADDY_UI_VERSION__
     container_name: caddy
     command: caddy
     ports:
@@ -9,12 +9,10 @@ services:
       - "443:443/udp"
     environment:
       ACME_EMAIL: ${ACME_EMAIL}
-      DOMAIN: ${DOMAIN}
+      DOMAIN: ${DOMAIN:-}
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
       NETCUP_API_KEY: ${NETCUP_API_KEY}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
-      CADDYFILE_PATH: /etc/caddy/Caddyfile
-      CADDY_ROUTES_DIR: /etc/caddy/routes
     volumes:
       - etc:/etc/caddy
       - data:/data
@@ -26,11 +24,10 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    networks:
-      - proxy
+    networks: [proxy]
 
   caddy-ui:
-    image: ghcr.io/juloc/caddy-ui:latest
+    image: ghcr.io/juloc/caddy-ui:__CADDY_UI_VERSION__
     container_name: caddy-ui
     command: web
     depends_on:
@@ -39,20 +36,13 @@ services:
     ports:
       - "8098:8098"
     environment:
-      DOMAIN: ${DOMAIN}
+      DOMAIN: ${DOMAIN:-}
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
       NETCUP_API_KEY: ${NETCUP_API_KEY}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
       CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
       CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
-      CADDY_UI_SECURE_COOKIES: ${CADDY_UI_SECURE_COOKIES:-false}
       CADDY_ADMIN_URL: http://caddy:2019
-      CADDYFILE_PATH: /etc/caddy/Caddyfile
-      CADDY_ROUTES_DIR: /etc/caddy/routes
-      CADDY_DATA_PATH: /data
-      CADDY_LOG_PATH: /var/log/caddy/access.log
-      CADDY_SYSTEM_LOG_PATH: /var/log/caddy/caddy.log
-      CADDY_UI_CONFIG_PATH: /etc/caddy/caddy-ui.json
       CADDY_UI_DATA_DIR: /var/lib/caddy-ui
     volumes:
       - etc:/etc/caddy
@@ -65,8 +55,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    networks:
-      - proxy
+    networks: [proxy]
 
 volumes:
   etc:
