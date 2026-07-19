@@ -28,13 +28,15 @@ class MonitoringReliabilityTests(unittest.TestCase):
         self.assertIn("TLS valid", result["detail"])
         tls_probe.assert_called_once_with("caddy", "app.example.com", 3)
 
-    def test_certificate_view_excludes_local_ca_and_keeps_newest_managed_certificate(self) -> None:
+    def test_certificate_view_excludes_local_ca_expired_history_and_keeps_newest_current_certificate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             managed = root / "caddy" / "certificates" / "acme" / "example.com"
             managed.mkdir(parents=True)
+            expired = managed / "expired.crt"
             older = managed / "older.crt"
             newer = managed / "newer.crt"
+            expired.write_text("expired", encoding="utf-8")
             older.write_text("old", encoding="utf-8")
             newer.write_text("new", encoding="utf-8")
             local_ca = root / "caddy" / "pki" / "authorities" / "local" / "root.crt"
@@ -42,16 +44,21 @@ class MonitoringReliabilityTests(unittest.TestCase):
             local_ca.write_text("ca", encoding="utf-8")
 
             def decode(path: str) -> dict:
-                if path.endswith("older.crt"):
+                if path.endswith("expired.crt"):
+                    expiry = "Jan 01 00:00:00 2020 GMT"
+                    name = "*.example.com"
+                elif path.endswith("older.crt"):
                     expiry = "Jan 01 00:00:00 2030 GMT"
+                    name = "example.com"
                 elif path.endswith("newer.crt"):
                     expiry = "Jan 01 00:00:00 2031 GMT"
+                    name = "example.com"
                 else:
                     raise AssertionError("local CA certificate must not be inspected")
                 return {
                     "notAfter": expiry,
-                    "subject": ((('commonName', 'example.com'),),),
-                    "subjectAltName": (("DNS", "example.com"),),
+                    "subject": ((("commonName", name),),),
+                    "subjectAltName": (("DNS", name),),
                 }
 
             with patch("caddy_ui.monitoring.ssl._ssl._test_decode_cert", side_effect=decode):
