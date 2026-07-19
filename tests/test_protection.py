@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from caddy_ui.enhanced_web import Application
+from caddy_ui.protection import protection_settings
 from tests.helpers import settings
 
 
@@ -58,6 +59,25 @@ class ProtectionTests(unittest.TestCase):
 
         self.app.security.unban_ip("203.0.113.25")
         self.assertEqual(self.app.security.active_bans(), [])
+
+    def test_protection_levels_have_predictable_presets(self) -> None:
+        self.app.database.set_setting("protection", {"level": "balanced", "global": {"requests": 7}})
+        self.assertEqual(protection_settings(self.app.database)["global"]["requests"], 300)
+
+        self.app.database.set_setting("protection", {"level": "strict", "global": {"requests": 999}})
+        strict = protection_settings(self.app.database)["global"]
+        self.assertEqual(strict["requests"], 120)
+        self.assertEqual(strict["burst"], 20)
+
+        self.app.database.set_setting(
+            "protection",
+            {"level": "custom", "global": {"requests": 77, "window_seconds": 30, "burst": 9, "block_seconds": 600}},
+        )
+        custom = protection_settings(self.app.database)["global"]
+        self.assertEqual(custom["requests"], 77)
+        self.assertEqual(custom["window_seconds"], 30)
+        self.assertEqual(custom["burst"], 9)
+        self.assertEqual(custom["block_seconds"], 600)
 
 
 if __name__ == "__main__":
