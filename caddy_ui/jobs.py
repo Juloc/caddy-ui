@@ -160,20 +160,31 @@ class JobRunner:
             for route in routes:
                 if not route.enabled:
                     continue
-                for kind, title in (("public", "Public route unavailable"), ("upstream", "Upstream unavailable")):
+                checks = (
+                    ("public", "route.dns.down", "Public DNS unavailable"),
+                    ("upstream", "route.upstream.down", "Upstream unavailable"),
+                )
+                for kind, event, title in checks:
                     key = f"route:{route.id}:{kind}"
                     result = health.get(route.id, {}).get(kind, {})
                     current[key] = bool(result.get("ok"))
-                    descriptions[key] = (f"route.{kind}.down", title, f"{route.effective_host}: {result.get('detail', 'health check failed')}")
+                    descriptions[key] = (event, title, f"{route.effective_host}: {result.get('detail', 'health check failed')}")
             for certificate in certificate_files(self.settings.caddy_data_path):
                 key = f"certificate:{certificate['name']}"
                 current[key] = certificate["days"] >= 21
                 descriptions[key] = ("certificate.expiring", "Certificate expiring", f"{certificate['name']} expires in {certificate['days']} days.")
+
+            # Old releases performed an internal HTTPS self-check and could create false
+            # route.public.down alerts because of hairpin NAT or split DNS. Retire them.
+            self.notifications.acknowledge_event_type("route.public.down")
+
             previous = self.database.setting("monitor_state", {}) or {}
             for key, healthy in current.items():
-                if not healthy and previous.get(key) is not False:
-                    event, title, message = descriptions[key]
-                    object_type, _, object_id = key.partition(":")
+                event, title, message = descriptions[key]
+                object_type, _, object_id = key.partition(":")
+                if healthy:
+                    self.notifications.acknowledge_matching(event, object_type, object_id)
+                elif previous.get(key) is not False:
                     self.notifications.create("error", event, title, message, object_type, object_id)
             self.database.set_setting("monitor_state", current)
         except Exception:
