@@ -7,7 +7,10 @@ from typing import Any
 from . import analytics
 
 
-class AnalyticsRepository(analytics.AnalyticsRepository):
+_BaseAnalyticsRepository = analytics.AnalyticsRepository
+
+
+class AnalyticsRepository(_BaseAnalyticsRepository):
     """Extends the base repository with the synthetic combined `errors` status filter."""
 
     @staticmethod
@@ -17,8 +20,8 @@ class AnalyticsRepository(analytics.AnalyticsRepository):
         end: datetime,
     ) -> tuple[str, list[Any]]:
         if filters.status != "errors":
-            return analytics.AnalyticsRepository._raw_where(filters, start, end)
-        where, args = analytics.AnalyticsRepository._raw_where(replace(filters, status=""), start, end)
+            return _BaseAnalyticsRepository._raw_where(filters, start, end)
+        where, args = _BaseAnalyticsRepository._raw_where(replace(filters, status=""), start, end)
         return f"{where} AND status>=400", args
 
     def _bucket_where(
@@ -28,8 +31,8 @@ class AnalyticsRepository(analytics.AnalyticsRepository):
         end: datetime,
     ) -> tuple[str, list[Any]]:
         if filters.status != "errors":
-            return super()._bucket_where(filters, start, end)
-        where, args = super()._bucket_where(replace(filters, status=""), start, end)
+            return _BaseAnalyticsRepository._bucket_where(self, filters, start, end)
+        where, args = _BaseAnalyticsRepository._bucket_where(self, replace(filters, status=""), start, end)
         return f"{where} AND status_class IN ('4xx','5xx')", args
 
 
