@@ -53,8 +53,13 @@ jobs:
         run: |
           python -m compileall -q caddy_ui caddy_ui_entrypoint.py scripts tests
           python -m unittest discover -v
-          test -z "$(gofmt -l cmd caddynetcp)"
+          UNFORMATTED="$(gofmt -l cmd caddynetcp)"
+          if [ -n "$UNFORMATTED" ]; then
+            printf 'Go files need formatting:\n%s\n' "$UNFORMATTED"
+            exit 1
+          fi
           go mod tidy
+          git diff --exit-code -- go.mod go.sum
           go test ./...
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4

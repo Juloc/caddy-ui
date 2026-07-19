@@ -1,8 +1,6 @@
 package caddynetcp
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestCleanZone(t *testing.T) {
 	if got := cleanZone("example.com."); got != "example.com" {
