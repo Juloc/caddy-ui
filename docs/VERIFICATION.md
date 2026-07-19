@@ -15,7 +15,7 @@ Completed on 2026-07-19:
 
 The pull-request workflow is configured to complete the checks unavailable in the local environment:
 
-- Go formatting and `go test ./...` using the version declared in `go.mod`.
+- Go formatting and `go test ./...` using Go 1.25.1, the minimum required by Caddy 2.11.4.
 - Companion container build.
 - Bundle container build including Caddy 2.11.4 and the Netcup module.
 - Caddyfile adaptation as part of the bundle build/smoke path.
