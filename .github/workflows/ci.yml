@@ -37,13 +37,6 @@ jobs:
             exit 1
           fi
           go mod tidy
-      - name: Export tidied modules
-        uses: actions/upload-artifact@v6
-        with:
-          name: go-modules
-          path: |
-            go.mod
-            go.sum
       - name: Test and verify committed modules
         run: |
           go test ./...
