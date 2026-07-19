@@ -36,8 +36,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
-          if [ -z "$CURRENT" ]; then CURRENT="v$(cat caddy_ui/VERSION)"; fi
+          CURRENT="v$(cat caddy_ui/VERSION)"
           LABELS="$(
             curl --fail --silent --show-error \
               --header "Authorization: Bearer ${GITHUB_TOKEN}" \
@@ -90,6 +89,18 @@ jobs:
             ghcr.io/juloc/caddy-ui-companion:${{ steps.version.outputs.version }}
             ghcr.io/juloc/caddy-ui-companion:${{ steps.version.outputs.channel }}
           cache-from: type=gha
+      - name: Record release version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          printf '%s\n' "$VERSION" > caddy_ui/VERSION
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add caddy_ui/VERSION
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): ${VERSION}"
+            git push origin HEAD:main
+          fi
       - name: Create tag and GitHub release
         env:
           GITHUB_TOKEN: ${{ github.token }}
