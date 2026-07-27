@@ -6,6 +6,7 @@ import os
 import secrets
 import sqlite3
 import urllib.parse
+import uuid
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer
@@ -15,12 +16,12 @@ from . import __version__, secure_views
 from .audit import Actor, AuditLog
 from .config import Settings
 from .db import Database, utc_now
+from .domain import ManagedRoute, RouteKind, Upstream
 from .jobs import JobRunner
 from .migration import import_legacy
 from .notifications import NotificationService
-from .providers.netcup import NetcupProvider
 from .repositories import AccessRepository, ProviderRepository, RouteRepository, UserRepository
-from .secure_caddy import HardenedCaddyManager
+from .secure_caddy import HardenedCaddyManager, route_targets_caddy_ui
 from .security import token_hash, verify_totp
 from .security_policy import (
     INTERNAL_SECRET_HEADER,
@@ -55,9 +56,48 @@ class SecureApplication:
         self.throttle = PersistentLoginThrottle(self.database, self.security)
         import_legacy(settings, self.database, self.audit)
         self.caddy.migrate_legacy_layout()
-        # Validate existing managed routes at startup. Protected routes must never run without the shared secret.
         self.caddy.rendered()
+        self._ensure_public_route()
         self.jobs = JobRunner(settings, self.database, self.notifications)
+
+    def _ensure_public_route(self) -> None:
+        if not self.security.public_url:
+            return
+        routes = self.routes.list()
+        matching = [route for route in routes if route.effective_host == self.security.public_host]
+        valid = [
+            route
+            for route in matching
+            if route.enabled
+            and route.kind == RouteKind.PROXY
+            and not route.paths
+            and route_targets_caddy_ui(route)
+        ]
+        if len(valid) == 1 and len(matching) == 1:
+            return
+        if matching:
+            raise RuntimeError(
+                f"CADDY_UI_PUBLIC_URL host {self.security.public_host} is already used by an incompatible route."
+            )
+        names = {route.name.casefold() for route in routes}
+        base_name = "caddy-ui-admin"
+        name = base_name
+        counter = 2
+        while name.casefold() in names:
+            name = f"{base_name}-{counter}"
+            counter += 1
+        route = ManagedRoute(
+            id=str(uuid.uuid4()),
+            name=name,
+            host=self.security.public_host,
+            kind=RouteKind.PROXY,
+            upstreams=[Upstream("caddy-ui:8098")],
+        )
+        self.caddy.apply(
+            Actor(username="system"),
+            "Bootstrap hardened public Caddy UI route",
+            proposed=route,
+        )
 
     def start_jobs(self) -> None:
         self.jobs.start()
@@ -83,7 +123,8 @@ class SecureHandler(BaseHandler):
             return
         super().do_POST()
 
-    def _is_portal_path(self, path: str) -> bool:
+    @staticmethod
+    def _is_portal_path(path: str) -> bool:
         return path.startswith("/__caddy_ui_auth") or path == "/portal/authorize"
 
     def _proxy_authenticated(self) -> bool:
@@ -97,18 +138,17 @@ class SecureHandler(BaseHandler):
 
     def _enforce_proxy_boundary(self, path: str) -> bool:
         policy = self.app.security
-        proxy_required = bool(policy.public_url) or self._is_portal_path(path)
-        if not proxy_required:
+        if not (policy.public_url or self._is_portal_path(path)):
             return True
         if not self._proxy_authenticated():
             self.send_error(HTTPStatus.NOT_FOUND)
             return False
-        forwarded_scheme = self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower()
-        forwarded_host = normalize_host(self.headers.get("X-Forwarded-Host", "").split(",", 1)[0])
-        if forwarded_scheme != "https" or not forwarded_host:
+        scheme = self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower()
+        host = normalize_host(self.headers.get("X-Forwarded-Host", "").split(",", 1)[0])
+        if scheme != "https" or not host:
             self.send_error(HTTPStatus.MISDIRECTED_REQUEST, "HTTPS proxy metadata is required.")
             return False
-        if policy.public_url and not self._is_portal_path(path) and forwarded_host != policy.public_host:
+        if policy.public_url and not self._is_portal_path(path) and host != policy.public_host:
             self.send_error(HTTPStatus.MISDIRECTED_REQUEST, "Unexpected public host.")
             return False
         return True
@@ -117,7 +157,7 @@ class SecureHandler(BaseHandler):
         if self._is_portal_path(path):
             host = normalize_host(self.headers.get("X-Forwarded-Host", "").split(",", 1)[0])
             scheme = self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower()
-            return f"{scheme}://{host}" if scheme in {"http", "https"} and host else ""
+            return f"{scheme}://{host}" if scheme == "https" and host else ""
         if self.app.security.public_url:
             return self.app.security.public_url
         host = normalize_host(self.headers.get("Host", ""))
@@ -127,9 +167,9 @@ class SecureHandler(BaseHandler):
     def _normalized_origin(value: str) -> str:
         try:
             parsed = urllib.parse.urlsplit(value)
+            host = normalize_host(parsed.netloc)
         except ValueError:
             return ""
-        host = normalize_host(parsed.netloc)
         if parsed.scheme not in {"http", "https"} or not host:
             return ""
         return f"{parsed.scheme.lower()}://{host}"
@@ -142,7 +182,6 @@ class SecureHandler(BaseHandler):
         referer = self.headers.get("Referer", "")
         if referer:
             return secrets.compare_digest(self._normalized_origin(referer), expected)
-        # Public and portal POST requests must provide browser same-origin metadata.
         return not (self.app.security.public_url or self._is_portal_path(path))
 
     def _client_ip(self) -> str:
@@ -153,13 +192,21 @@ class SecureHandler(BaseHandler):
         for address in reversed(forwarded):
             if not self.app.security.trusted_proxy(address):
                 return address
-        return forwarded[0] if forwarded else peer
+        return peer
 
-    def _login_keys(self, realm: str, username: str) -> tuple[str, str]:
+    def _login_limits(self, realm: str, username: str) -> tuple[tuple[str, int], ...]:
         address = self._client_ip()
+        account = username.strip().casefold() or "<empty>"
         return (
-            f"{realm}:account:{username.strip().casefold()}",
-            f"{realm}:address:{address}",
+            (
+                f"{realm}:credential-address:{account}:{address}",
+                self.app.security.account_attempts,
+            ),
+            (f"{realm}:address:{address}", self.app.security.address_attempts),
+            (
+                f"{realm}:account:{account}",
+                max(100, self.app.security.address_attempts * 4),
+            ),
         )
 
     def _login_get(self, parsed: urllib.parse.SplitResult) -> None:
@@ -171,15 +218,21 @@ class SecureHandler(BaseHandler):
             if not group:
                 self.send_error(HTTPStatus.NOT_FOUND, "Access group not found.")
                 return
-            return_to = safe_return_path(first(query, "return_to", "/"))
-            content = secure_views.portal_login(group, csrf, first(query, "error"), return_to)
+            content = secure_views.portal_login(
+                group,
+                csrf,
+                first(query, "error"),
+                safe_return_path(first(query, "return_to", "/")),
+            )
             self._html_with_cookie(content, self._cookie_header(LOGIN_CSRF_COOKIE, csrf, 600))
             return
         if self._secure_session(self._cookie(SESSION_COOKIE)):
             self._redirect("/")
             return
-        content = secure_views.login(csrf, first(query, "error"))
-        self._html_with_cookie(content, self._cookie_header(LOGIN_CSRF_COOKIE, csrf, 600))
+        self._html_with_cookie(
+            secure_views.login(csrf, first(query, "error")),
+            self._cookie_header(LOGIN_CSRF_COOKIE, csrf, 600),
+        )
 
     def _valid_login_csrf(self, form: dict[str, list[str]]) -> bool:
         cookie = self._cookie(LOGIN_CSRF_COOKIE)
@@ -193,15 +246,12 @@ class SecureHandler(BaseHandler):
         username = first(form, "username")[:80]
         password = first(form, "password")[:512]
         code = first(form, "totp")[:6]
-        account_key, address_key = self._login_keys("admin", username)
-        limits = (
-            (account_key, self.app.security.account_attempts),
-            (address_key, self.app.security.address_attempts),
-        )
+        limits = self._login_limits("admin", username)
+        keys = tuple(key for key, _maximum in limits)
         if not self.app.throttle.allowed(limits):
             self._redirect("/login", error="Too many sign-in attempts. Try again later.", clear_login_csrf=True)
             return
-        user = self.app.database.authenticate(username, password) if len(password) >= 14 else None
+        user = self.app.database.authenticate(username, password)
         valid_totp = bool(user and (not user["totp_enabled"] or verify_totp(user["totp_secret"], code)))
         if user and self.app.security.require_totp and not user["totp_enabled"]:
             self.app.audit.record(
@@ -218,7 +268,7 @@ class SecureHandler(BaseHandler):
             )
             return
         if not user or not valid_totp:
-            self.app.throttle.record_failure((account_key, address_key))
+            self.app.throttle.record_failure(keys)
             self.app.audit.record(
                 Actor(username=username or "unknown", remote_address=self._client_ip()),
                 "login.failed",
@@ -232,12 +282,13 @@ class SecureHandler(BaseHandler):
                 clear_login_csrf=True,
             )
             return
-        self.app.throttle.clear((account_key, address_key))
-        ttl = self.app.settings.session_ttl_seconds
-        if self.app.security.public_url:
-            ttl = min(ttl, 28800)
-        token, _ = self.app.database.create_session(
-            user["id"], ttl, self._client_ip(), self.headers.get("User-Agent", "")
+        self.app.throttle.clear(keys)
+        ttl = min(self.app.settings.session_ttl_seconds, 28800) if self.app.security.public_url else self.app.settings.session_ttl_seconds
+        token, _csrf = self.app.database.create_session(
+            user["id"],
+            ttl,
+            self._client_ip(),
+            self.headers.get("User-Agent", ""),
         )
         self.app.audit.record(
             Actor(user["id"], user["username"], self._client_ip()),
@@ -248,8 +299,7 @@ class SecureHandler(BaseHandler):
         self._redirect("/", set_session=token, clear_login_csrf=True, session_ttl=ttl)
 
     def _portal_authorize(self, parsed: urllib.parse.SplitResult) -> None:
-        query = urllib.parse.parse_qs(parsed.query)
-        group_id = first(query, "group")
+        group_id = first(urllib.parse.parse_qs(parsed.query), "group")
         if not REFERENCE_RE.fullmatch(group_id):
             self.send_error(HTTPStatus.BAD_REQUEST, "Invalid access group.")
             return
@@ -297,18 +347,15 @@ class SecureHandler(BaseHandler):
             return
         username = first(form, "username")[:80]
         password = first(form, "password")[:512]
-        account_key, address_key = self._login_keys(f"portal:{group_id}", username)
-        limits = (
-            (account_key, self.app.security.account_attempts),
-            (address_key, self.app.security.address_attempts),
-        )
         return_to = safe_return_path(first(form, "return_to", "/"))
+        limits = self._login_limits(f"portal:{group_id}", username)
+        keys = tuple(key for key, _maximum in limits)
         if not self.app.throttle.allowed(limits):
             self._portal_failure_redirect(group_id, return_to, "Too many sign-in attempts. Try again later.")
             return
-        credential = self.app.access.authenticate(group_id, username, password) if len(password) >= 14 else None
+        credential = self.app.access.authenticate(group_id, username, password)
         if not credential:
-            self.app.throttle.record_failure((account_key, address_key))
+            self.app.throttle.record_failure(keys)
             self.app.audit.record(
                 Actor(username=username or "unknown", remote_address=self._client_ip()),
                 "portal_login.failed",
@@ -318,7 +365,7 @@ class SecureHandler(BaseHandler):
             )
             self._portal_failure_redirect(group_id, return_to, "Invalid username or password.")
             return
-        self.app.throttle.clear((account_key, address_key))
+        self.app.throttle.clear(keys)
         token = secrets.token_urlsafe(32)
         now = datetime.now(UTC)
         expires = now + timedelta(seconds=self.app.security.portal_session_ttl_seconds)
@@ -399,10 +446,9 @@ class SecureHandler(BaseHandler):
 
     def _cookie_header(self, name: str, value: str, max_age: int) -> str:
         secure = self.app.settings.secure_cookies or bool(self.app.security.public_url) or self._is_portal_path(self.path)
-        secure_value = "; Secure" if secure else ""
         return (
             f"{name}={value}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}; Priority=High"
-            f"{secure_value}"
+            + ("; Secure" if secure else "")
         )
 
     def _html_with_cookie(self, content: bytes, cookie: str) -> None:
