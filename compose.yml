@@ -37,7 +37,7 @@ services:
       caddy:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8098:8098"
+      - "8098:8098"
     expose:
       - "8099"
     environment:
@@ -49,7 +49,7 @@ services:
       CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
       CADDY_UI_PUBLIC_ORIGIN: ${CADDY_UI_PUBLIC_ORIGIN:-}
       CADDY_UI_SECURE_COOKIES: ${CADDY_UI_SECURE_COOKIES:-false}
-      CADDY_UI_REQUIRE_TOTP: ${CADDY_UI_REQUIRE_TOTP:-false}
+      CADDY_UI_REQUIRE_TOTP: "false"
       CADDY_UI_SESSION_TTL: ${CADDY_UI_SESSION_TTL:-86400}
       CADDY_UI_PORTAL_SESSION_TTL: ${CADDY_UI_PORTAL_SESSION_TTL:-43200}
       CADDY_UI_PASSWORD_HASH_WORKERS: ${CADDY_UI_PASSWORD_HASH_WORKERS:-2}
