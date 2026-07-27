@@ -201,8 +201,46 @@ class SecureCaddyManager(base.CaddyManager):
                     actual[path.name] = value
         if actual == desired:
             return False
-        self.apply(Actor(username="system"), "Reconcile hardened authentication")
-        return True
+
+        actor = Actor(username="system")
+        self.database.backup("pre-auth-reconcile")
+        with tempfile.TemporaryDirectory(prefix="caddy-ui-reconcile-") as temporary_name:
+            routes_backup = Path(temporary_name) / "routes"
+            if self.settings.routes_dir.exists():
+                shutil.copytree(self.settings.routes_dir, routes_backup)
+            revision_id = ""
+            try:
+                revision_id = self._create_revision(actor, "Reconcile hardened authentication", desired)
+                self._write_managed_files(desired)
+                self.validate()
+                if self.settings.auto_reload:
+                    self.reload()
+                self._mark_revision_applied(revision_id)
+                self.audit.record(
+                    actor,
+                    "route.reconcile",
+                    "authentication",
+                    "managed-routes",
+                    after={"files": sorted(desired)},
+                    revision_id=revision_id,
+                )
+                return True
+            except Exception as exc:
+                self._restore_directory(routes_backup)
+                try:
+                    if self.settings.auto_reload:
+                        self.reload()
+                except Exception:
+                    pass
+                self.audit.record(
+                    actor,
+                    "route.reconcile",
+                    "authentication",
+                    "managed-routes",
+                    result=f"failed: {exc}",
+                    revision_id=revision_id,
+                )
+                raise
 
     def _restore_revision(self, actor: Actor, revision_id: str) -> None:
         with self.database.connect() as connection:
