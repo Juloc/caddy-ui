@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 from caddy_ui.config import Settings
@@ -14,6 +13,7 @@ def settings(tmp_path: Path) -> Settings:
     return Settings(
         host="127.0.0.1",
         port=0,
+        portal_port=1,
         data_dir=data,
         database_path=data / "app.db",
         backup_dir=data / "backups",
@@ -26,7 +26,10 @@ def settings(tmp_path: Path) -> Settings:
         default_domain="example.com",
         auto_reload=False,
         session_ttl_seconds=3600,
+        portal_session_ttl_seconds=1800,
         secure_cookies=False,
+        public_origin="",
+        require_totp=False,
         bootstrap_username="admin",
         bootstrap_password="correct-horse-battery-staple",
         legacy_config_path=tmp_path / "legacy.json",

@@ -13,6 +13,8 @@ Caddy UI is a fast, lightweight desktop-oriented web application for daily Caddy
 - Bundle mode uses a custom Caddy image with the Netcup and Caddy UI protection modules.
 - Companion mode manages an existing standard Caddy installation. Features that require a custom Caddy module must fail safely when that module is unavailable.
 - Both modes use exactly two containers: `caddy` and `caddy-ui`.
+- The administration listener may be exposed only through an HTTPS reverse-proxy route with an exact configured public origin.
+- The access-portal listener is internal-only and must never be published directly.
 
 ## Navigation
 
@@ -66,6 +68,10 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 - reusable access group;
 - selected safe reverse-proxy options.
 
+The path prefix `/__caddy_ui_auth/*` is reserved for the access portal and cannot be assigned to a managed route. Generated access-portal handlers are placed before route-specific path matchers so a route cannot recursively protect its own login page.
+
+Managed proxy routes remove untrusted `Remote-User` and internal portal identity headers. Protected routes overwrite `Remote-User` only with the identity returned by the internal portal authorization response.
+
 ### Custom routes
 
 - Administrators may create a Custom Route containing a controlled Caddy snippet.
@@ -86,13 +92,20 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 7. Roll back automatically on failure.
 8. Record the complete audit entry and revision.
 
+Managed route files are reconciled through the current hardened renderer during startup. Revision restore regenerates route files from route metadata through the current renderer; legacy revisions without route metadata are not restored as raw authentication configuration.
+
 ## Access
 
 - Reusable access groups can protect multiple routes.
 - Version 1 uses a branded form login with username and password.
 - A group can configure name, logo, help text, and accent color.
 - Passwords are strongly hashed and never rendered back.
-- Caddy UI and branded portal logins use persistent brute-force protection keyed by securely resolved client IP and username.
+- Caddy UI and branded portal logins use persistent progressive brute-force protection keyed by securely resolved client IP and username.
+- Portal authentication runs on a separate internal listener from the administration UI.
+- Caddy authenticates to the portal listener with an automatically generated random secret stored in the protected UI database.
+- Login POSTs require same-origin browser context and reject external or recursive return targets.
+- Portal sessions use random tokens stored only as user-agent-bound hashes and expire after a configurable bounded lifetime.
+- Authentication endpoints never pass through the protected route's own `forward_auth` handler, preventing recursive redirects.
 - The architecture reserves provider types for forward-auth and OIDC without exposing unfinished controls.
 - Future targets include Authentik, Authelia, Microsoft, Google, and GitHub.
 
@@ -180,13 +193,15 @@ Login protection:
 - default temporary login restriction begins after 10 failures;
 - repeated attacks escalate from 15 minutes to one hour and up to 24 hours;
 - successful sign-in clears the active failure counter;
-- administrators can remove active temporary restrictions.
+- administrators can remove active temporary restrictions;
+- unknown usernames perform a bounded constant-cost password verification;
+- password length, accepted scrypt parameters, password-hash concurrency, and HTTP worker concurrency are bounded to limit memory-exhaustion attacks.
 
 Threat detection observes recent request metadata for high request rates, repeated authorization failures, and scanning-like 404 patterns. The response follows `detect -> throttle/restrict -> temporary block`, records an explicit reason, and avoids automatic restrictions for private or explicitly allowlisted addresses.
 
 Every administrator security-policy change and manual restriction action is recorded in the audit log. Security events preserve enough detail to explain why an automatic decision was made.
 
-The custom protection handler is built into bundle mode so no CrowdSec, Redis, PostgreSQL, or third security container is required. Companion mode must preserve existing routes and report protection as unavailable rather than writing an unsupported Caddy configuration.
+The custom protection handler is built into bundle mode so no CrowdSec, Redis, PostgreSQL, or third security container is required. Companion mode preserves hardened authentication and existing routes but reports the custom route guard as unavailable rather than writing an unsupported Caddy configuration.
 
 ## System
 
@@ -210,8 +225,12 @@ The custom protection handler is built into bundle mode so no CrowdSec, Redis, P
 - Administrator: full management, users, settings, restore, Custom Routes, analytics exports, and security policy changes.
 - Editor: managed routes, DNS, access groups, and operational actions permitted by policy.
 - Viewer: read-only status, routes, analytics, logs, security events, DNS, audit, and configuration previews.
-- Login uses username/password and optional TOTP in version 1.
+- Login uses username/password and optional TOTP in version 1. Public deployments may require TOTP for every successful login after account setup.
 - Passkeys are a future extension point, not an unfinished visible feature.
+- Public mode requires an exact HTTPS origin and rejects other hosts or insecure requests.
+- Login requests require same-origin browser context.
+- Public session cookies use `Secure`, `HttpOnly`, `SameSite`, `Path=/`, and the `__Host-` prefix.
+- Administration sessions are bound to the browser user agent and revoked on a binding mismatch.
 
 ### Audit
 
@@ -228,21 +247,3 @@ The custom protection handler is built into bundle mode so no CrowdSec, Redis, P
 - Initial events include public/down, upstream/down, certificate expiry, Caddy reload failure, DNS/DDNS failure, backup failure, update availability, security threats, and protection activation failures.
 - Repeated security events are grouped/deduplicated before external notification where practical.
 - Webhooks support ntfy and Home Assistant through generic JSON payloads.
-
-## Persistence and migration
-
-- SQLite in the existing persistent UI volume.
-- WAL mode, foreign keys, bounded busy timeout, and explicit migrations.
-- Analytics and security tables use targeted indexes for time, host, endpoint, IP, status, and response-time filtering.
-- Existing JSON provider configuration and managed route metadata are imported automatically.
-- Every schema migration creates a backup first, validates database integrity, and preserves rollback capability.
-
-## Removed scope
-
-- App templates and generated Docker Compose snippets.
-- Docker socket integration.
-- Full raw Caddyfile editor.
-- Heavy SPA frameworks.
-- External analytics databases required for core operation.
-- Additional mandatory security containers.
-- Unfinished provider controls.

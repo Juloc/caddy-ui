@@ -51,7 +51,7 @@ def main() -> int:
         from caddy_ui.runtime_security import install as install_runtime_security
 
         install_runtime_security()
-        from caddy_ui.enhanced_web import main as web_main
+        from caddy_ui.hardened_web import main as web_main
 
         return web_main()
     if command == "init-caddyfile":
