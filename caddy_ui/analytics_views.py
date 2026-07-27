@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from . import views
 from .analytics import AnalyticsFilters
+from .ip_intelligence import assess_client, lookup_ip
 
 
 def q(values: dict[str, Any]) -> str:
@@ -152,11 +153,28 @@ def logs_page(session: sqlite3.Row, csrf: str, rows: Iterable[sqlite3.Row], filt
 
 def client_page(session: sqlite3.Row, csrf: str, detail: dict[str, Any], range_name: str, security_events: Iterable[sqlite3.Row], banned: bool, is_admin: bool, message: str = "", error: str = "") -> bytes:
     summary = detail["summary"]; ip = detail["ip"]
+    intelligence = lookup_ip(ip)
+    assessment = assess_client(detail["events"])
     security_rows = "".join(f'<tr><td>{views.e(row["occurred_at"])}</td><td><span class="badge">{views.e(row["kind"])}</span></td><td>{views.e(row["reason"])}</td></tr>' for row in security_events) or '<tr><td colspan="3" class="empty">No security events for this client.</td></tr>'
     requests = "".join(f'<tr><td>{views.e(row["occurred_at"])}</td><td>{views.e(row["host"])}</td><td>{views.e(row["method"])}</td><td>{views.e(row["uri"])}</td><td>{views.e(row["status"])}</td><td>{views.e(format_ms(row["duration_ms"]))}</td></tr>' for row in detail["events"]) or '<tr><td colspan="6" class="empty">No requests in this range.</td></tr>'
     action = ""
     if is_admin:
         action = f'<form method="post" action="/security/unban"><input type="hidden" name="csrf" value="{views.e(csrf)}"><input type="hidden" name="ip" value="{views.e(ip)}"><button type="submit">Remove temporary block</button></form>' if banned else f'<form method="post" action="/security/ban" class="inline-form"><input type="hidden" name="csrf" value="{views.e(csrf)}"><input type="hidden" name="ip" value="{views.e(ip)}"><input type="hidden" name="duration" value="86400"><input name="reason" value="Manual administrator block" required><button class="danger" type="submit">Temporarily block</button></form>'
     endpoint_rows = "".join(f'<tr><td><a href="/logs?{q({"ip":ip,"endpoint":item[0],"range":range_name})}">{views.e(item[0])}</a></td><td>{item[1]:,}</td><td>{views.e(format_ms(item[2]))}</td></tr>' for item in detail["endpoints"])
-    body = f'<div class="commandbar"><div><a href="/analytics?tab=clients">← Clients</a><h2 class="page-inline-title">{views.e(ip)}</h2></div><div class="commands"><a class="button" href="/logs?{q({"ip":ip,"range":range_name})}">Open filtered logs</a>{action}</div></div><div class="grid metrics-grid">{metric("Requests",f"{safe_int(summary.get('requests')):,}")}{metric("Average",format_ms(summary.get("avg_ms")))}{metric("P95",format_ms(summary.get("p95_ms")))}{metric("5xx",f"{safe_int(summary.get('errors_5xx')):,}")}</div><div class="grid analytics-grid">{chart("Request activity",detail["series"],"requests","requests",{"ip":ip,"range":range_name})}<section class="panel span-6"><div class="panel-header"><h2>Top endpoints</h2></div><div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Requests</th><th>Average</th></tr></thead><tbody>{endpoint_rows or "<tr><td colspan=\"3\" class=\"empty\">No data.</td></tr>"}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Security history</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Type</th><th>Reason</th></tr></thead><tbody>{security_rows}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Recent requests</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Host</th><th>Method</th><th>Path</th><th>Status</th><th>Response</th></tr></thead><tbody>{requests}</tbody></table></div></section></div>'
+    endpoint_rows = endpoint_rows or '<tr><td colspan="3" class="empty">No data.</td></tr>'
+    owner_rows = [
+        ("Scope", intelligence.get("scope", "unknown")),
+        ("Network holder", intelligence.get("holder", "") or "Unavailable"),
+        ("ASN", intelligence.get("asn", "") or "Unavailable"),
+        ("Prefix", intelligence.get("prefix", "") or "Unavailable"),
+        ("Registry", intelligence.get("registry", "") or "Unavailable"),
+        ("Source", intelligence.get("source", "") or "Unavailable"),
+    ]
+    owner_table = "".join(f'<tr><th>{views.e(label)}</th><td>{views.e(value)}</td></tr>' for label, value in owner_rows)
+    if not intelligence.get("available") and intelligence.get("error"):
+        owner_table += f'<tr><th>Lookup status</th><td>{views.e(intelligence["error"])}</td></tr>'
+    reasons = "".join(f'<li>{views.e(reason)}</li>' for reason in assessment["reasons"])
+    risk_state = "bad" if assessment["risk"] == "high" else "warn" if assessment["risk"] == "medium" else "ok"
+    intelligence_panels = f'<section class="panel span-6"><div class="panel-header"><div><h2>IP ownership</h2><div class="muted">Routing and registration data are cached. The network holder is not necessarily the individual user.</div></div></div><div class="table-wrap"><table><tbody>{owner_table}</tbody></table></div></section><section class="panel span-6"><div class="panel-header"><div><h2>Bot assessment</h2><div class="muted">Heuristic result based on the recent request sample. It is not definitive.</div></div><span class="status {risk_state}">{views.e(assessment["risk"])} risk</span></div><div class="grid metrics-grid"><section class="card span-6"><div class="muted">Classification</div><div class="stat-value">{views.e(assessment["classification"])}</div></section><section class="card span-6"><div class="muted">Automation score</div><div class="stat-value">{assessment["automation_score"]}/100</div></section></div><ul>{reasons}</ul></section>'
+    body = f'<div class="commandbar"><div><a href="/analytics?tab=clients">← Clients</a><h2 class="page-inline-title">{views.e(ip)}</h2></div><div class="commands"><a class="button" href="/logs?{q({"ip":ip,"range":range_name})}">Open filtered logs</a>{action}</div></div><div class="grid metrics-grid">{metric("Requests",f"{safe_int(summary.get('requests')):,}")}{metric("Average",format_ms(summary.get("avg_ms")))}{metric("P95",format_ms(summary.get("p95_ms")))}{metric("5xx",f"{safe_int(summary.get('errors_5xx')):,}")}</div><div class="grid analytics-grid">{intelligence_panels}{chart("Request activity",detail["series"],"requests","requests",{"ip":ip,"range":range_name})}<section class="panel span-6"><div class="panel-header"><h2>Top endpoints</h2></div><div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Requests</th><th>Average</th></tr></thead><tbody>{endpoint_rows}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Security history</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Type</th><th>Reason</th></tr></thead><tbody>{security_rows}</tbody></table></div></section><section class="panel span-12"><div class="panel-header"><h2>Recent requests</h2></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Host</th><th>Method</th><th>Path</th><th>Status</th><th>Response</th></tr></thead><tbody>{requests}</tbody></table></div></section></div>'
     return views.layout(f"Client {ip}", "analytics", session, csrf, body, message, error)
