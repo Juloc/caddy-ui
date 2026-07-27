@@ -8,7 +8,7 @@ from pathlib import Path
 from caddy_ui.audit import AuditLog
 from caddy_ui.caddy import redact_config
 from caddy_ui.db import Database
-from caddy_ui.domain import HeaderOperation, ManagedRoute, Upstream
+from caddy_ui.domain import HeaderOperation, ManagedRoute, RouteKind, Upstream
 from caddy_ui.public_auth import (
     ADMIN_PROXY_HEADER,
     PORTAL_PROXY_HEADER,
@@ -71,13 +71,21 @@ class PublicAuthenticationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exactly one enabled, unprotected"):
                 manager._rendered_for([route])
 
-    def test_legacy_access_locked_public_admin_route_is_migrated(self) -> None:
+    def test_single_legacy_public_route_is_fully_normalized(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = self.migrating_manager(directory, "https://caddy.example.com")
             route = ManagedRoute(
-                name="caddy-ui-admin",
+                name="legacy-admin",
                 host="caddy.example.com",
-                upstreams=[Upstream("caddy-ui:8098")],
+                kind=RouteKind.PROXY,
+                enabled=False,
+                paths=["/admin/*"],
+                upstreams=[Upstream("host.docker.internal:8098")],
+                request_headers=[HeaderOperation("X-Legacy", "true")],
+                response_headers=[HeaderOperation("X-Legacy-Response", "true")],
+                load_balancing="round_robin",
+                health_uri="/health",
+                tls_skip_verify=True,
                 access_group_id="legacy-portal",
             )
             manager.routes.save(route)
@@ -94,8 +102,32 @@ class PublicAuthenticationTests(unittest.TestCase):
             self.assertTrue(manager.ensure_public_route())
             migrated = applied["route"]
             self.assertIsInstance(migrated, ManagedRoute)
+            self.assertEqual(migrated.id, route.id)
+            self.assertEqual(migrated.name, route.name)
+            self.assertEqual(migrated.host, "caddy.example.com")
+            self.assertEqual(migrated.domain, "")
+            self.assertEqual(migrated.kind, RouteKind.PROXY)
+            self.assertTrue(migrated.enabled)
+            self.assertEqual(migrated.paths, [])
+            self.assertEqual([item.address for item in migrated.upstreams], ["caddy-ui:8098"])
+            self.assertEqual(migrated.request_headers, [])
+            self.assertEqual(migrated.response_headers, [])
             self.assertEqual(migrated.access_group_id, "")
-            self.assertIn("built-in authentication", str(applied["reason"]))
+            self.assertFalse(migrated.tls_skip_verify)
+            self.assertIn("Normalize public Caddy UI route", str(applied["reason"]))
+
+    def test_multiple_public_routes_still_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = self.migrating_manager(directory, "https://caddy.example.com")
+            manager.routes.save(
+                ManagedRoute(name="admin-one", host="caddy.example.com", upstreams=[Upstream("one:8080")])
+            )
+            manager.routes.save(
+                ManagedRoute(name="admin-two", host="caddy.example.com", upstreams=[Upstream("two:8080")])
+            )
+
+            with self.assertRaisesRegex(ValueError, "exactly one managed route"):
+                manager.ensure_public_route()
 
     def test_public_settings_do_not_force_totp_before_enrollment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
