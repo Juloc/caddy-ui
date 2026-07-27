@@ -48,7 +48,7 @@ def main() -> int:
     if command == "caddy":
         return run_caddy(args)
     if command == "web":
-        from caddy_ui.secure_web import main as web_main
+        from caddy_ui.public_web import main as web_main
 
         return web_main()
     if command == "init-caddyfile":
