@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CaddyUi.Application/CaddyUi.Application.csproj" />
+    <Project Path="src/CaddyUi.Contracts/CaddyUi.Contracts.csproj" />
+    <Project Path="src/CaddyUi.Domain/CaddyUi.Domain.csproj" />
+    <Project Path="src/CaddyUi.Infrastructure/CaddyUi.Infrastructure.csproj" />
+    <Project Path="src/CaddyUi.Migration/CaddyUi.Migration.csproj" />
+    <Project Path="src/CaddyUi.Web/CaddyUi.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CaddyUi.AcceptanceTests/CaddyUi.AcceptanceTests.csproj" />
+    <Project Path="tests/CaddyUi.Application.Tests/CaddyUi.Application.Tests.csproj" />
+    <Project Path="tests/CaddyUi.Domain.Tests/CaddyUi.Domain.Tests.csproj" />
+    <Project Path="tests/CaddyUi.Infrastructure.Tests/CaddyUi.Infrastructure.Tests.csproj" />
+    <Project Path="tests/CaddyUi.Migration.Tests/CaddyUi.Migration.Tests.csproj" />
+    <Project Path="tests/CaddyUi.Web.Tests/CaddyUi.Web.Tests.csproj" />
+  </Folder>
+</Solution>

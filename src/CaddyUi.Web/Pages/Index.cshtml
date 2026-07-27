@@ -1,0 +1,74 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Übersicht";
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Caddy UI 2.0</p>
+        <h1>.NET-Grundgerüst</h1>
+        <p class="page-description">
+            Die neue Razor-Pages-Anwendung läuft parallel zum bestehenden Python-Produktivpfad.
+        </p>
+    </div>
+    <span class="status-badge status-badge--ok">Phase 1</span>
+</section>
+
+<section class="metric-grid" aria-label="Systemstatus">
+    <article class="metric-card">
+        <span class="metric-label">Anwendung</span>
+        <strong class="metric-value">@Model.Status.Product</strong>
+        <span class="metric-detail">@Model.Status.Version</span>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Stack</span>
+        <strong class="metric-value">Razor Pages</strong>
+        <span class="metric-detail">.NET 10 und PostgreSQL</span>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Liveness</span>
+        <strong class="metric-value">Aktiv</strong>
+        <span class="metric-detail"><code>/health/live</code></span>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Readiness</span>
+        <strong class="metric-value">PostgreSQL</strong>
+        <span class="metric-detail"><code>/health/ready</code></span>
+    </article>
+</section>
+
+<section class="workspace-grid">
+    <article class="panel panel--wide">
+        <header class="panel-header">
+            <div>
+                <p class="eyebrow">Architektur</p>
+                <h2>Parallelbetrieb ohne Umschaltung</h2>
+            </div>
+        </header>
+        <div class="panel-body">
+            <ul class="check-list">
+                <li>Eigenständige .NET-Solution und zentrale Buildregeln</li>
+                <li>EF-Core-Migrationen gegen PostgreSQL</li>
+                <li>Strukturierte JSON-Konsolenlogs</li>
+                <li>Separate Companion- und Bundle-Containerziele</li>
+                <li>Bestehende Python- und Go-Laufzeit bleibt unverändert</li>
+            </ul>
+        </div>
+    </article>
+
+    <aside class="panel">
+        <header class="panel-header">
+            <div>
+                <p class="eyebrow">Nächster Schritt</p>
+                <h2>Phase 2</h2>
+            </div>
+        </header>
+        <div class="panel-body">
+            <p>
+                Das vollständige PostgreSQL-Schema und das reproduzierbare
+                SQLite-Migrationswerkzeug folgen erst nach Freigabe dieser Grundlage.
+            </p>
+        </div>
+    </aside>
+</section>
