@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import secrets
 import threading
+import urllib.parse
 from dataclasses import replace
+from http import HTTPStatus
 
 from . import __version__
 from .audit import Actor
@@ -11,7 +15,42 @@ from .config import Settings
 from .domain import ManagedRoute, RouteKind, Upstream
 from .enhanced_web import Application as EnhancedApplication
 from .hardened_web import BoundedThreadingHTTPServer, _validate_settings, create_handler
-from .public_auth import AdminHandler, PortalHandler, PublicAuthCaddyManager, _public_host
+from .public_auth import (
+    LOGIN_CSRF_COOKIE,
+    AdminHandler as PublicAdminHandler,
+    PortalHandler,
+    PublicAuthCaddyManager,
+    _public_host,
+)
+
+
+LOGIN_CSRF_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
+
+
+def stable_login_csrf_token(existing: str) -> str:
+    """Reuse a valid short-lived token so parallel login GETs cannot invalidate a form."""
+    if LOGIN_CSRF_TOKEN_RE.fullmatch(existing):
+        return existing
+    return secrets.token_urlsafe(32)
+
+
+class AdminHandler(PublicAdminHandler):
+    def do_GET(self) -> None:
+        if urllib.parse.urlsplit(self.path).path == "/favicon.ico":
+            self._empty(HTTPStatus.NO_CONTENT)
+            return
+        super().do_GET()
+
+    def _login_html(self, content: bytes) -> None:
+        token = stable_login_csrf_token(self._cookie(LOGIN_CSRF_COOKIE))
+        content = self._inject_login_csrf(content, token)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Set-Cookie", self._login_csrf_cookie_header(token))
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(content)
 
 
 class MigratingPublicAuthCaddyManager(PublicAuthCaddyManager):
