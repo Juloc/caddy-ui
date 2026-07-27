@@ -16,6 +16,7 @@ from caddy_ui.public_auth import (
     PublicAuthCaddyManager,
     _public_host,
 )
+from caddy_ui.public_auth_hotfix import MigratingPublicAuthCaddyManager, public_settings
 from tests.helpers import settings
 
 
@@ -25,6 +26,12 @@ class PublicAuthenticationTests(unittest.TestCase):
         database = Database(config)
         database.initialize()
         return PublicAuthCaddyManager(config, database, AuditLog(database))
+
+    def migrating_manager(self, directory: str, public_origin: str) -> MigratingPublicAuthCaddyManager:
+        config = replace(settings(Path(directory)), public_origin=public_origin)
+        database = Database(config)
+        database.initialize()
+        return MigratingPublicAuthCaddyManager(config, database, AuditLog(database))
 
     def test_public_origin_requires_standard_https(self) -> None:
         self.assertEqual(_public_host("https://Caddy.Example.com"), "caddy.example.com")
@@ -63,6 +70,48 @@ class PublicAuthenticationTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "exactly one enabled, unprotected"):
                 manager._rendered_for([route])
+
+    def test_legacy_access_locked_public_admin_route_is_migrated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = self.migrating_manager(directory, "https://caddy.example.com")
+            route = ManagedRoute(
+                name="caddy-ui-admin",
+                host="caddy.example.com",
+                upstreams=[Upstream("caddy-ui:8098")],
+                access_group_id="legacy-portal",
+            )
+            manager.routes.save(route)
+            applied: dict[str, object] = {}
+
+            def capture_apply(actor, reason, proposed=None, delete_id=""):
+                applied["actor"] = actor
+                applied["reason"] = reason
+                applied["route"] = proposed
+                return "revision"
+
+            manager.apply = capture_apply  # type: ignore[method-assign]
+
+            self.assertTrue(manager.ensure_public_route())
+            migrated = applied["route"]
+            self.assertIsInstance(migrated, ManagedRoute)
+            self.assertEqual(migrated.access_group_id, "")
+            self.assertIn("built-in authentication", str(applied["reason"]))
+
+    def test_public_settings_do_not_force_totp_before_enrollment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = replace(
+                settings(Path(directory)),
+                public_origin="https://caddy.example.com",
+                require_totp=False,
+                secure_cookies=False,
+                session_ttl_seconds=86_400,
+            )
+
+            secured = public_settings(config)
+
+            self.assertTrue(secured.secure_cookies)
+            self.assertFalse(secured.require_totp)
+            self.assertEqual(secured.session_ttl_seconds, 28_800)
 
     def test_reserved_authentication_headers_cannot_be_configured(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
