@@ -176,12 +176,16 @@ class AccessGroup:
     def validate(self) -> None:
         if not self.name.strip() or len(self.name) > 80:
             raise ValueError("Access group name is required and must be at most 80 characters.")
+        if not self.title.strip() or len(self.title) > 120:
+            raise ValueError("Portal title is required and must be at most 120 characters.")
+        if len(self.help_text) > 500:
+            raise ValueError("Portal help text must be at most 500 characters.")
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", self.accent):
             raise ValueError("Accent must be a six-digit hex color.")
         if len(self.logo_data) > 350_000:
             raise ValueError("Portal logo must be smaller than 256 KiB.")
         if self.logo_data and not (
             self.logo_data.startswith("https://")
-            or re.fullmatch(r"data:image/(?:png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+", self.logo_data)
+            or re.fullmatch(r"data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+", self.logo_data)
         ):
-            raise ValueError("Portal logo must be an HTTPS URL or a supported image data URL.")
+            raise ValueError("Portal logo must be an HTTPS URL or a PNG, JPEG, or WebP data URL.")
