@@ -43,7 +43,7 @@ class IpIntelligenceTests(unittest.TestCase):
                 "uri": "/articles/example",
                 "endpoint": "/articles/example",
                 "status": 200,
-                "occurred_at": f"2026-07-27T20:00:{index:02d}+00:00",
+                "occurred_at": f"2026-07-27T20:{index:02d}:00+00:00",
             }
             for index in range(10)
         ]
