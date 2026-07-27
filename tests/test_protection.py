@@ -5,8 +5,12 @@ import unittest
 from pathlib import Path
 
 from caddy_ui.enhanced_web import Application
+from caddy_ui.login_security import install as install_login_security
 from caddy_ui.protection import protection_settings
 from tests.helpers import settings
+
+
+install_login_security()
 
 
 class ProtectionTests(unittest.TestCase):
@@ -28,6 +32,23 @@ class ProtectionTests(unittest.TestCase):
 
         self.app.security.clear_login("ui", "198.51.100.20", "admin")
         self.assertTrue(self.app.security.login_state("ui", "198.51.100.20", "admin")["allowed"])
+
+    def test_username_rotation_from_one_address_is_restricted(self) -> None:
+        address = "198.51.100.30"
+        for index in range(10):
+            self.app.security.record_login_failure("ui", address, f"unknown-{index}")
+
+        state = self.app.security.login_state("ui", address, "another-name")
+        self.assertFalse(state["allowed"])
+        self.assertGreaterEqual(state["retry_after"], 1)
+
+    def test_distributed_attempts_against_one_account_are_restricted(self) -> None:
+        for index in range(10):
+            self.app.security.record_login_failure("ui", f"198.51.100.{40 + index}", "admin")
+
+        state = self.app.security.login_state("ui", "203.0.113.50", "admin")
+        self.assertFalse(state["allowed"])
+        self.assertGreaterEqual(state["retry_after"], 1)
 
     def test_forwarded_headers_are_ignored_without_trusted_proxy(self) -> None:
         self.assertEqual(
