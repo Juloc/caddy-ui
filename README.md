@@ -26,7 +26,7 @@ The default deployment uses exactly two containers and one bundle image:
 | Container | Image | Purpose |
 | --- | --- | --- |
 | `caddy` | `ghcr.io/juloc/caddy-ui:<version>` | Caddy with the Netcup DNS module |
-| `caddy-ui` | `ghcr.io/juloc/caddy-ui:<version>` | UI, DDNS, migration, aggregation, and backup jobs |
+| `caddy-ui` | `ghcr.io/juloc/caddy-ui:<version>` | UI, access portal, DDNS, migration, aggregation, and backup jobs |
 
 For an existing official or custom Caddy container, use `ghcr.io/juloc/caddy-ui-companion:<version>` for the UI container. Both modes keep the two-container boundary.
 
@@ -38,7 +38,29 @@ docker network create proxy
 docker compose --env-file .env up -d
 ```
 
-Open `http://<server-ip>:8098`. Do not expose the UI or Caddy admin port `2019` directly to the internet.
+The administration listener is bound to host loopback at `127.0.0.1:8098`. The access-portal listener on port `8099` is internal-only. Do not publish port `8099` or Caddy's admin port `2019`.
+
+For initial setup, use an SSH tunnel:
+
+```sh
+ssh -L 8098:127.0.0.1:8098 your-server
+```
+
+Then open `http://127.0.0.1:8098` locally.
+
+## Public administration UI
+
+Caddy UI can be exposed publicly through Caddy after the administrator account is configured:
+
+1. Enable TOTP for the administrator under **Administration → Settings**.
+2. Set `CADDY_UI_PUBLIC_ORIGIN` to the exact external HTTPS origin, for example `https://caddy.example.com`.
+3. Create an unprotected proxy route for that host with upstream `caddy-ui:8098`. Do not assign an Access Group because the administration UI has its own login.
+4. Restart the `caddy-ui` container.
+5. After all required accounts have TOTP configured, set `CADDY_UI_REQUIRE_TOTP=true`.
+
+When `CADDY_UI_PUBLIC_ORIGIN` is configured, non-HTTPS requests and requests with a different external host are rejected. Session cookies use the `Secure`, `HttpOnly`, `SameSite`, and `__Host-` protections. Login POSTs require a same-origin browser request, sessions are bound to the browser user agent, and failed-login limits persist through the audit database.
+
+The portal listener is separate from the public administration listener. Generated protected routes authenticate to it with a random internal secret stored in the Caddy UI database. Portal login paths are handled before application path matchers, preventing authentication redirect loops on path-based routes.
 
 ## Required configuration
 
@@ -56,7 +78,17 @@ CADDY_UI_PASSWORD=use-a-long-unique-password
 
 `CADDY_UI_PASSWORD` is required only when the first administrator is created. Passwords are stored as salted scrypt hashes. Provider records store environment-variable references, not the Netcup secret values.
 
-Set `CADDY_UI_SECURE_COOKIES=true` when the UI itself is served over HTTPS. `DOMAIN` provides the default domain but is optional after domains are configured in the UI.
+Use `CADDY_UI_PUBLIC_ORIGIN` for public HTTPS access. `CADDY_UI_SECURE_COOKIES=true` can also force secure cookies without a configured public origin. `DOMAIN` provides the default domain but is optional after domains are configured in the UI.
+
+## Access portal security
+
+- Each Access Group has independent credentials and sessions.
+- Portal sessions expire after `CADDY_UI_PORTAL_SESSION_TTL`, defaulting to 12 hours.
+- Session tokens are stored only as hashes and are bound to the browser user agent.
+- The reserved path `/__caddy_ui_auth/*` cannot be used by managed route path matchers.
+- Incoming `Remote-User` and internal portal identity headers are removed or overwritten before proxying upstream.
+- Brute-force limits are enforced per address and identity using persistent audit data.
+- Password hashing concurrency and accepted scrypt parameters are bounded to prevent memory-exhaustion attacks.
 
 ## Persistence
 
@@ -81,6 +113,8 @@ On first start Caddy UI:
 5. replaces only that recognized generated shape with the new `site-*.caddy` managed-site import.
 
 Custom Caddyfiles and unmanaged snippets are never overwritten. They are not included by the new managed-only import; import their route directives through the administrator-only preview wizard instead.
+
+Existing portal sessions are intentionally invalidated by the hardened session binding. Reapply protected routes once after upgrading so their generated snippets use the isolated portal listener.
 
 ## Development and verification
 
