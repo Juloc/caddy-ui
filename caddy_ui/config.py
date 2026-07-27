@@ -21,6 +21,7 @@ def _integer(name: str, default: int, minimum: int = 1) -> int:
 class Settings:
     host: str
     port: int
+    portal_port: int
     data_dir: Path
     database_path: Path
     backup_dir: Path
@@ -33,7 +34,10 @@ class Settings:
     default_domain: str
     auto_reload: bool
     session_ttl_seconds: int
+    portal_session_ttl_seconds: int
     secure_cookies: bool
+    public_origin: str
+    require_totp: bool
     bootstrap_username: str
     bootstrap_password: str
     legacy_config_path: Path
@@ -46,6 +50,7 @@ class Settings:
         return cls(
             host=os.getenv("UI_HOST", "0.0.0.0"),
             port=_integer("UI_PORT", 8098),
+            portal_port=_integer("UI_PORTAL_PORT", 8099),
             data_dir=data_dir,
             database_path=Path(os.getenv("CADDY_UI_DATABASE_PATH", str(data_dir / "caddy-ui.db"))),
             backup_dir=Path(os.getenv("CADDY_UI_BACKUP_DIR", str(data_dir / "backups"))),
@@ -58,7 +63,10 @@ class Settings:
             default_domain=os.getenv("DOMAIN", "").strip().rstrip("."),
             auto_reload=_boolean("CADDY_AUTO_RELOAD", True),
             session_ttl_seconds=_integer("CADDY_UI_SESSION_TTL", 86400, 300),
+            portal_session_ttl_seconds=_integer("CADDY_UI_PORTAL_SESSION_TTL", 43200, 300),
             secure_cookies=_boolean("CADDY_UI_SECURE_COOKIES", False),
+            public_origin=os.getenv("CADDY_UI_PUBLIC_ORIGIN", "").strip().rstrip("/"),
+            require_totp=_boolean("CADDY_UI_REQUIRE_TOTP", False),
             bootstrap_username=os.getenv("CADDY_UI_USERNAME", "admin").strip() or "admin",
             bootstrap_password=os.getenv("CADDY_UI_PASSWORD", ""),
             legacy_config_path=Path(os.getenv("CADDY_UI_CONFIG_PATH", "/etc/caddy/caddy-ui.json")),
