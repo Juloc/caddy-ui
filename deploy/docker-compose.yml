@@ -34,7 +34,9 @@ services:
       caddy:
         condition: service_healthy
     ports:
-      - "8098:8098"
+      - "127.0.0.1:8098:8098"
+    expose:
+      - "8099"
     environment:
       DOMAIN: ${DOMAIN:-}
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
@@ -42,6 +44,13 @@ services:
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
       CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
       CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
+      CADDY_UI_PUBLIC_ORIGIN: ${CADDY_UI_PUBLIC_ORIGIN:-}
+      CADDY_UI_SECURE_COOKIES: ${CADDY_UI_SECURE_COOKIES:-false}
+      CADDY_UI_REQUIRE_TOTP: ${CADDY_UI_REQUIRE_TOTP:-false}
+      CADDY_UI_SESSION_TTL: ${CADDY_UI_SESSION_TTL:-86400}
+      CADDY_UI_PORTAL_SESSION_TTL: ${CADDY_UI_PORTAL_SESSION_TTL:-43200}
+      CADDY_UI_PASSWORD_HASH_WORKERS: ${CADDY_UI_PASSWORD_HASH_WORKERS:-2}
+      UI_PORTAL_PORT: 8099
       CADDY_ADMIN_URL: http://caddy:2019
       CADDY_UI_DATA_DIR: /var/lib/caddy-ui
     volumes:
