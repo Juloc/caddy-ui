@@ -13,6 +13,8 @@ Caddy UI is a fast, lightweight desktop-oriented web application for daily Caddy
 - Bundle mode uses a custom Caddy image with the Netcup module.
 - Companion mode manages an existing standard Caddy installation.
 - Both modes use exactly two containers: `caddy` and `caddy-ui`.
+- Port `8098` is loopback-only for local setup; public administration is exposed only through a managed HTTPS Caddy route.
+- Caddy and Caddy UI share a generated internal proxy secret. Port `2019` is never published.
 
 ## Navigation
 
@@ -63,6 +65,8 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 - reusable access group;
 - selected safe reverse-proxy options.
 
+Authentication identity and internal proxy-secret headers are reserved and cannot be configured manually. Caddy UI itself may be targeted only by the dedicated route matching the configured public origin.
+
 ### Custom routes
 
 - Administrators may create a Custom Route containing a controlled Caddy snippet.
@@ -87,9 +91,15 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 
 - Reusable access groups can protect multiple routes.
 - Version 1 uses a branded form login with username and password.
-- A group can configure name, logo, help text, and accent color.
-- Passwords are strongly hashed and never rendered back.
-- The architecture reserves provider types for forward-auth and OIDC without exposing unfinished controls.
+- A group can configure bounded name, raster logo, help text, and accent color.
+- New passwords require at least 14 characters, use salted scrypt hashes, and are never rendered back.
+- Portal endpoints are rendered outside path-specific route matchers.
+- Authorization uses internal `forward_auth` with a shared proxy secret; client-supplied identity and secret headers are removed.
+- Login forms require pre-authentication CSRF and same-origin checks.
+- Account and client-address login limits persist in SQLite across restarts.
+- Portal sessions use hashed random tokens, secure strict cookies, browser-context binding, and an eight-hour default lifetime.
+- Return targets are restricted to safe same-origin paths.
+- The architecture reserves provider types for external forward-auth and OIDC without exposing unfinished controls.
 - Future targets include Authentik, Authelia, Microsoft, Google, and GitHub.
 
 ## Logs and traffic
@@ -132,7 +142,12 @@ Traffic retention:
 - Administrator: full management, users, settings, restore, and Custom Routes.
 - Editor: managed routes, DNS, access groups, and operational actions permitted by policy.
 - Viewer: read-only status, routes, logs, DNS, audit, and configuration previews.
-- Login uses username/password and optional TOTP in version 1.
+- Local login uses username/password and optional TOTP.
+- Public administration requires an exact HTTPS origin and TOTP by default.
+- Public requests must arrive from a trusted Caddy proxy with the shared secret, HTTPS forwarding metadata, and the configured host.
+- Login forms require pre-authentication CSRF and Origin/Referer validation; authenticated mutations retain per-session CSRF validation.
+- Public administrator sessions use secure HttpOnly SameSite=Strict cookies, HSTS, browser-context binding, and an eight-hour maximum lifetime.
+- Changing the public origin, proxy secret, or relevant binding policy invalidates existing sessions.
 - Passkeys are a future extension point, not an unfinished visible feature.
 
 ### Audit
@@ -153,6 +168,7 @@ Traffic retention:
 - SQLite in the existing persistent UI volume.
 - WAL mode, foreign keys, bounded busy timeout, and explicit migrations.
 - Existing JSON provider configuration and managed route metadata are imported automatically.
+- Authentication hardening creates a database backup, adds persistent throttle and portal-session metadata, and invalidates pre-hardening sessions.
 - Migration creates a backup first, validates imported data, and rolls back on failure.
 
 ## Removed scope
