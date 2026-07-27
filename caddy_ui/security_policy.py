@@ -140,7 +140,7 @@ class PersistentLoginThrottle:
 
     def _initialize(self) -> None:
         version = int(self.database.setting("security_schema_version", 0) or 0)
-        if version >= 1:
+        if version >= 2:
             return
         self.database.backup("pre-security-hardening")
         with self.database.transaction() as connection:
@@ -153,9 +153,21 @@ class PersistentLoginThrottle:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS ix_auth_failures_key_time ON auth_failures(key_hash, failed_at)"
             )
+            columns = {
+                str(row[1])
+                for row in connection.execute("PRAGMA table_info(portal_sessions)").fetchall()
+            }
+            for name in ("created_at", "remote_address", "user_agent"):
+                if name not in columns:
+                    connection.execute(
+                        f"ALTER TABLE portal_sessions ADD COLUMN {name} TEXT NOT NULL DEFAULT ''"
+                    )
+            # Old cookies were not bound to the hardened proxy/session policy and must not survive the migration.
+            connection.execute("DELETE FROM sessions")
+            connection.execute("DELETE FROM portal_sessions")
             connection.execute(
-                """INSERT INTO settings(key,value_json,updated_at) VALUES('security_schema_version','1',?)
-                   ON CONFLICT(key) DO UPDATE SET value_json='1',updated_at=excluded.updated_at""",
+                """INSERT INTO settings(key,value_json,updated_at) VALUES('security_schema_version','2',?)
+                   ON CONFLICT(key) DO UPDATE SET value_json='2',updated_at=excluded.updated_at""",
                 (utc_now(),),
             )
 
