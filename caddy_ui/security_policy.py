@@ -61,9 +61,24 @@ class SecurityPolicy:
         public_scheme = ""
         public_host = ""
         if public_url:
-            parsed = urllib.parse.urlsplit(public_url)
-            if parsed.scheme != "https" or not parsed.hostname or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-                raise RuntimeError("CADDY_UI_PUBLIC_URL must be an HTTPS origin without a path, query, or fragment.")
+            try:
+                parsed = urllib.parse.urlsplit(public_url)
+                port = parsed.port
+            except ValueError as exc:
+                raise RuntimeError("CADDY_UI_PUBLIC_URL is malformed.") from exc
+            if (
+                parsed.scheme != "https"
+                or not parsed.hostname
+                or port not in {None, 443}
+                or parsed.path not in {"", "/"}
+                or parsed.query
+                or parsed.fragment
+                or parsed.username
+                or parsed.password
+            ):
+                raise RuntimeError(
+                    "CADDY_UI_PUBLIC_URL must be a standard HTTPS origin without credentials, port, path, query, or fragment."
+                )
             public_scheme = parsed.scheme
             public_host = normalize_host(parsed.netloc)
         proxy_secret = os.getenv("CADDY_UI_PROXY_SECRET", "")
@@ -108,12 +123,12 @@ def normalize_host(value: str) -> str:
         return ""
     try:
         parsed = urllib.parse.urlsplit("//" + value)
+        port = parsed.port
     except ValueError:
         return ""
     if parsed.username or parsed.password or not parsed.hostname:
         return ""
     host = parsed.hostname.rstrip(".")
-    port = parsed.port
     if port and port not in {80, 443}:
         return f"{host}:{port}"
     return host
@@ -122,7 +137,10 @@ def normalize_host(value: str) -> str:
 def safe_return_path(value: str) -> str:
     if not value.startswith("/") or value.startswith("//") or "\\" in value or any(ord(character) < 32 for character in value):
         return "/"
-    parsed = urllib.parse.urlsplit(value)
+    try:
+        parsed = urllib.parse.urlsplit(value)
+    except ValueError:
+        return "/"
     if parsed.scheme or parsed.netloc:
         return "/"
     return urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
@@ -162,7 +180,6 @@ class PersistentLoginThrottle:
                     connection.execute(
                         f"ALTER TABLE portal_sessions ADD COLUMN {name} TEXT NOT NULL DEFAULT ''"
                     )
-            # Old cookies were not bound to the hardened proxy/session policy and must not survive the migration.
             connection.execute("DELETE FROM sessions")
             connection.execute("DELETE FROM portal_sessions")
             connection.execute(
