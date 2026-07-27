@@ -50,7 +50,6 @@ def render_hardened_route(route: ManagedRoute) -> str:
     lines.extend(f"        {item}" for item in matchers)
     lines.extend(["    }", f"    handle @{matcher} {{", "        route {"])
 
-    # Never let a client supply internal authentication identity or proxy credentials.
     lines.extend(
         [
             f"            request_header -{INTERNAL_SECRET_HEADER}",
@@ -156,6 +155,16 @@ class HardenedCaddyManager(CaddyManager):
                 raise ValueError(
                     "CADDY_UI_PROXY_SECRET is required for access portals and public Caddy UI routes."
                 )
+            ui_routes = [route for route in enabled if route_targets_caddy_ui(route)]
+            if ui_routes:
+                if not self.security_policy.public_url:
+                    raise ValueError(
+                        "CADDY_UI_PUBLIC_URL is required before Caddy UI can be exposed through a managed route."
+                    )
+                if host != self.security_policy.public_host:
+                    raise ValueError(
+                        f"The Caddy UI route host must match CADDY_UI_PUBLIC_URL ({self.security_policy.public_host})."
+                    )
             catch_all = [route for route in enabled if not route.paths]
             if len(catch_all) > 1:
                 names = ", ".join(sorted(route.name for route in catch_all))
