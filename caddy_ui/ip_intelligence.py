@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import threading
 import time
 import urllib.parse
@@ -127,6 +128,7 @@ def lookup_ip(value: str) -> dict[str, Any]:
             "cached": False,
         }
     except Exception as exc:
+        logging.info("IP intelligence lookup failed for %s: %s", normalized, exc)
         ttl = _ERROR_CACHE_TTL_SECONDS
         result = {
             "ip": normalized,
@@ -137,7 +139,7 @@ def lookup_ip(value: str) -> dict[str, Any]:
             "holder": "",
             "registry": "",
             "source": "RIPEstat",
-            "error": str(exc),
+            "error": "IP ownership lookup is currently unavailable.",
             "cached": False,
         }
 
@@ -228,7 +230,7 @@ def assess_client(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
 
     score = min(100, score)
     risk_score = min(100, risk_score)
-    if score >= 70:
+    if score >= 60:
         classification = "Likely automated"
     elif score >= 40:
         classification = "Suspicious automation"
