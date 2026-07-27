@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import shutil
 import tempfile
 from pathlib import Path
@@ -15,7 +16,7 @@ PORTAL_BACKEND = "caddy-ui:8099"
 PORTAL_PREFIX = "/__caddy_ui_auth/"
 
 
-def render_route(route: ManagedRoute) -> str:
+def render_route(route: ManagedRoute, portal_secret: str = "test-portal-secret") -> str:
     route.validate()
     metadata = json.dumps(
         {"id": route.id, "name": route.name, "kind": route.kind.value, "host": route.host},
@@ -38,7 +39,7 @@ def render_route(route: ManagedRoute) -> str:
             [
                 f"        forward_auth {PORTAL_BACKEND} {{",
                 f"            uri /portal/authorize?group={route.access_group_id}",
-                "            header_up X-Caddy-Portal-Proxy 1",
+                f"            header_up X-Caddy-Portal-Secret {portal_secret}",
                 "            copy_headers Remote-User>X-Caddy-Portal-User",
                 "        }",
             ]
@@ -75,7 +76,12 @@ def render_route(route: ManagedRoute) -> str:
     return "\n".join(lines)
 
 
-def render_site(host: str, routes: list[ManagedRoute], tls_lines: list[str] | None = None) -> str:
+def render_site(
+    host: str,
+    routes: list[ManagedRoute],
+    tls_lines: list[str] | None = None,
+    portal_secret: str = "test-portal-secret",
+) -> str:
     lines = [base.MANAGED_HEADER, f"{host} {{", "    encode zstd gzip"]
     if tls_lines:
         lines.extend(["    tls {", *[f"        {line}" for line in tls_lines], "    }"])
@@ -98,7 +104,7 @@ def render_site(host: str, routes: list[ManagedRoute], tls_lines: list[str] | No
                 "    @caddy_ui_portal path /__caddy_ui_auth/*",
                 "    handle @caddy_ui_portal {",
                 f"        reverse_proxy {PORTAL_BACKEND} {{",
-                "            header_up X-Caddy-Portal-Proxy 1",
+                f"            header_up X-Caddy-Portal-Secret {portal_secret}",
                 "            header_up X-Forwarded-Host {host}",
                 "            header_up X-Forwarded-Proto {scheme}",
                 "            header_up X-Forwarded-Uri {uri}",
@@ -109,7 +115,7 @@ def render_site(host: str, routes: list[ManagedRoute], tls_lines: list[str] | No
 
     for route in routes:
         if route.enabled:
-            lines.extend(render_route(route).splitlines())
+            lines.extend(render_route(route, portal_secret).splitlines())
         else:
             lines.append(f"    # disabled route: {route.name}")
     lines.extend(["    handle {", '        respond "Service not configured" 404', "    }", "}", ""])
@@ -117,6 +123,14 @@ def render_site(host: str, routes: list[ManagedRoute], tls_lines: list[str] | No
 
 
 class SecureCaddyManager(base.CaddyManager):
+    def __init__(self, settings, database, audit):
+        super().__init__(settings, database, audit)
+        portal_secret = str(database.setting("portal_proxy_secret", "") or "")
+        if len(portal_secret) < 43:
+            portal_secret = secrets.token_urlsafe(48)
+            database.set_setting("portal_proxy_secret", portal_secret)
+        self.portal_secret = portal_secret
+
     def _rendered_for(self, routes: list[ManagedRoute]) -> dict[str, str]:
         grouped: dict[str, list[ManagedRoute]] = {}
         for route in routes:
@@ -165,7 +179,12 @@ class SecureCaddyManager(base.CaddyManager):
                     "resolvers 1.1.1.1 8.8.8.8",
                 ]
             digest = hashlib.sha256(host.encode("utf-8")).hexdigest()[:12]
-            content[f"site-{digest}.caddy"] = render_site(host, ordered_routes, tls_lines)
+            content[f"site-{digest}.caddy"] = render_site(
+                host,
+                ordered_routes,
+                tls_lines,
+                self.portal_secret,
+            )
         return content
 
     def _restore_revision(self, actor: Actor, revision_id: str) -> None:
