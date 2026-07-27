@@ -1,8 +1,8 @@
-# Caddy UI 1.0 Product Specification
+# Caddy UI 1.x Product Specification
 
 ## Purpose
 
-Caddy UI is a fast, lightweight desktop-oriented web application for daily Caddy administration. It prioritizes reverse-proxy routes and operational health. It is not a Docker management product and does not attempt to expose every Caddy directive through a form.
+Caddy UI is a fast, lightweight desktop-oriented web application for daily Caddy administration. It prioritizes reverse-proxy routes, operational health, observability, and practical edge protection. It is not a Docker management product and does not attempt to expose every Caddy directive through a form.
 
 ## Audience and deployment modes
 
@@ -10,19 +10,23 @@ Caddy UI is a fast, lightweight desktop-oriented web application for daily Caddy
 - Multiple base domains with one default domain.
 - Netcup is the first complete DNS and DDNS provider.
 - Provider integrations are modular so more providers can be added later.
-- Bundle mode uses a custom Caddy image with the Netcup module.
-- Companion mode manages an existing standard Caddy installation.
+- Bundle mode uses a custom Caddy image with the Netcup and Caddy UI protection modules.
+- Companion mode manages an existing standard Caddy installation. Features that require a custom Caddy module must fail safely when that module is unavailable.
 - Both modes use exactly two containers: `caddy` and `caddy-ui`.
+- The administration listener may be exposed only through an HTTPS reverse-proxy route with an exact configured public origin.
+- The access-portal listener is internal-only and must never be published directly.
 
 ## Navigation
 
 1. Dashboard
 2. Routes
 3. Access
-4. Logs
-5. System
-6. DNS
-7. Administration
+4. Analytics
+5. Security
+6. Logs
+7. System
+8. DNS
+9. Administration
    - Users
    - Audit Log
    - Settings
@@ -33,11 +37,12 @@ Administration is a collapsible group at the bottom of the desktop navigation. M
 
 The dashboard is ordered by operational importance:
 
-1. Problems: unavailable public routes, failed upstreams, Caddy errors, DNS/DDNS failures, and expiring certificates.
-2. Traffic: request trend, status distribution, and busiest hosts.
-3. Inventory: routes, domains, certificates, DNS providers, and system version.
+1. Problems: unavailable public routes, failed upstreams, Caddy errors, DNS/DDNS failures, security warnings, and expiring certificates.
+2. Compact observability KPIs: 24-hour requests, P95 response time, 5xx count, and active temporary security restrictions.
+3. Traffic: request trend, status distribution, and busiest hosts.
+4. Inventory: routes, domains, certificates, DNS providers, and system version.
 
-It contains summaries and grouped charts only. Full logs belong to the Logs page.
+It contains summaries and grouped charts only. Full analytics and logs belong to their dedicated workspaces.
 
 ## Routes
 
@@ -63,6 +68,10 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 - reusable access group;
 - selected safe reverse-proxy options.
 
+The path prefix `/__caddy_ui_auth/*` is reserved for the access portal and cannot be assigned to a managed route. Generated access-portal handlers are placed before route-specific path matchers so a route cannot recursively protect its own login page.
+
+Managed proxy routes remove untrusted `Remote-User` and internal portal identity headers. Protected routes overwrite `Remote-User` only with the identity returned by the internal portal authorization response.
+
 ### Custom routes
 
 - Administrators may create a Custom Route containing a controlled Caddy snippet.
@@ -83,32 +92,116 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 7. Roll back automatically on failure.
 8. Record the complete audit entry and revision.
 
+Managed route files are reconciled through the current hardened renderer during startup. Revision restore regenerates route files from route metadata through the current renderer; legacy revisions without route metadata are not restored as raw authentication configuration.
+
 ## Access
 
 - Reusable access groups can protect multiple routes.
 - Version 1 uses a branded form login with username and password.
 - A group can configure name, logo, help text, and accent color.
 - Passwords are strongly hashed and never rendered back.
+- Caddy UI and branded portal logins use persistent progressive brute-force protection keyed by securely resolved client IP and username.
+- Portal authentication runs on a separate internal listener from the administration UI.
+- Caddy authenticates to the portal listener with an automatically generated random secret stored in the protected UI database.
+- Login POSTs require same-origin browser context and reject external or recursive return targets.
+- Portal sessions use random tokens stored only as user-agent-bound hashes and expire after a configurable bounded lifetime.
+- Authentication endpoints never pass through the protected route's own `forward_auth` handler, preventing recursive redirects.
 - The architecture reserves provider types for forward-auth and OIDC without exposing unfinished controls.
 - Future targets include Authentik, Authelia, Microsoft, Google, and GitHub.
 
+## Analytics
+
+Analytics is a dedicated top-level workspace with Overview, Performance, Traffic, Endpoints, and Clients/IPs views.
+
+Required metrics and behavior:
+
+- request counts over time;
+- average, P50, P95, and P99 response time;
+- 4xx and 5xx rates;
+- response traffic volume;
+- busiest domains and endpoints;
+- slowest endpoints;
+- client/IP drill-downs that connect analytics, logs, and security history;
+- time ranges `15m`, `1h`, `6h`, `24h`, `7d`, `30d`, `1y`, and custom;
+- drill-down from metrics and charts into the corresponding filtered logs;
+- clients classified as humans, bots/crawlers, internal checks, or unknown;
+- request categories Pages, API, Assets, WebSocket, and Other;
+- internal health and monitoring checks separated from normal user traffic;
+- static assets included in total traffic but excluded by default from endpoint/performance ranking;
+- numeric identifiers, UUIDs, and common opaque IDs normalized to `{id}` for endpoint aggregation while the exact raw path remains available in raw logs.
+
+Charts are responsive, theme-aware, dependency-free, and shipped locally without CDN dependencies.
+
 ## Logs and traffic
 
-The Logs page has tabs for:
+The Logs workspace provides structured request logs plus the existing Caddy/System and DDNS/DNS views.
 
-- Access;
-- Caddy/System;
-- DDNS/DNS.
+Request log filters include:
 
-It supports live updates, pause/resume, text search, structured filters, severity filters, host/status filters, and download of the currently filtered view.
+- time range;
+- domain/host;
+- normalized endpoint and exact path search;
+- HTTP method;
+- status code/status class;
+- minimum and maximum response time;
+- client IP;
+- user-agent/freetext;
+- client type and request category.
 
-Traffic retention:
+Quick filters include 4xx, 5xx, slow requests, errors, recent requests, and bots. Active filters remain visible as removable chips and are encoded in the URL so views can be bookmarked or shared. Users can save named views. Administrators can export the active filtered request set as CSV or JSON. Redaction is preserved in exports.
 
-- detailed values for 30 days;
-- daily aggregates after 30 days;
-- monthly aggregates after one year;
-- compact aggregates retained indefinitely;
-- raw log rotation remains external/configurable.
+Live request mode uses an efficient server-sent event stream with pause/resume behavior. It is opt-in and stops when the page is left.
+
+Request persistence:
+
+- full raw request metadata, including full client IP, retained for at least 30 days by default;
+- raw request metadata includes timestamp, host, method, redacted URI, exact path, normalized endpoint, status, response bytes, response time, client IP, user-agent, client classification, and category;
+- request/response bodies, cookies, and Authorization headers are never persisted;
+- sensitive query values such as tokens, secrets, passwords, keys, auth codes, sessions, cookies, and signatures are redacted before persistence;
+- administrators may extend the sensitive query-name list;
+- hourly aggregates are generated while ingesting raw logs;
+- data older than the raw retention window is compacted into daily aggregates without full IP addresses;
+- aggregate retention defaults to one year and is configurable;
+- raw Caddy log rotation remains external/configurable.
+
+## Security
+
+Security is a dedicated top-level workspace with Overview, Threats, Blocked IPs, Rate Limits, and Login Protection.
+
+Protection levels:
+
+- Off;
+- Balanced (default);
+- Strict;
+- Custom.
+
+Balanced defaults are intentionally generous for normal home-lab traffic and may be overridden per managed route. The protection layer supports:
+
+- per-client request-rate limiting with burst allowance;
+- temporary restrictions after repeated limit violations;
+- dynamic administrator and automatic temporary IP restrictions;
+- per-route inherit/off/custom policies;
+- explicit trusted-proxy configuration;
+- explicit allowlists;
+- safely resolved client IPs that never trust `X-Forwarded-For` or `X-Real-IP` from an untrusted peer;
+- WebSocket and streaming connections treated as request handshakes rather than long-running response-time failures;
+- no automatic permanent IP or account bans.
+
+Login protection:
+
+- progressive delay begins after repeated failed attempts;
+- default temporary login restriction begins after 10 failures;
+- repeated attacks escalate from 15 minutes to one hour and up to 24 hours;
+- successful sign-in clears the active failure counter;
+- administrators can remove active temporary restrictions;
+- unknown usernames perform a bounded constant-cost password verification;
+- password length, accepted scrypt parameters, password-hash concurrency, and HTTP worker concurrency are bounded to limit memory-exhaustion attacks.
+
+Threat detection observes recent request metadata for high request rates, repeated authorization failures, and scanning-like 404 patterns. The response follows `detect -> throttle/restrict -> temporary block`, records an explicit reason, and avoids automatic restrictions for private or explicitly allowlisted addresses.
+
+Every administrator security-policy change and manual restriction action is recorded in the audit log. Security events preserve enough detail to explain why an automatic decision was made.
+
+The custom protection handler is built into bundle mode so no CrowdSec, Redis, PostgreSQL, or third security container is required. Companion mode preserves hardened authentication and existing routes but reports the custom route guard as unavailable rather than writing an unsupported Caddy configuration.
 
 ## System
 
@@ -129,11 +222,15 @@ Traffic retention:
 
 ### Users and roles
 
-- Administrator: full management, users, settings, restore, and Custom Routes.
+- Administrator: full management, users, settings, restore, Custom Routes, analytics exports, and security policy changes.
 - Editor: managed routes, DNS, access groups, and operational actions permitted by policy.
-- Viewer: read-only status, routes, logs, DNS, audit, and configuration previews.
-- Login uses username/password and optional TOTP in version 1.
+- Viewer: read-only status, routes, analytics, logs, security events, DNS, audit, and configuration previews.
+- Login uses username/password and optional TOTP in version 1. Public deployments may require TOTP for every successful login after account setup.
 - Passkeys are a future extension point, not an unfinished visible feature.
+- Public mode requires an exact HTTPS origin and rejects other hosts or insecure requests.
+- Login requests require same-origin browser context.
+- Public session cookies use `Secure`, `HttpOnly`, `SameSite`, `Path=/`, and the `__Host-` prefix.
+- Administration sessions are bound to the browser user agent and revoked on a binding mismatch.
 
 ### Audit
 
@@ -143,22 +240,10 @@ Traffic retention:
 
 ## Notifications
 
-- Dashboard notifications, email, and generic webhooks.
+- Dashboard notifications, email, generic webhooks, Discord, and Telegram.
 - Each channel and event is individually configurable.
-- Initial events: public/down, upstream/down, certificate expiry, Caddy reload failure, DNS/DDNS failure, backup failure, and update availability.
+- External channels are disabled by default.
+- Discord webhook URLs and Telegram bot tokens are referenced through environment variables rather than stored as plaintext in SQLite.
+- Initial events include public/down, upstream/down, certificate expiry, Caddy reload failure, DNS/DDNS failure, backup failure, update availability, security threats, and protection activation failures.
+- Repeated security events are grouped/deduplicated before external notification where practical.
 - Webhooks support ntfy and Home Assistant through generic JSON payloads.
-
-## Persistence and migration
-
-- SQLite in the existing persistent UI volume.
-- WAL mode, foreign keys, bounded busy timeout, and explicit migrations.
-- Existing JSON provider configuration and managed route metadata are imported automatically.
-- Migration creates a backup first, validates imported data, and rolls back on failure.
-
-## Removed scope
-
-- App templates and generated Docker Compose snippets.
-- Docker socket integration.
-- Full raw Caddyfile editor.
-- Heavy SPA frameworks.
-- Unfinished provider controls.

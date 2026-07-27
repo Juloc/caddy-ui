@@ -15,6 +15,16 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(service_names, ["  caddy:", "  caddy-ui:"])
         self.assertNotIn("docker.sock", value)
 
+    def test_admin_port_is_loopback_and_portal_is_internal(self) -> None:
+        for path in (ROOT / "compose.yml", ROOT / "deploy" / "docker-compose.yml"):
+            value = path.read_text(encoding="utf-8")
+            with self.subTest(path=path):
+                self.assertIn('"127.0.0.1:8098:8098"', value)
+                self.assertIn('      - "8099"', value)
+                self.assertNotIn('      - "8099:8099"', value)
+                self.assertIn("no-new-privileges:true", value)
+                self.assertIn("cap_drop:", value)
+
     def test_release_template_is_version_pinned(self) -> None:
         value = (ROOT / "deploy" / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertEqual(value.count("ghcr.io/juloc/caddy-ui:__CADDY_UI_VERSION__"), 2)

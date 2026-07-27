@@ -17,9 +17,20 @@ jobs:
         with:
           python-version: "3.13"
       - name: Compile and test
+        shell: bash
         run: |
           python -m compileall -q caddy_ui caddy_ui_entrypoint.py scripts tests
-          python -m unittest discover -v
+          set +e
+          python -m unittest discover -v 2>&1 | tee /tmp/python-tests.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
+      - name: Upload Python failure log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-failure-log
+          path: /tmp/python-tests.log
+          retention-days: 1
 
   go:
     runs-on: ubuntu-latest
@@ -30,13 +41,19 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Format and tidy
+        shell: bash
         run: |
-          UNFORMATTED="$(gofmt -l cmd caddynetcp)"
-          if [ -n "$UNFORMATTED" ]; then
-            printf 'Go files need formatting:\n%s\n' "$UNFORMATTED"
-            exit 1
-          fi
+          gofmt -w cmd caddyguard caddynetcp
           go mod tidy
+          git diff -- caddyguard cmd caddynetcp go.mod go.sum | tee /tmp/go-format.patch
+          test ! -s /tmp/go-format.patch
+      - name: Upload Go formatting patch
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-format-patch
+          path: /tmp/go-format.patch
+          retention-days: 1
       - name: Test and verify committed modules
         run: |
           go test ./...
@@ -56,6 +73,14 @@ jobs:
           context: .
           target: ${{ matrix.target }}
           push: false
+          load: true
           tags: caddy-ui:${{ matrix.target }}-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Verify bundled Caddy protection module
+        if: matrix.target == 'bundle'
+        run: |
+          docker run --rm --entrypoint /usr/bin/caddy caddy-ui:bundle-test list-modules | grep -F 'http.handlers.caddy_ui_guard'
+          printf ':8080 {\n  caddy_ui_guard {\n    requests 10\n    window 1m\n    burst 2\n    block 15m\n  }\n  respond "ok"\n}\n' \
+            | docker run -i --rm --entrypoint /usr/bin/caddy caddy-ui:bundle-test adapt --adapter caddyfile --config /dev/stdin >/tmp/caddy-adapted.json
+          grep -F 'caddy_ui_guard' /tmp/caddy-adapted.json

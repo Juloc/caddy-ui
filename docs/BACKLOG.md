@@ -1,4 +1,4 @@
-# Caddy UI 1.0 Backlog
+# Caddy UI 1.x Backlog
 
 This file is the persistent implementation ledger. Update status and verification evidence as work progresses.
 
@@ -83,3 +83,30 @@ This file is the persistent implementation ledger. Update status and verificatio
 - [ ] Deployed two-container smoke test.
 - [x] Remove dead code, unused configuration, obsolete docs, and duplicated behavior.
 - [ ] Confirm every product requirement has implementation and verification evidence.
+
+## Phase 9 - Analytics and structured logs
+
+- [x] Add indexed SQLite raw request storage with idempotent ingestion and automatic backup before feature migration.
+- [x] Persist redacted URI, exact path, normalized endpoint, response time, status, traffic, client IP, user-agent, classification, and category.
+- [x] Add 30-day minimum raw retention, hourly rollups, daily compaction, and configurable one-year aggregate retention.
+- [x] Add Overview, Performance, Traffic, Endpoints, and Clients/IPs analytics workspaces.
+- [x] Add average/P50/P95/P99 response-time metrics, 4xx/5xx, traffic, top domains/endpoints/clients, and slow endpoint views.
+- [x] Add structured URL filters, quick filters, filter chips, saved views, administrator CSV/JSON export, and client/IP drill-down.
+- [x] Add opt-in SSE live request stream and responsive/mobile request-log cards.
+- [x] Add dashboard 24-hour observability KPIs.
+- [ ] Verify retention/compaction against large synthetic request volumes.
+- [ ] Complete desktop/mobile/light/dark visual smoke checks for Analytics and Logs.
+
+## Phase 10 - Integrated protection and security workspace
+
+- [x] Add bundled `caddy_ui_guard` HTTP handler with token-bucket rate limiting, burst support, temporary restrictions, trusted proxies, allowlists, dynamic shared blocklist, and structured security events.
+- [x] Add persistent login protection with progressive delay and temporary 15-minute/1-hour/24-hour escalation.
+- [x] Add threat detection for request floods, repeated authorization failures, and scanning-like 404 patterns.
+- [x] Add Security Overview, Threats, Blocked IPs, Rate Limits, and Login Protection workspaces.
+- [x] Add Off/Balanced/Strict/Custom policy levels and per-route inherit/off/custom controls.
+- [x] Validate protection configuration through the full Caddy adapt/reload/rollback workflow.
+- [x] Add security audit entries and client/IP security drill-downs.
+- [x] Add optional Discord and Telegram adapters using environment-referenced secrets.
+- [ ] Verify the bundled Caddy protection directive with live Caddy configuration validation and request tests.
+- [ ] Verify companion mode fails safely without the custom protection module.
+- [ ] Complete deployed two-container security/analytics smoke test and record evidence.
