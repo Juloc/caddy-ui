@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from caddy_ui.audit import AuditLog
 from caddy_ui.db import Database
 from caddy_ui.domain import ManagedRoute, Upstream
 from caddy_ui.secure_caddy import HardenedCaddyManager, render_hardened_site
-from caddy_ui.security_policy import PersistentLoginThrottle, SecurityPolicy, safe_return_path
+from caddy_ui.security_policy import (
+    PersistentLoginThrottle,
+    SecurityPolicy,
+    normalize_host,
+    safe_return_path,
+)
 from tests.helpers import settings
 
 
@@ -100,6 +107,17 @@ class SecureAuthTests(unittest.TestCase):
         self.assertEqual(safe_return_path("/\\evil"), "/")
         self.assertEqual(safe_return_path("https://evil.example"), "/")
         self.assertEqual(safe_return_path("/api/items?page=2#fragment"), "/api/items?page=2")
+
+    def test_malformed_hosts_and_nonstandard_public_ports_are_rejected(self) -> None:
+        self.assertEqual(normalize_host("example.com:not-a-port"), "")
+        environment = {
+            "CADDY_UI_PUBLIC_URL": "https://caddy.example.com:8443",
+            "CADDY_UI_PROXY_SECRET": "s" * 48,
+            "CADDY_UI_TRUSTED_PROXY_CIDRS": "127.0.0.0/8",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "standard HTTPS origin"):
+                SecurityPolicy.from_environment()
 
 
 if __name__ == "__main__":
