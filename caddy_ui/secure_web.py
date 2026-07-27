@@ -79,6 +79,7 @@ class Application:
         self.throttle = web.LoginThrottle()
         import_legacy(settings, self.database, self.audit)
         self.caddy.migrate_legacy_layout()
+        self.caddy.reconcile()
         self.jobs = JobRunner(settings, self.database, self.notifications)
 
     def start_jobs(self) -> None:
