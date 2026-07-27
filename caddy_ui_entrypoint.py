@@ -54,7 +54,7 @@ def main() -> int:
         from caddy_ui.login_security import install as install_login_security
 
         install_login_security()
-        from caddy_ui.public_auth import main as web_main
+        from caddy_ui.public_auth_hotfix import main as web_main
 
         return web_main()
     if command == "init-caddyfile":
