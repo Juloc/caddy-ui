@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import json
 import os
 import re
 import urllib.parse
@@ -116,6 +117,17 @@ class SecurityPolicy:
             return False
         return any(value in network for network in self.trusted_proxy_networks)
 
+    def context_hash(self) -> str:
+        material = "\0".join(
+            (
+                self.public_url,
+                self.proxy_secret,
+                str(self.require_totp),
+                str(self.bind_session_ip),
+            )
+        )
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
 
 def normalize_host(value: str) -> str:
     value = value.strip().lower().rstrip(".")
@@ -151,6 +163,7 @@ class PersistentLoginThrottle:
         self.database = database
         self.policy = policy
         self._initialize()
+        self._synchronize_context()
 
     @staticmethod
     def _digest(key: str) -> str:
@@ -186,6 +199,20 @@ class PersistentLoginThrottle:
                 """INSERT INTO settings(key,value_json,updated_at) VALUES('security_schema_version','2',?)
                    ON CONFLICT(key) DO UPDATE SET value_json='2',updated_at=excluded.updated_at""",
                 (utc_now(),),
+            )
+
+    def _synchronize_context(self) -> None:
+        current = self.policy.context_hash()
+        previous = str(self.database.setting("security_context_hash", "") or "")
+        if previous == current:
+            return
+        with self.database.transaction() as connection:
+            connection.execute("DELETE FROM sessions")
+            connection.execute("DELETE FROM portal_sessions")
+            connection.execute(
+                """INSERT INTO settings(key,value_json,updated_at) VALUES('security_context_hash',?,?)
+                   ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at""",
+                (json.dumps(current), utc_now()),
             )
 
     def allowed(self, keys: Iterable[tuple[str, int]]) -> bool:
