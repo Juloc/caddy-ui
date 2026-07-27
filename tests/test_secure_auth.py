@@ -102,6 +102,22 @@ class SecureAuthTests(unittest.TestCase):
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(portal_sessions)")}
             self.assertTrue({"created_at", "remote_address", "user_agent"}.issubset(columns))
 
+    def test_sessions_are_invalidated_when_security_context_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = settings(Path(directory))
+            database = Database(config)
+            database.initialize()
+            current_policy = policy("https://caddy.example.com", "caddy.example.com", "a" * 48)
+            PersistentLoginThrottle(database, current_policy)
+            admin = database.authenticate("admin", "correct-horse-battery-staple")
+            self.assertIsNotNone(admin)
+            token, _ = database.create_session(admin["id"], 3600, "127.0.0.1", "test")
+            PersistentLoginThrottle(database, current_policy)
+            self.assertIsNotNone(database.session(token))
+            changed_policy = policy("https://caddy.example.com", "caddy.example.com", "b" * 48)
+            PersistentLoginThrottle(database, changed_policy)
+            self.assertIsNone(database.session(token))
+
     def test_return_path_rejects_external_redirects(self) -> None:
         self.assertEqual(safe_return_path("//evil.example/path"), "/")
         self.assertEqual(safe_return_path("/\\evil"), "/")
