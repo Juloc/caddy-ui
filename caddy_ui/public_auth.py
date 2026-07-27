@@ -24,12 +24,20 @@ from .hardened_web import (
     _validate_settings,
     create_handler,
 )
-from .web import PORTAL_COOKIE_PREFIX, SESSION_COOKIE, first
+from .web import SESSION_COOKIE, first
 
 
 ADMIN_PROXY_HEADER = "X-Caddy-Admin-Secret"
+PORTAL_PROXY_HEADER = "X-Caddy-Portal-Secret"
 LOGIN_CSRF_COOKIE = "caddy_ui_login_csrf"
 ADMIN_UPSTREAMS = {"caddy-ui:8098", "http://caddy-ui:8098"}
+PORTAL_UPSTREAMS = {"caddy-ui:8099", "http://caddy-ui:8099"}
+RESERVED_AUTH_HEADERS = {
+    ADMIN_PROXY_HEADER.casefold(),
+    PORTAL_PROXY_HEADER.casefold(),
+    "x-caddy-portal-user",
+    "remote-user",
+}
 
 
 def _public_host(origin: str) -> str:
@@ -87,12 +95,26 @@ class PublicAuthCaddyManager(HardenedSecurityCaddyManager):
             )
         return matches[0]
 
+    def _validate_auth_transport(self, routes: list[ManagedRoute]) -> None:
+        for route in routes:
+            if any(header.name.casefold() in RESERVED_AUTH_HEADERS for header in route.request_headers):
+                raise ValueError("Reserved authentication headers cannot be configured manually.")
+            upstreams = {upstream.address.strip().lower() for upstream in route.upstreams}
+            if upstreams & PORTAL_UPSTREAMS:
+                raise ValueError("The internal access-portal listener cannot be used as a managed upstream.")
+            admin_targets = upstreams & ADMIN_UPSTREAMS
+            if admin_targets and upstreams - ADMIN_UPSTREAMS:
+                raise ValueError("Caddy UI cannot be mixed with other upstreams in one route.")
+            if admin_targets and not self.public_host:
+                raise ValueError("CADDY_UI_PUBLIC_ORIGIN is required before Caddy UI can be exposed through a managed route.")
+
     def ensure_public_route(self) -> bool:
         if not self.public_host:
             return False
         routes = self.routes.list()
         matches = [route for route in routes if route.effective_host.lower() == self.public_host]
         if matches:
+            self._validate_auth_transport(routes)
             self._public_route(routes)
             return False
 
@@ -117,28 +139,43 @@ class PublicAuthCaddyManager(HardenedSecurityCaddyManager):
         return True
 
     def _rendered_for(self, routes: list[ManagedRoute]) -> dict[str, str]:
+        self._validate_auth_transport(routes)
         public_route = self._public_route(routes) if self.public_host else None
         content = super()._rendered_for(routes)
-        if not public_route:
-            return content
-
-        filename = f"site-{hashlib.sha256(self.public_host.encode('utf-8')).hexdigest()[:12]}.caddy"
-        value = content.get(filename, "")
-        candidates = (
-            "        reverse_proxy caddy-ui:8098 {\n",
-            "        reverse_proxy http://caddy-ui:8098 {\n",
+        public_filename = (
+            f"site-{hashlib.sha256(self.public_host.encode('utf-8')).hexdigest()[:12]}.caddy"
+            if public_route
+            else ""
         )
-        for candidate in candidates:
-            if candidate in value:
-                replacement = (
-                    candidate
-                    + f"            header_up {ADMIN_PROXY_HEADER} {self.admin_secret}\n"
-                    + "            header_up X-Forwarded-Host {host}\n"
-                    + "            header_up X-Forwarded-Proto {scheme}\n"
-                )
-                content[filename] = value.replace(candidate, replacement, 1)
-                return content
-        raise ValueError("The hardened public Caddy UI route could not be rendered securely.")
+        admin_injected = False
+
+        for filename, value in list(content.items()):
+            rendered: list[str] = []
+            for line in value.splitlines():
+                rendered.append(line)
+                stripped = line.strip()
+                if not (line.startswith("        reverse_proxy ") and stripped.endswith("{")):
+                    continue
+                target = stripped[len("reverse_proxy ") : -1].strip().lower()
+                if filename == public_filename and target in ADMIN_UPSTREAMS:
+                    rendered.extend(
+                        [
+                            f"            header_up {ADMIN_PROXY_HEADER} {self.admin_secret}",
+                            f"            header_up -{PORTAL_PROXY_HEADER}",
+                            "            header_up X-Forwarded-Host {host}",
+                            "            header_up X-Forwarded-Proto {scheme}",
+                        ]
+                    )
+                    admin_injected = True
+                else:
+                    rendered.append(f"            header_up -{ADMIN_PROXY_HEADER}")
+                    if target not in PORTAL_UPSTREAMS:
+                        rendered.append(f"            header_up -{PORTAL_PROXY_HEADER}")
+            content[filename] = "\n".join(rendered) + "\n"
+
+        if public_route and not admin_injected:
+            raise ValueError("The hardened public Caddy UI route could not be rendered securely.")
+        return content
 
 
 class Application(EnhancedApplication):
@@ -248,7 +285,12 @@ def main() -> int:
     _validate_settings(settings)
     if settings.public_origin:
         _public_host(settings.public_origin)
-        settings = replace(settings, secure_cookies=True, require_totp=True)
+        settings = replace(
+            settings,
+            secure_cookies=True,
+            require_totp=True,
+            session_ttl_seconds=min(settings.session_ttl_seconds, 28_800),
+        )
 
     application = Application(settings)
     application.start_jobs()
