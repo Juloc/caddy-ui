@@ -13,6 +13,7 @@ services:
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
       NETCUP_API_KEY: ${NETCUP_API_KEY}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
+      CADDY_UI_PROXY_SECRET: ${CADDY_UI_PROXY_SECRET}
     volumes:
       - etc:/etc/caddy
       - data:/data
@@ -34,7 +35,7 @@ services:
       caddy:
         condition: service_healthy
     ports:
-      - "8098:8098"
+      - "127.0.0.1:8098:8098"
     environment:
       DOMAIN: ${DOMAIN:-}
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
@@ -42,6 +43,11 @@ services:
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
       CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
       CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
+      CADDY_UI_PUBLIC_URL: ${CADDY_UI_PUBLIC_URL:-}
+      CADDY_UI_PROXY_SECRET: ${CADDY_UI_PROXY_SECRET}
+      CADDY_UI_REQUIRE_TOTP: ${CADDY_UI_REQUIRE_TOTP:-auto}
+      CADDY_UI_BIND_SESSION_IP: ${CADDY_UI_BIND_SESSION_IP:-false}
+      CADDY_UI_SECURE_COOKIES: ${CADDY_UI_SECURE_COOKIES:-false}
       CADDY_ADMIN_URL: http://caddy:2019
       CADDY_UI_DATA_DIR: /var/lib/caddy-ui
     volumes:
@@ -49,6 +55,10 @@ services:
       - data:/data:ro
       - logs:/var/log/caddy:ro
       - ui-data:/var/lib/caddy-ui
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8098/api/health', timeout=3)"]
       interval: 15s
