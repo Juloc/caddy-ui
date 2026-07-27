@@ -13,6 +13,10 @@ class SecurityTests(unittest.TestCase):
         self.assertTrue(verify_password("correct-horse-battery-staple", first))
         self.assertFalse(verify_password("wrong-password", first))
 
+    def test_password_verification_rejects_unsafe_work_factors(self) -> None:
+        encoded = "scrypt$1073741824$8$1$MDEyMzQ1Njc4OWFiY2RlZg$MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY"
+        self.assertFalse(verify_password("password", encoded))
+
     def test_totp_accepts_current_window(self) -> None:
         secret = new_totp_secret()
         code = totp_code(secret, timestamp=1_700_000_000)
