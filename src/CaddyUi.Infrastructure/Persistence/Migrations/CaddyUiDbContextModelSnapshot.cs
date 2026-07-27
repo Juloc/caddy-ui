@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -15,6 +16,30 @@ public partial class CaddyUiDbContextModelSnapshot : ModelSnapshot
             .HasDefaultSchema("caddy_ui")
             .HasAnnotation("ProductVersion", "10.0.10")
             .HasAnnotation("Relational:MaxIdentifierLength", 63);
+
+        modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", entity =>
+        {
+            entity.Property<int>("Id")
+                .ValueGeneratedOnAdd()
+                .HasColumnType("integer")
+                .HasColumnName("id")
+                .HasAnnotation(
+                    "Npgsql:ValueGenerationStrategy",
+                    NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+            entity.Property<string>("FriendlyName")
+                .HasColumnType("text")
+                .HasColumnName("friendly_name");
+
+            entity.Property<string>("Xml")
+                .HasColumnType("text")
+                .HasColumnName("xml");
+
+            entity.HasKey("Id")
+                .HasName("pk_data_protection_keys");
+
+            entity.ToTable("data_protection_keys", "caddy_ui");
+        });
 
         modelBuilder.Entity("CaddyUi.Infrastructure.Persistence.SchemaMarker", entity =>
         {

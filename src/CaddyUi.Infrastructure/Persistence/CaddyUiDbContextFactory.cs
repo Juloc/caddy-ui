@@ -16,7 +16,11 @@ public sealed class CaddyUiDbContextFactory : IDesignTimeDbContextFactory<CaddyU
         var options = new DbContextOptionsBuilder<CaddyUiDbContext>()
             .UseNpgsql(
                 connectionString,
-                postgres => postgres.MigrationsAssembly(typeof(CaddyUiDbContext).Assembly.FullName))
+                postgres =>
+                {
+                    postgres.MigrationsAssembly(typeof(CaddyUiDbContext).Assembly.FullName);
+                    postgres.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+                })
             .Options;
 
         return new CaddyUiDbContext(options);

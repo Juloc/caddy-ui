@@ -1,5 +1,6 @@
 using CaddyUi.Application;
 using CaddyUi.Infrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +27,14 @@ public static class DependencyInjection
         services.AddDbContext<CaddyUiDbContext>(options =>
             options.UseNpgsql(
                 connectionString,
-                postgres => postgres.MigrationsAssembly(typeof(CaddyUiDbContext).Assembly.FullName)));
+                postgres =>
+                {
+                    postgres.MigrationsAssembly(typeof(CaddyUiDbContext).Assembly.FullName);
+                    postgres.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+                }));
+        services.AddDataProtection()
+            .SetApplicationName("CaddyUi")
+            .PersistKeysToDbContext<CaddyUiDbContext>();
 
         return services;
     }
