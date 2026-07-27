@@ -11,6 +11,7 @@ from . import caddy as base
 from .audit import Actor
 from .domain import ManagedRoute, RouteKind
 from .protection import SecurityCaddyManager, protection_settings
+from .runtime_security import bundled_guard_available
 
 
 PORTAL_BACKEND = "caddy-ui:8099"
@@ -131,6 +132,10 @@ class HardenedSecurityCaddyManager(SecurityCaddyManager):
             database.set_setting("portal_proxy_secret", portal_secret)
         self.portal_secret = portal_secret
 
+    def _guard_directives_enabled(self) -> bool:
+        runtime_parent = any(cls.__name__ == "RuntimeSecurityCaddyManager" for cls in type(self).__mro__)
+        return not runtime_parent or bundled_guard_available()
+
     def _rendered_for(self, routes: list[ManagedRoute]) -> dict[str, str]:
         grouped: dict[str, list[ManagedRoute]] = {}
         for route in routes:
@@ -187,7 +192,7 @@ class HardenedSecurityCaddyManager(SecurityCaddyManager):
             )
 
         settings = protection_settings(self.database)
-        if settings["level"] != "off":
+        if settings["level"] != "off" and self._guard_directives_enabled():
             for route in routes:
                 if not route.enabled:
                     continue
