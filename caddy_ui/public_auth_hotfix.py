@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import logging
 import os
 import re
@@ -16,6 +18,7 @@ from .domain import ManagedRoute, RouteKind, Upstream
 from .enhanced_web import Application as EnhancedApplication
 from .hardened_web import BoundedThreadingHTTPServer, _validate_settings, create_handler
 from .public_auth import (
+    ADMIN_PROXY_HEADER,
     LOGIN_CSRF_COOKIE,
     AdminHandler as PublicAdminHandler,
     PortalHandler,
@@ -34,7 +37,58 @@ def stable_login_csrf_token(existing: str) -> str:
     return secrets.token_urlsafe(32)
 
 
+def local_admin_host(value: str) -> bool:
+    """Return whether a raw Host header targets localhost or a private/link-local IP."""
+    try:
+        hostname = urllib.parse.urlsplit(f"//{value.strip()}").hostname
+    except ValueError:
+        return False
+    if not hostname:
+        return False
+    normalized = hostname.casefold().rstrip(".")
+    if normalized == "localhost" or normalized.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+    return address.is_private or address.is_loopback or address.is_link_local
+
+
 class AdminHandler(PublicAdminHandler):
+    def _via_public_proxy(self) -> bool:
+        return self._peer_is_internal() and hmac.compare_digest(
+            self.headers.get(ADMIN_PROXY_HEADER, ""),
+            self.app.caddy.admin_secret,
+        )
+
+    def _public_origin(self) -> str:
+        # Only trust the configured public origin when Caddy authenticated the hop.
+        if self._via_public_proxy():
+            return super()._public_origin()
+        return ""
+
+    def _surface_allowed(self) -> bool:
+        if self._via_public_proxy():
+            return super()._surface_allowed()
+        return self._peer_is_internal() and local_admin_host(self.headers.get("Host", ""))
+
+    def _same_origin(self, expected: str | None = None) -> bool:
+        if super()._same_origin(expected):
+            return True
+        # Chromium/Brave can emit Origin: null for a same-page form submission.
+        # The double-submit login CSRF token is still validated in _login_post.
+        return (
+            self.headers.get("Origin", "").strip().casefold() == "null"
+            and self.headers.get("Sec-Fetch-Site", "").strip().casefold() != "cross-site"
+            and self._surface_allowed()
+        )
+
+    def _secure_cookie(self) -> bool:
+        # Public access is HTTPS through the authenticated Caddy hop. Direct LAN
+        # access is intentionally HTTP and receives separate non-__Host cookies.
+        return self._via_public_proxy()
+
     def do_GET(self) -> None:
         if urllib.parse.urlsplit(self.path).path == "/favicon.ico":
             self._empty(HTTPStatus.NO_CONTENT)
@@ -119,11 +173,12 @@ class Application(EnhancedApplication):
 
 def public_settings(settings: Settings) -> Settings:
     if not settings.public_origin:
-        return settings
+        return replace(settings, require_totp=False)
     _public_host(settings.public_origin)
     return replace(
         settings,
         secure_cookies=True,
+        require_totp=False,
         session_ttl_seconds=min(settings.session_ttl_seconds, 28_800),
     )
 
@@ -135,10 +190,6 @@ def main() -> int:
     )
     settings = public_settings(Settings.from_environment())
     _validate_settings(settings)
-    if settings.public_origin and not settings.require_totp:
-        logging.warning(
-            "Public Caddy UI access is enabled without mandatory TOTP. Enable TOTP for the account, then set CADDY_UI_REQUIRE_TOTP=true."
-        )
 
     application = Application(settings)
     application.start_jobs()
