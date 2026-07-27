@@ -8,20 +8,35 @@ from dataclasses import replace
 from . import __version__
 from .audit import Actor
 from .config import Settings
-from .domain import RouteKind
+from .domain import ManagedRoute, RouteKind, Upstream
 from .enhanced_web import Application as EnhancedApplication
 from .hardened_web import BoundedThreadingHTTPServer, _validate_settings, create_handler
-from .public_auth import (
-    ADMIN_UPSTREAMS,
-    AdminHandler,
-    PortalHandler,
-    PublicAuthCaddyManager,
-    _public_host,
-)
+from .public_auth import AdminHandler, PortalHandler, PublicAuthCaddyManager, _public_host
 
 
 class MigratingPublicAuthCaddyManager(PublicAuthCaddyManager):
-    """Migrate the legacy Access-locked admin route to the built-in admin login."""
+    """Reserve the configured public origin for the built-in admin login."""
+
+    def _canonical_public_route(self, route: ManagedRoute) -> ManagedRoute:
+        return replace(
+            route,
+            host=self.public_host,
+            domain="",
+            kind=RouteKind.PROXY,
+            enabled=True,
+            paths=[],
+            upstreams=[Upstream("caddy-ui:8098")],
+            request_headers=[],
+            response_headers=[],
+            load_balancing="random",
+            health_uri="",
+            health_interval="30s",
+            tls_skip_verify=False,
+            redirect_to="",
+            redirect_status=308,
+            access_group_id="",
+            custom_snippet="",
+        )
 
     def ensure_public_route(self) -> bool:
         if not self.public_host:
@@ -37,24 +52,16 @@ class MigratingPublicAuthCaddyManager(PublicAuthCaddyManager):
             )
 
         route = matches[0]
-        compatible = (
-            route.enabled
-            and route.kind == RouteKind.PROXY
-            and not route.paths
-            and len(route.upstreams) == 1
-            and route.upstreams[0].address.strip().lower() in ADMIN_UPSTREAMS
-        )
-        if not compatible:
-            raise ValueError(
-                f"Public Caddy UI host {self.public_host} must be an enabled catch-all proxy route to caddy-ui:8098."
-            )
-
-        if route.access_group_id:
-            migrated = replace(route, access_group_id="")
+        canonical = self._canonical_public_route(route)
+        if route != canonical:
             self.apply(
                 Actor(username="system", remote_address="local"),
-                "Migrate public Caddy UI route to built-in authentication",
-                proposed=migrated,
+                "Normalize public Caddy UI route for built-in authentication",
+                proposed=canonical,
+            )
+            logging.warning(
+                "Normalized legacy public Caddy UI route %s to the secured caddy-ui:8098 catch-all route.",
+                route.name,
             )
             return True
 
