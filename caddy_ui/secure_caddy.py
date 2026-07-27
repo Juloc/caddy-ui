@@ -187,6 +187,23 @@ class SecureCaddyManager(base.CaddyManager):
             )
         return content
 
+    def reconcile(self) -> bool:
+        desired = self.rendered()
+        actual: dict[str, str] = {}
+        if self.settings.routes_dir.exists():
+            for path in self.settings.routes_dir.glob("*.caddy"):
+                try:
+                    value = path.read_text(encoding="utf-8")
+                    first = value.splitlines()[0]
+                except (OSError, IndexError, UnicodeError):
+                    continue
+                if first == base.MANAGED_HEADER:
+                    actual[path.name] = value
+        if actual == desired:
+            return False
+        self.apply(Actor(username="system"), "Reconcile hardened authentication")
+        return True
+
     def _restore_revision(self, actor: Actor, revision_id: str) -> None:
         with self.database.connect() as connection:
             row = connection.execute(
