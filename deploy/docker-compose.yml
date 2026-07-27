@@ -58,6 +58,10 @@ services:
       - data:/data:ro
       - logs:/var/log/caddy:ro
       - ui-data:/var/lib/caddy-ui
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8098/api/health', timeout=3)"]
       interval: 15s
