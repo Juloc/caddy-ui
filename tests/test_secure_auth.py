@@ -12,6 +12,14 @@ from caddy_ui.secure_web import _normalized_origin, _safe_return_to
 from tests.helpers import settings
 
 
+class TestSecureManager(SecureCaddyManager):
+    def validate(self) -> None:
+        return None
+
+    def reload(self) -> None:
+        return None
+
+
 class SecureAuthenticationTests(unittest.TestCase):
     def route(self, protected: bool = True) -> ManagedRoute:
         return ManagedRoute(
@@ -51,6 +59,33 @@ class SecureAuthenticationTests(unittest.TestCase):
             route.paths = ["/__caddy_ui_auth/*"]
             with self.assertRaisesRegex(ValueError, "reserved access portal prefix"):
                 manager.preview(proposed=route)
+
+    def test_preview_redacts_internal_portal_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = settings(Path(directory))
+            database = Database(config)
+            database.initialize()
+            manager = SecureCaddyManager(config, database, AuditLog(database))
+            rendered, diff = manager.preview(proposed=self.route())
+            self.assertNotIn(manager.portal_secret, rendered)
+            self.assertNotIn(manager.portal_secret, diff)
+            self.assertIn("[redacted]", rendered)
+
+    def test_startup_reconcile_replaces_old_auth_rendering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = settings(Path(directory))
+            database = Database(config)
+            database.initialize()
+            manager = TestSecureManager(config, database, AuditLog(database))
+            route = self.route()
+            manager.routes.save(route)
+            config.routes_dir.mkdir(parents=True, exist_ok=True)
+            legacy = config.routes_dir / "site-old.caddy"
+            legacy.write_text("# managed-by caddy-ui\nold insecure auth\n", encoding="utf-8")
+            self.assertTrue(manager.reconcile())
+            value = next(config.routes_dir.glob("site-*.caddy")).read_text(encoding="utf-8")
+            self.assertIn("forward_auth caddy-ui:8099", value)
+            self.assertFalse(legacy.exists())
 
     def test_return_target_cannot_loop_or_leave_current_host(self) -> None:
         self.assertEqual(_safe_return_to("/__caddy_ui_auth/login?group=x"), "/")
