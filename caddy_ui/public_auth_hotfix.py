@@ -21,13 +21,20 @@ from .public_auth import (
     ADMIN_PROXY_HEADER,
     LOGIN_CSRF_COOKIE,
     AdminHandler as PublicAdminHandler,
-    PortalHandler,
+    PortalHandler as PublicPortalHandler,
     PublicAuthCaddyManager,
     _public_host,
 )
 
 
 LOGIN_CSRF_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
+BROWSER_METADATA_PATHS = {
+    "/favicon.ico",
+    "/apple-touch-icon.png",
+    "/apple-touch-icon-precomposed.png",
+    "/site.webmanifest",
+    "/manifest.json",
+}
 
 
 def stable_login_csrf_token(existing: str) -> str:
@@ -55,7 +62,20 @@ def local_admin_host(value: str) -> bool:
     return address.is_private or address.is_loopback or address.is_link_local
 
 
-class AdminHandler(PublicAdminHandler):
+class StableLoginCsrfMixin:
+    def _login_html(self, content: bytes) -> None:
+        token = stable_login_csrf_token(self._cookie(LOGIN_CSRF_COOKIE))
+        content = self._inject_login_csrf(content, token)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Set-Cookie", self._login_csrf_cookie_header(token))
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(content)
+
+
+class AdminHandler(StableLoginCsrfMixin, PublicAdminHandler):
     def _via_public_proxy(self) -> bool:
         return self._peer_is_internal() and hmac.compare_digest(
             self.headers.get(ADMIN_PROXY_HEADER, ""),
@@ -95,16 +115,28 @@ class AdminHandler(PublicAdminHandler):
             return
         super().do_GET()
 
-    def _login_html(self, content: bytes) -> None:
-        token = stable_login_csrf_token(self._cookie(LOGIN_CSRF_COOKIE))
-        content = self._inject_login_csrf(content, token)
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(content)))
-        self.send_header("Set-Cookie", self._login_csrf_cookie_header(token))
-        self._security_headers()
-        self.end_headers()
-        self.wfile.write(content)
+
+class PortalHandler(StableLoginCsrfMixin, PublicPortalHandler):
+    def _same_origin(self, expected: str | None = None) -> bool:
+        if super()._same_origin(expected):
+            return True
+        # Some Chromium-based browsers submit the portal form with Origin: null.
+        # The request must still come through the authenticated Caddy portal hop,
+        # must not be cross-site, and must pass the login CSRF token check.
+        return (
+            self.headers.get("Origin", "").strip().casefold() == "null"
+            and self.headers.get("Sec-Fetch-Site", "").strip().casefold() != "cross-site"
+            and self._proxy_allowed()
+        )
+
+    def _portal_authorize(self, parsed: urllib.parse.SplitResult) -> None:
+        original_path = urllib.parse.urlsplit(self.headers.get("X-Forwarded-Uri", "/")).path
+        if original_path in BROWSER_METADATA_PATHS:
+            # Browser metadata requests must not create a second hidden portal login
+            # page and rotate the double-submit CSRF cookie behind the visible form.
+            self._empty(HTTPStatus.NOT_FOUND)
+            return
+        super()._portal_authorize(parsed)
 
 
 class MigratingPublicAuthCaddyManager(PublicAuthCaddyManager):
