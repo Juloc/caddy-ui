@@ -35,8 +35,7 @@ ADMIN_IDENTITY_LIMIT = 8
 ADMIN_ADDRESS_LIMIT = 30
 PORTAL_IDENTITY_LIMIT = 10
 PORTAL_ADDRESS_LIMIT = 40
-PORTAL_PROXY_HEADER = "X-Caddy-Portal-Proxy"
-PORTAL_PROXY_VALUE = "1"
+PORTAL_PROXY_HEADER = "X-Caddy-Portal-Secret"
 AUTH_PREFIX = "/__caddy_ui_auth/"
 
 
@@ -387,7 +386,10 @@ class PortalHandler(SecurityHandler):
     def _proxy_allowed(self) -> bool:
         return (
             self._peer_is_trusted_proxy()
-            and hmac.compare_digest(self.headers.get(PORTAL_PROXY_HEADER, ""), PORTAL_PROXY_VALUE)
+            and hmac.compare_digest(
+                self.headers.get(PORTAL_PROXY_HEADER, ""),
+                self.app.caddy.portal_secret,
+            )
             and bool(self._request_host())
         )
 
