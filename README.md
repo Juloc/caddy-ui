@@ -11,7 +11,7 @@ The interface follows a restrained Fluent 2 / Windows 11 style. Dashboard summar
 - Validate, preview/diff, apply, reload, verify, automatic rollback, and immutable revisions
 - Enable, disable, duplicate, bulk delete, JSON import/export, and controlled unmanaged-snippet import
 - Reusable branded username/password access portals with isolated forward-auth handling
-- Administrator, Editor, and Viewer roles; optional or required TOTP; CSRF-protected server-side sessions
+- Administrator, Editor, and Viewer roles; optional local or mandatory public TOTP; CSRF-protected server-side sessions
 - Request analytics, performance views, client classification, live logs, saved views, and exports
 - Integrated route protection, progressive login protection, IP blocks, alerts, and observability jobs
 - Dedicated Access, Analytics, Security, Logs, System, and DNS workspaces
@@ -54,13 +54,13 @@ Then open `http://127.0.0.1:8098` locally.
 
 The administration UI can be exposed through Caddy after initial setup:
 
-1. Enable TOTP for the administrator under **Administration → Settings**.
+1. Enable TOTP for every administrator who must sign in publicly under **Administration → Settings**.
 2. Set `CADDY_UI_PUBLIC_ORIGIN` to the exact external HTTPS origin, for example `https://caddy.example.com`.
-3. Create an unprotected managed proxy route for that host with upstream `caddy-ui:8098`. Do not assign an Access Group because the administration UI has its own login.
-4. Restart `caddy-ui`.
-5. After every required account has TOTP configured, set `CADDY_UI_REQUIRE_TOTP=true`.
+3. Restart `caddy-ui`.
 
-Public mode rejects non-HTTPS requests and requests for a different external host. Session cookies use `Secure`, `HttpOnly`, `SameSite`, `Path=/`, and the `__Host-` prefix. Login POSTs require a same-origin browser request, sessions are bound to the browser user agent, and progressive login protection persists in SQLite.
+Caddy UI automatically creates and protects the dedicated unprotected proxy route for that exact host. The generated Caddy configuration adds a random internal admin-proxy secret that is never stored in route JSON and is redacted from previews. Public requests without the secret, with a different host, or without HTTPS proxy metadata are rejected.
+
+Public mode always enables secure cookies and requires TOTP. Admin and portal login forms use a short-lived double-submit CSRF token plus strict Origin/Referer checks. Sessions are bound to the browser user agent, progressive login protection persists in SQLite, and the container host port remains loopback-only.
 
 ## Access portal security
 
@@ -137,11 +137,11 @@ The CI workflow performs these checks for pull requests and `main` and verifies 
 
 ## Releases
 
-A successful merge to `main` creates the next SemVer release and publishes both images. During the pre-1.0 phase, releases advance `alpha.N` by default.
+A successful merge to `main` creates the next SemVer release and publishes both images.
 
 | Pull request label | Result |
 | --- | --- |
-| none | next patch, or next current prerelease sequence |
+| none | next patch |
 | `minor` / `release:minor` | next minor version |
 | `major` / `release:major` | next major version |
 | `beta` / `release:beta` | promote to or advance beta |
