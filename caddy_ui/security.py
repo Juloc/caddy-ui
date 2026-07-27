@@ -9,14 +9,18 @@ import time
 from dataclasses import dataclass
 
 
-SCRYPT_N = 2**14
+SCRYPT_N = 2**15
 SCRYPT_R = 8
 SCRYPT_P = 1
+MINIMUM_PASSWORD_LENGTH = 14
+MAXIMUM_PASSWORD_LENGTH = 512
 
 
 def hash_password(password: str) -> str:
-    if len(password) < 10:
-        raise ValueError("Password must contain at least 10 characters.")
+    if not MINIMUM_PASSWORD_LENGTH <= len(password) <= MAXIMUM_PASSWORD_LENGTH:
+        raise ValueError(
+            f"Password must contain between {MINIMUM_PASSWORD_LENGTH} and {MAXIMUM_PASSWORD_LENGTH} characters."
+        )
     salt = secrets.token_bytes(16)
     digest = hashlib.scrypt(
         password.encode("utf-8"),
@@ -40,6 +44,8 @@ def _decode(value: str) -> bytes:
 
 
 def verify_password(password: str, encoded: str) -> bool:
+    if len(password) > MAXIMUM_PASSWORD_LENGTH:
+        return False
     try:
         algorithm, n, r, p, salt, expected = encoded.split("$", 5)
         if algorithm != "scrypt":
@@ -55,6 +61,14 @@ def verify_password(password: str, encoded: str) -> bool:
         return hmac.compare_digest(digest, _decode(expected))
     except (ValueError, TypeError):
         return False
+
+
+def password_hash_needs_upgrade(encoded: str) -> bool:
+    try:
+        algorithm, n, r, p, _salt, _expected = encoded.split("$", 5)
+        return algorithm != "scrypt" or int(n) < SCRYPT_N or int(r) < SCRYPT_R or int(p) < SCRYPT_P
+    except (ValueError, TypeError):
+        return True
 
 
 def token_hash(token: str) -> str:
@@ -91,6 +105,8 @@ def verify_totp(secret: str, code: str, timestamp: int | None = None) -> bool:
 
 @dataclass(slots=True)
 class LoginThrottle:
+    """Legacy in-memory throttle retained for compatibility; the web runtime uses the persistent throttle."""
+
     failures: dict[str, list[float]]
     window_seconds: int = 300
     maximum_attempts: int = 8
