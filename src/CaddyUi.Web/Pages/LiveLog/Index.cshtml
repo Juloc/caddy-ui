@@ -1,0 +1,34 @@
+@page
+@model CaddyUi.Web.Pages.LiveLog.IndexModel
+@{
+    ViewData["Title"] = "Live-Log";
+}
+<section class="page-heading"><div><p class="eyebrow">Server-Sent Events</p><h1>Live-Log</h1><p class="page-description">Neue Requests werden ohne Vollseiten-Neuladung ergänzt. Die Ansicht ist read-only und nutzt dieselben Filter wie die übrige Statistik.</p></div><span id="live-state" class="status-badge status-badge--neutral">Verbindung wird aufgebaut</span></section>
+<partial name="Shared/_AnalyticsFilters" model="Model" />
+<section class="panel panel--wide"><div class="panel-body table-wrap"><table class="data-table request-table"><thead><tr><th>Zeit</th><th>Host / Pfad</th><th>Status</th><th>Typ</th><th>Akteur</th><th>Laufzeit</th></tr></thead><tbody id="live-rows">
+@foreach (var request in Model.Requests)
+{
+<tr><td>@request.OccurredAt.ToLocalTime().ToString("G")</td><td><strong>@request.Host</strong><small><code>@request.Method @request.Path</code></small></td><td>@request.Status</td><td>@request.RequestType</td><td>@request.ActorType</td><td>@AnalyticsPageModelBase.FormatDuration(request.DurationMilliseconds)</td></tr>
+}
+</tbody></table></div></section>
+<script>
+(() => {
+    const rows = document.getElementById('live-rows');
+    const state = document.getElementById('live-state');
+    const stream = new EventSource(@Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(Model.EventStreamUrl)));
+    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+    stream.addEventListener('request', event => {
+        const item = JSON.parse(event.data);
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${escapeHtml(new Date(item.occurredAt).toLocaleString())}</td><td><strong>${escapeHtml(item.host)}</strong><small><code>${escapeHtml(item.method)} ${escapeHtml(item.path)}</code></small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.requestType)}</td><td>${escapeHtml(item.actorType)}</td><td>${escapeHtml(item.durationMilliseconds.toFixed(1))} ms</td>`;
+        rows.prepend(row);
+        while (rows.children.length > 100) rows.lastElementChild.remove();
+        state.textContent = 'Live';
+        state.className = 'status-badge status-badge--ok';
+    });
+    stream.onerror = () => {
+        state.textContent = 'Verbindung unterbrochen';
+        state.className = 'status-badge status-badge--warning';
+    };
+})();
+</script>

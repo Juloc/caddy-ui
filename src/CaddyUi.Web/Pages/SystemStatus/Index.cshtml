@@ -1,0 +1,20 @@
+@page "/System"
+@model CaddyUi.Web.Pages.SystemStatus.IndexModel
+@{
+    ViewData["Title"] = "System";
+}
+<section class="page-heading"><div><p class="eyebrow">Betriebsstatus</p><h1>System</h1><p class="page-description">Read-only Zustand von PostgreSQL, Ingestion, Checkpoints, Retention und den standardmäßig deaktivierten Sicherheits-Workern.</p></div><span class="status-badge @(Model.Status.DatabaseAvailable ? "status-badge--ok" : "status-badge--warning")">@(Model.Status.DatabaseAvailable ? "PostgreSQL erreichbar" : "PostgreSQL nicht erreichbar")</span></section>
+@if (!Model.Status.DatabaseAvailable)
+{
+<div class="notice notice--warning"><strong>Datenbankfehler:</strong> @Model.Status.DatabaseError</div>
+}
+<section class="metric-grid">
+<article class="metric-card"><span class="metric-label">Request-Zeilen</span><strong class="metric-value">@Model.Status.RequestRows.ToString("N0")</strong><span class="metric-detail">Raw-Retention @Model.Status.RawRequestRetentionDays Tage</span></article>
+<article class="metric-card"><span class="metric-label">Pageviews</span><strong class="metric-value">@Model.Status.PageViewRows.ToString("N0")</strong><span class="metric-detail">Retention @Model.Status.PageViewRetentionDays Tage</span></article>
+<article class="metric-card"><span class="metric-label">Clients</span><strong class="metric-value">@Model.Status.ClientRows.ToString("N0")</strong><span class="metric-detail">pseudonym und geschätzt</span></article>
+<article class="metric-card"><span class="metric-label">Offene Ingestionfehler</span><strong class="metric-value">@Model.Status.UnresolvedFailures.ToString("N0")</strong><span class="metric-detail">separat protokolliert</span></article>
+</section>
+<section class="analytics-columns analytics-columns--two">
+<article class="panel"><header class="panel-header"><div><p class="eyebrow">Ingestion</p><h2>Log-Verarbeitung</h2></div></header><div class="panel-body definition-list"><div><span>Aktiv</span><strong>@(Model.Status.IngestionEnabled ? "Ja" : "Nein · Shadow aus")</strong></div><div><span>Logpfade</span><strong>@Model.Status.ConfiguredLogPaths</strong></div><div><span>Checkpoints</span><strong>@Model.Status.CheckpointCount</strong></div><div><span>Letzter Request</span><strong>@(Model.Status.LatestRequestAt?.ToLocalTime().ToString("G") ?? "–")</strong></div><div><span>Letzter Checkpoint</span><strong>@(Model.Status.LatestCheckpointAt?.ToLocalTime().ToString("G") ?? "–")</strong></div></div></article>
+<article class="panel"><header class="panel-header"><div><p class="eyebrow">Sicherheit</p><h2>Feature Flags</h2></div></header><div class="panel-body definition-list"><div><span>IP Intelligence</span><strong>@(Model.Status.IpIntelligenceEnabled ? "Aktiv" : "Deaktiviert")</strong></div><div><span>Risikobewertung</span><strong>@(Model.Status.RiskAssessmentEnabled ? "Aktiv" : "Deaktiviert")</strong></div><div><span>Blocklist-Modus</span><strong>@Model.Status.BlockWriteMode</strong></div><div><span>Produktivpfad</span><strong>Python bleibt aktiv</strong></div></div></article>
+</section>

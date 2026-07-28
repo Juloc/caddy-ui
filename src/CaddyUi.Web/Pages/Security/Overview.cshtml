@@ -1,0 +1,28 @@
+@page
+@model CaddyUi.Web.Pages.Security.OverviewModel
+@{
+    ViewData["Title"] = "Bots & Sicherheit";
+}
+<section class="page-heading"><div><p class="eyebrow">Security Analytics</p><h1>Bots &amp; Sicherheit</h1><p class="page-description">Risikowerte sind deterministische Hinweise mit nachvollziehbaren Gründen. Sie sind keine sichere Identifikation einer Person.</p></div><a class="button button--quiet" asp-page="/Security/Clients">Alle Clients</a></section>
+<partial name="Shared/_AnalyticsFilters" model="Model" />
+<section class="metric-grid">
+<article class="metric-card"><span class="metric-label">Clients</span><strong class="metric-value">@Model.Security.Clients.ToString("N0")</strong><span class="metric-detail">geschätzte technische Identitäten</span></article>
+<article class="metric-card"><span class="metric-label">Bot-Requests</span><strong class="metric-value">@Model.Security.BotRequests.ToString("N0")</strong><span class="metric-detail">Requestklassifikation</span></article>
+<article class="metric-card"><span class="metric-label">Hohes Risiko</span><strong class="metric-value">@Model.Security.HighRiskClients.ToString("N0")</strong><span class="metric-detail">aktuelle Auswahl</span></article>
+<article class="metric-card"><span class="metric-label">Aktive Sperren</span><strong class="metric-value">@Model.Security.ActiveBlocks.ToString("N0")</strong><span class="metric-detail">manuell und nicht abgelaufen</span></article>
+</section>
+<section class="workspace-grid workspace-grid--analytics">
+<article class="panel panel--wide"><header class="panel-header"><div><p class="eyebrow">Priorisiert</p><h2>Auffällige Clients</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>Client</th><th>IP</th><th>Klassifikation</th><th>Score</th><th>Bewertet</th></tr></thead><tbody>
+@foreach (var client in Model.Security.SuspiciousClients)
+{
+<tr><td><a asp-page="/Security/Client" asp-route-id="@client.ClientId"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? "geschätzt" : "First-Party-ID")</small></td><td><code>@(client.RemoteAddress.Length == 0 ? "–" : client.RemoteAddress)</code></td><td>@client.Classification</td><td><span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">@client.AutomationScore · @client.RiskLevel</span></td><td>@(client.AssessedAt?.ToLocalTime().ToString("g") ?? "–")</td></tr>
+}
+</tbody></table></div></article>
+<aside class="panel"><header class="panel-header"><div><p class="eyebrow">Einordnung</p><h2>Dimensionen</h2></div></header><div class="panel-body"><ul class="check-list"><li>Akteur und Requesttyp bleiben getrennt</li><li>Client ist keine sichere Person</li><li>Score enthält einzelne Reasons</li><li>Automatische Sperren bleiben aus</li></ul></div></aside>
+</section>
+<section class="panel panel--wide analytics-section"><header class="panel-header"><div><p class="eyebrow">Auditierbar</p><h2>Security Events</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>Zeit</th><th>Art</th><th>Grund</th><th>IP</th><th>Host / Pfad</th></tr></thead><tbody>
+@foreach (var item in Model.Security.RecentEvents)
+{
+<tr><td>@item.OccurredAt.ToLocalTime().ToString("G")</td><td>@item.Kind</td><td>@item.Reason</td><td><code>@item.RemoteAddress</code></td><td>@item.Host<small><code>@item.Path</code></small></td></tr>
+}
+</tbody></table></div></section>

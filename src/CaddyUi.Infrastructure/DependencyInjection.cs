@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<AnalyticsLogTailer>();
         services.AddSingleton<AnalyticsIngestionStore>();
         services.AddSingleton<AnalyticsClientKeyProvider>();
+        services.AddSingleton<AnalyticsReadStore>();
         services.AddHostedService<AnalyticsIngestionWorker>();
         services.AddHostedService<AnalyticsMaintenanceWorker>();
         services.AddSingleton(ipSecurityOptions);

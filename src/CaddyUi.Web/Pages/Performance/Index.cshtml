@@ -1,0 +1,30 @@
+@page
+@model CaddyUi.Web.Pages.Performance.IndexModel
+@{
+    ViewData["Title"] = "Fehler & Performance";
+}
+<section class="page-heading"><div><p class="eyebrow">Qualität</p><h1>Fehler &amp; Performance</h1><p class="page-description">Latenzperzentile, langsamste normalisierte Pfade und häufigste HTTP-Fehler für den ausgewählten Zeitraum.</p></div></section>
+<partial name="Shared/_AnalyticsFilters" model="Model" />
+<section class="metric-grid metric-grid--dense">
+<article class="metric-card"><span class="metric-label">Requests</span><strong class="metric-value">@Model.Performance.Requests.ToString("N0")</strong></article>
+<article class="metric-card"><span class="metric-label">Fehler</span><strong class="metric-value">@Model.Performance.Errors.ToString("N0")</strong></article>
+<article class="metric-card"><span class="metric-label">Durchschnitt</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Performance.AverageDurationMilliseconds)</strong></article>
+<article class="metric-card"><span class="metric-label">p50</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Performance.P50DurationMilliseconds)</strong></article>
+<article class="metric-card"><span class="metric-label">p95</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Performance.P95DurationMilliseconds)</strong></article>
+<article class="metric-card"><span class="metric-label">p99</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Performance.P99DurationMilliseconds)</strong></article>
+<article class="metric-card"><span class="metric-label">Maximum</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Performance.MaximumDurationMilliseconds)</strong></article>
+</section>
+<section class="analytics-columns analytics-columns--two">
+<article class="panel"><header class="panel-header"><div><p class="eyebrow">Latenz</p><h2>Langsamste Routen</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>Route</th><th>Requests</th><th>Ø</th><th>Max</th></tr></thead><tbody>
+@foreach (var route in Model.Performance.SlowRoutes)
+{
+<tr><td><strong>@route.Host</strong><small><code>@route.Path</code></small></td><td>@route.RequestCount.ToString("N0")</td><td>@AnalyticsPageModelBase.FormatDuration(route.AverageDurationMilliseconds)</td><td>@AnalyticsPageModelBase.FormatDuration(route.MaximumDurationMilliseconds)</td></tr>
+}
+</tbody></table></div></article>
+<article class="panel"><header class="panel-header"><div><p class="eyebrow">HTTP</p><h2>Häufigste Fehler</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>Status</th><th>Route</th><th>Anzahl</th></tr></thead><tbody>
+@foreach (var error in Model.Performance.CommonErrors)
+{
+<tr><td><span class="status-code status-code--@((error.Status / 100).ToString())xx">@error.Status</span></td><td><strong>@error.Host</strong><small><code>@error.Path</code></small></td><td>@error.Count.ToString("N0")</td></tr>
+}
+</tbody></table></div></article>
+</section>
