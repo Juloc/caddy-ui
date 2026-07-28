@@ -1,0 +1,59 @@
+@page
+@model CaddyUi.Web.Pages.LoginModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Anmelden · Caddy UI</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/phase3.css" asp-append-version="true" />
+</head>
+<body class="auth-page">
+    <main class="auth-card">
+        <div class="auth-brand">
+            <span class="brand-mark" aria-hidden="true">C</span>
+            <div>
+                <strong>Caddy UI</strong>
+                <span>Administration</span>
+            </div>
+        </div>
+
+        <div>
+            <p class="eyebrow">Geschützter Bereich</p>
+            <h1>Anmelden</h1>
+            <p class="page-description">Lokaler Zugriff und öffentlicher Zugriff verwenden getrennte, serverseitig geprüfte Sitzungen.</p>
+        </div>
+
+        @if (Model.ShowPublicWarning)
+        {
+            <div class="notice notice--warning">
+                Öffentlicher Zugriff ist aktiv, aber TOTP ist nicht verpflichtend. Dieser Betriebsmodus bleibt erlaubt, wird jedoch nicht empfohlen.
+            </div>
+        }
+
+        <form method="post" class="form-stack">
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+            <label>
+                <span>Benutzername</span>
+                <input asp-for="Input.Username" autocomplete="username" autofocus />
+            </label>
+            <label>
+                <span>Passwort</span>
+                <input asp-for="Input.Password" type="password" autocomplete="current-password" />
+            </label>
+            <label>
+                <span>TOTP- oder Recovery-Code</span>
+                <input asp-for="Input.SecondFactor" inputmode="numeric" autocomplete="one-time-code" />
+                <small>Nur erforderlich, wenn TOTP für das Konto aktiv oder öffentlich vorgeschrieben ist.</small>
+            </label>
+            <button class="button button--primary" type="submit">Anmelden</button>
+        </form>
+    </main>
+</body>
+</html>

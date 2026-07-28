@@ -1,0 +1,47 @@
+@page "/__caddy_ui_auth/login"
+@model CaddyUi.Web.Pages.Portal.LoginModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@Model.GroupName · Geschützter Zugriff</title>
+    <style>
+        :root { color-scheme: light dark; font-family: Inter, system-ui, sans-serif; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111827; }
+        main { width: min(420px, calc(100% - 32px)); padding: 30px; border-radius: 18px; background: #fff; color: #111827; box-shadow: 0 24px 70px #0007; }
+        h1 { margin: 0 0 8px; } p { color: #667085; }
+        form { display: grid; gap: 16px; margin-top: 24px; }
+        label { display: grid; gap: 7px; font-weight: 600; }
+        input { padding: 12px; border: 1px solid #d0d5dd; border-radius: 10px; font: inherit; }
+        button { padding: 12px; border: 0; border-radius: 10px; background: #7c3aed; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+        .error { padding: 12px; border-radius: 10px; background: #fee2e2; color: #991b1b; }
+        @@media (prefers-color-scheme: dark) { main { background: #1f2937; color: #f9fafb; } p { color: #cbd5e1; } input { background: #111827; color: #f9fafb; border-color: #475569; } }
+    </style>
+</head>
+<body>
+    <main>
+        <small>Caddy Access Portal</small>
+        <h1>@Model.GroupName</h1>
+        <p>Diese Anwendung ist einer geschützten Access Group zugeordnet.</p>
+        <div asp-validation-summary="ModelOnly" class="error"></div>
+        <form method="post">
+            <input type="hidden" asp-for="Group" />
+            <input type="hidden" asp-for="ReturnTo" />
+            <label>
+                Benutzername
+                <input asp-for="Input.Username" autocomplete="username" autofocus />
+            </label>
+            <label>
+                Passwort
+                <input asp-for="Input.Password" type="password" autocomplete="current-password" />
+            </label>
+            <button type="submit">Anmelden</button>
+        </form>
+    </main>
+</body>
+</html>

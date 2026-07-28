@@ -7,12 +7,12 @@
 <section class="page-heading">
     <div>
         <p class="eyebrow">Caddy UI 2.0</p>
-        <h1>.NET-Grundgerüst</h1>
+        <h1>Sicherer Parallelbetrieb</h1>
         <p class="page-description">
-            Die neue Razor-Pages-Anwendung läuft parallel zum bestehenden Python-Produktivpfad.
+            Die Razor-Pages-Anwendung nutzt PostgreSQL, getrennte Admin- und Portal-Sitzungen sowie eine domainbasierte Routing-Grundlage.
         </p>
     </div>
-    <span class="status-badge status-badge--ok">Phase 1</span>
+    <span class="status-badge status-badge--ok">Phase 3</span>
 </section>
 
 <section class="metric-grid" aria-label="Systemstatus">
@@ -22,19 +22,19 @@
         <span class="metric-detail">@Model.Status.Version</span>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Stack</span>
-        <strong class="metric-value">Razor Pages</strong>
-        <span class="metric-detail">.NET 10 und PostgreSQL</span>
+        <span class="metric-label">Authentifizierung</span>
+        <strong class="metric-value">2 Bereiche</strong>
+        <span class="metric-detail">Admin und Access Portal</span>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Liveness</span>
-        <strong class="metric-value">Aktiv</strong>
-        <span class="metric-detail"><code>/health/live</code></span>
+        <span class="metric-label">Zertifikatstandard</span>
+        <strong class="metric-value">Wildcard</strong>
+        <span class="metric-detail">Einzelzertifikat nur explizit</span>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Readiness</span>
-        <strong class="metric-value">PostgreSQL</strong>
-        <span class="metric-detail"><code>/health/ready</code></span>
+        <span class="metric-label">DNS-Katalog</span>
+        <strong class="metric-value">18 Provider</strong>
+        <span class="metric-detail">Secrets nur als Referenzen</span>
     </article>
 </section>
 
@@ -42,17 +42,18 @@
     <article class="panel panel--wide">
         <header class="panel-header">
             <div>
-                <p class="eyebrow">Architektur</p>
-                <h2>Parallelbetrieb ohne Umschaltung</h2>
+                <p class="eyebrow">Phase 3</p>
+                <h2>Ersetzte Sicherheitsgrundlage</h2>
             </div>
         </header>
         <div class="panel-body">
             <ul class="check-list">
-                <li>Eigenständige .NET-Solution und zentrale Buildregeln</li>
-                <li>EF-Core-Migrationen gegen PostgreSQL</li>
-                <li>Strukturierte JSON-Konsolenlogs</li>
-                <li>Separate Companion- und Bundle-Containerziele</li>
-                <li>Bestehende Python- und Go-Laufzeit bleibt unverändert</li>
+                <li>Rollen Administrator, Editor und Viewer</li>
+                <li>Getrennte LAN-, Public- und Portal-Sitzungen</li>
+                <li>TOTP, Recovery-Codes und Legacy-scrypt-Rehash</li>
+                <li>Persistente progressive Login-Sperren</li>
+                <li>Origin-, CSRF- und Proxy-Surface-Prüfung</li>
+                <li>Mehrere Domains mit Wildcard-Zertifikaten als Standard</li>
             </ul>
         </div>
     </article>
@@ -60,15 +61,12 @@
     <aside class="panel">
         <header class="panel-header">
             <div>
-                <p class="eyebrow">Nächster Schritt</p>
-                <h2>Phase 2</h2>
+                <p class="eyebrow">Als Nächstes</p>
+                <h2>Phase 4</h2>
             </div>
         </header>
         <div class="panel-body">
-            <p>
-                Das vollständige PostgreSQL-Schema und das reproduzierbare
-                SQLite-Migrationswerkzeug folgen erst nach Freigabe dieser Grundlage.
-            </p>
+            <p>Log-Ingestion, Request-Klassifikation, Pageviews, Sessions und Aggregate werden als nächster Schritt umgesetzt.</p>
         </div>
     </aside>
 </section>

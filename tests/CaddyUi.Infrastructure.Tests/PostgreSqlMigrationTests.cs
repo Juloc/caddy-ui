@@ -24,7 +24,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Migrations_CreatePhaseTwoSchemaAndPartitions()
+    public async Task Migrations_CreatePhaseThreeSchemaAndPartitions()
     {
         var options = new DbContextOptionsBuilder<CaddyUiDbContext>()
             .UseNpgsql(
@@ -47,11 +47,16 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         Assert.Contains(
             "20260728220300_PhaseTwoMigrationPersistence",
             appliedMigrations);
+        Assert.Contains(
+            "20260728230000_PhaseThreeAuthenticationAndDomainManagement",
+            appliedMigrations);
 
         var requiredTables = new[]
         {
             "caddy_ui.users",
             "caddy_ui.managed_routes",
+            "caddy_ui.managed_domains",
+            "caddy_ui.dns_providers",
             "caddy_ui.request_events",
             "caddy_ui.page_views",
             "caddy_ui.ip_intelligence_cache",
@@ -68,6 +73,31 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
                 .SingleAsync();
             Assert.True(exists, $"Expected PostgreSQL table {table}.");
         }
+
+        var wildcardDefault = await database.Database
+            .SqlQueryRaw<string>(
+                """
+                SELECT column_default AS "Value"
+                FROM information_schema.columns
+                WHERE table_schema = 'caddy_ui'
+                  AND table_name = 'managed_domains'
+                  AND column_name = 'default_certificate_mode'
+                """)
+            .SingleAsync();
+        Assert.Contains("wildcard", wildcardDefault, StringComparison.Ordinal);
+
+        var routeDomainColumnExists = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'caddy_ui'
+                      AND table_name = 'managed_routes'
+                      AND column_name = 'domain_id') AS "Value"
+                """)
+            .SingleAsync();
+        Assert.True(routeDomainColumnExists);
 
         var isPartitioned = await database.Database
             .SqlQueryRaw<bool>(
@@ -86,7 +116,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         database.DataProtectionKeys.Add(
             new DataProtectionKey
             {
-                FriendlyName = "phase-two-test",
+                FriendlyName = "phase-three-test",
                 Xml = "<key />"
             });
         await database.SaveChangesAsync();

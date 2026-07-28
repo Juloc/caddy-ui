@@ -1,5 +1,7 @@
 using CaddyUi.Application;
+using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Persistence;
+using CaddyUi.Infrastructure.Security;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,18 +26,33 @@ public static class DependencyInjection
             DefaultConnectionString;
 
         services.AddSingleton<FoundationStatusService>();
-        services.AddDbContext<CaddyUiDbContext>(options =>
-            options.UseNpgsql(
-                connectionString,
-                postgres =>
-                {
-                    postgres.MigrationsAssembly(typeof(CaddyUiDbContext).Assembly.FullName);
-                    postgres.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-                }));
-        services.AddDataProtection()
-            .SetApplicationName("CaddyUi")
-            .PersistKeysToDbContext<CaddyUiDbContext>();
+        services.AddDbContext<CaddyUiDbContext>(options => Configure(options, connectionString));
+        services.AddSingleton<IDbContextFactory<CaddyUiDbContext>>(
+            new RuntimeDbContextFactory(connectionString));
+        services.AddSingleton<AuthenticationStore>();
+        services.AddSingleton<LoginProtectionService>();
+        services.AddSingleton<DomainProviderStore>();
+
+        var dataProtection = services.AddDataProtection()
+            .SetApplicationName("CaddyUi");
+        if (configuration.GetValue("DataProtection:PersistKeysToPostgreSql", true))
+        {
+            dataProtection.PersistKeysToDbContext<CaddyUiDbContext>();
+        }
 
         return services;
+    }
+
+    private static void Configure(
+        DbContextOptionsBuilder options,
+        string connectionString)
+    {
+        options.UseNpgsql(
+            connectionString,
+            postgres =>
+            {
+                postgres.MigrationsAssembly(typeof(CaddyUiDbContext).Assembly.FullName);
+                postgres.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+            });
     }
 }
