@@ -82,7 +82,13 @@ public sealed class IpSecurityTests
         var first = engine.Assess(sample);
         var second = engine.Assess(sample);
 
-        Assert.Equal(first, second);
+        Assert.Equal(first.Classification, second.Classification);
+        Assert.Equal(first.AutomationScore, second.AutomationScore);
+        Assert.Equal(first.RiskLevel, second.RiskLevel);
+        Assert.Equal(first.EngineVersion, second.EngineVersion);
+        Assert.Equal(
+            first.Reasons.Select(reason => (reason.Code, reason.Weight)),
+            second.Reasons.Select(reason => (reason.Code, reason.Weight)));
         Assert.Equal(100, first.AutomationScore);
         Assert.Equal(ClientRiskLevel.High, first.RiskLevel);
         Assert.Equal("bot", first.Classification);

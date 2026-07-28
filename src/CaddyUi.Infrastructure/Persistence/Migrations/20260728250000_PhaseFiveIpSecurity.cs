@@ -14,13 +14,6 @@ public sealed class PhaseFiveIpSecurity : Migration
         migrationBuilder.Sql(
             """
             ALTER TABLE caddy_ui.ip_intelligence_cache
-                DROP CONSTRAINT ck_ip_intelligence_cache_scope;
-            ALTER TABLE caddy_ui.ip_intelligence_cache
-                ADD CONSTRAINT ck_ip_intelligence_cache_scope
-                CHECK (scope IN (
-                    'public', 'private', 'loopback', 'link-local', 'multicast',
-                    'documentation', 'shared', 'benchmark', 'reserved',
-                    'unspecified', 'unknown')),
                 ADD COLUMN failure_count integer NOT NULL DEFAULT 0,
                 ADD COLUMN last_error_at timestamp with time zone NULL;
 
@@ -35,10 +28,6 @@ public sealed class PhaseFiveIpSecurity : Migration
                 ON caddy_ui.ip_intelligence_refresh_queue(not_before, requested_at);
 
             ALTER TABLE caddy_ui.client_assessments
-                DROP CONSTRAINT ck_client_assessments_classification;
-            ALTER TABLE caddy_ui.client_assessments
-                ADD CONSTRAINT ck_client_assessments_classification
-                CHECK (classification IN ('human', 'bot', 'suspicious', 'unknown')),
                 ADD COLUMN request_count bigint NOT NULL DEFAULT 0,
                 ADD COLUMN sample_json jsonb NOT NULL DEFAULT '{}'::jsonb;
             CREATE INDEX ix_client_assessments_remote_created
@@ -78,24 +67,14 @@ public sealed class PhaseFiveIpSecurity : Migration
 
             DROP INDEX IF EXISTS caddy_ui.ix_client_assessments_remote_created;
             ALTER TABLE caddy_ui.client_assessments
-                DROP CONSTRAINT IF EXISTS ck_client_assessments_classification,
                 DROP COLUMN IF EXISTS sample_json,
                 DROP COLUMN IF EXISTS request_count;
-            ALTER TABLE caddy_ui.client_assessments
-                ADD CONSTRAINT ck_client_assessments_classification
-                CHECK (classification IN ('human', 'bot', 'unknown'));
 
             DROP TABLE IF EXISTS caddy_ui.ip_intelligence_refresh_queue;
 
             ALTER TABLE caddy_ui.ip_intelligence_cache
-                DROP CONSTRAINT IF EXISTS ck_ip_intelligence_cache_scope,
                 DROP COLUMN IF EXISTS last_error_at,
                 DROP COLUMN IF EXISTS failure_count;
-            ALTER TABLE caddy_ui.ip_intelligence_cache
-                ADD CONSTRAINT ck_ip_intelligence_cache_scope
-                CHECK (scope IN (
-                    'public', 'private', 'loopback', 'link-local',
-                    'reserved', 'unknown'));
             """);
     }
 }
