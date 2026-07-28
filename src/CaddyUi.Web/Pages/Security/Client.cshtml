@@ -1,0 +1,149 @@
+@page "{id:guid}"
+@model CaddyUi.Web.Pages.Security.ClientModel
+@{
+    ViewData["Title"] = "Clientdetails";
+}
+
+@if (Model.Details is null)
+{
+    <section class="panel"><div class="panel-body">Client nicht gefunden.</div></section>
+    return;
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok">@Model.StatusMessage</div>
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Client</p>
+        <h1>@Model.Details.Summary.ClientKey[..Math.Min(Model.Details.Summary.ClientKey.Length, 32)]</h1>
+        <p class="page-description">@(Model.Details.Summary.Estimated ? "Aus Proxydaten geschätzter Client. Keine sicher identifizierte Person." : "First-Party-Clientkennung vorhanden.")</p>
+    </div>
+    <span class="status-badge @(Model.Details.Summary.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">
+        @Model.Details.Summary.Classification · Score @Model.Details.Summary.AutomationScore
+    </span>
+</section>
+
+<section class="workspace-grid">
+    <article class="panel panel--wide">
+        <header class="panel-header"><div><p class="eyebrow">Netzwerk</p><h2>IP Intelligence</h2></div></header>
+        <div class="panel-body">
+            <dl class="detail-grid">
+                <div><dt>Adresse</dt><dd><code>@(Model.Details.Summary.LatestAddress.Length == 0 ? "–" : Model.Details.Summary.LatestAddress)</code></dd></div>
+                <div><dt>Status</dt><dd>@(Model.Details.Intelligence.Pending ? "Lookup ausstehend" : Model.Details.Intelligence.Stale ? "Cache abgelaufen" : "aktuell")</dd></div>
+                <div><dt>Scope</dt><dd>@(Model.Details.Intelligence.Result?.Scope.ToString() ?? "Unbekannt")</dd></div>
+                <div><dt>ASN</dt><dd>@(Model.Details.Intelligence.Result?.Asn ?? "–")</dd></div>
+                <div><dt>Prefix</dt><dd>@(Model.Details.Intelligence.Result?.Prefix ?? "–")</dd></div>
+                <div><dt>Holder</dt><dd>@(Model.Details.Intelligence.Result?.Holder ?? "–")</dd></div>
+                <div><dt>Registry</dt><dd>@(Model.Details.Intelligence.Result?.Registry ?? "–")</dd></div>
+                <div><dt>Quelle</dt><dd>@(Model.Details.Intelligence.Result?.Source ?? "–")</dd></div>
+            </dl>
+            @if (!string.IsNullOrWhiteSpace(Model.Details.Intelligence.Result?.Error))
+            {
+                <div class="notice notice--warning">@Model.Details.Intelligence.Result.Error</div>
+            }
+        </div>
+    </article>
+
+    <aside class="panel">
+        <header class="panel-header"><div><p class="eyebrow">Maßnahme</p><h2>IP sperren</h2></div></header>
+        <div class="panel-body">
+            @if (User.IsInRole("admin") || User.IsInRole("editor"))
+            {
+                <form method="post" asp-page-handler="Block" class="form-stack">
+                    <input type="hidden" name="id" value="@Model.Details.Summary.Id" />
+                    <label><span>Grund</span><textarea asp-for="BlockReason" rows="3"></textarea></label>
+                    <label><span>Dauer in Stunden</span><input asp-for="BlockHours" min="1" max="720" /></label>
+                    @if (Model.Details.Summary.LatestAddress.Length == 0)
+                    {
+                        <button class="button button--danger" type="button" disabled>Sperren</button>
+                    }
+                    else
+                    {
+                        <button class="button button--danger" type="submit">Sperren</button>
+                    }
+                </form>
+            }
+            else
+            {
+                <p>Viewer dürfen Sperren nur einsehen.</p>
+            }
+        </div>
+    </aside>
+</section>
+
+<section class="workspace-grid">
+    <article class="panel">
+        <header class="panel-header"><div><p class="eyebrow">Regel-Engine</p><h2>Begründung</h2></div></header>
+        <div class="panel-body">
+            @if (Model.Details.AssessmentReasons.Count == 0)
+            {
+                <p>Noch keine Bewertung vorhanden.</p>
+            }
+            else
+            {
+                <ol class="reason-list">
+                    @foreach (var reason in Model.Details.AssessmentReasons)
+                    {
+                        <li><strong>+@reason.Weight · @reason.Code</strong><span>@reason.Message</span></li>
+                    }
+                </ol>
+            }
+        </div>
+    </article>
+
+    <article class="panel panel--wide">
+        <header class="panel-header"><div><p class="eyebrow">Historie</p><h2>IP-Sperren</h2></div></header>
+        <div class="panel-body table-wrap">
+            <table class="data-table">
+                <thead><tr><th>Ziel</th><th>Status</th><th>Grund</th><th>Ablauf</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var rule in Model.Details.BlockRules)
+                    {
+                        <tr>
+                            <td><code>@rule.Target</code></td>
+                            <td>@rule.ActivationState</td>
+                            <td>@rule.Reason</td>
+                            <td>@(rule.ExpiresAt?.ToLocalTime().ToString("g") ?? "–")</td>
+                            <td>
+                                @if (rule.ReleasedAt is null && (User.IsInRole("admin") || User.IsInRole("editor")))
+                                {
+                                    <form method="post" asp-page-handler="Unblock">
+                                        <input type="hidden" name="id" value="@Model.Details.Summary.Id" />
+                                        <input type="hidden" name="ruleId" value="@rule.Id" />
+                                        <input type="hidden" name="unblockReason" value="Manuell über Clientdetail entsperrt" />
+                                        <button class="button button--quiet" type="submit">Entsperren</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+
+<section class="panel panel--wide">
+    <header class="panel-header"><div><p class="eyebrow">Letzte 100</p><h2>Requests</h2></div></header>
+    <div class="panel-body table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Zeit</th><th>Host</th><th>Request</th><th>Status</th><th>Klasse</th><th>Dauer</th></tr></thead>
+            <tbody>
+                @foreach (var request in Model.Details.RecentRequests)
+                {
+                    <tr>
+                        <td>@request.OccurredAt.ToLocalTime().ToString("g")</td>
+                        <td>@request.Host</td>
+                        <td><code>@request.Method @request.Path</code></td>
+                        <td>@request.Status</td>
+                        <td>@request.ActorType · @request.RequestType</td>
+                        <td>@request.DurationMilliseconds.ToString("0.0") ms</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

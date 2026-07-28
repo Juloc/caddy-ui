@@ -24,7 +24,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Migrations_CreatePhaseFourSchemaAndPartitions()
+    public async Task Migrations_CreatePhaseFiveSchemaAndPartitions()
     {
         var options = new DbContextOptionsBuilder<CaddyUiDbContext>()
             .UseNpgsql(
@@ -53,6 +53,9 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         Assert.Contains(
             "20260728240000_PhaseFourAnalyticsRuntime",
             appliedMigrations);
+        Assert.Contains(
+            "20260728250000_PhaseFiveIpSecurity",
+            appliedMigrations);
 
         var requiredTables = new[]
         {
@@ -63,6 +66,9 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             "caddy_ui.request_events",
             "caddy_ui.page_views",
             "caddy_ui.ip_intelligence_cache",
+            "caddy_ui.ip_intelligence_refresh_queue",
+            "caddy_ui.client_assessments",
+            "caddy_ui.ip_block_rules",
             "caddy_ui.migration_runs",
             "caddy_ui.data_protection_keys",
         };
@@ -134,10 +140,23 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             .SingleAsync();
         Assert.True(pageViewNavigationIndexExists);
 
+        var blockActivationStateExists = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'caddy_ui'
+                      AND table_name = 'ip_block_rules'
+                      AND column_name = 'activation_state') AS "Value"
+                """)
+            .SingleAsync();
+        Assert.True(blockActivationStateExists);
+
         database.DataProtectionKeys.Add(
             new DataProtectionKey
             {
-                FriendlyName = "phase-four-test",
+                FriendlyName = "phase-five-test",
                 Xml = "<key />",
             });
         await database.SaveChangesAsync();
