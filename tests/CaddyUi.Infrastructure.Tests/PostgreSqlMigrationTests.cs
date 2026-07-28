@@ -24,7 +24,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Migrations_CreatePhaseFiveSchemaAndPartitions()
+    public async Task Migrations_CreatePhaseSevenSchemaAndPartitions()
     {
         var options = new DbContextOptionsBuilder<CaddyUiDbContext>()
             .UseNpgsql(
@@ -41,21 +41,12 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
                 .GetAppliedMigrationsAsync())
             .ToArray();
 
-        Assert.Contains(
-            "20260727220000_PhaseOneFoundation",
-            appliedMigrations);
-        Assert.Contains(
-            "20260728220300_PhaseTwoMigrationPersistence",
-            appliedMigrations);
-        Assert.Contains(
-            "20260728230000_PhaseThreeAuthenticationAndDomainManagement",
-            appliedMigrations);
-        Assert.Contains(
-            "20260728240000_PhaseFourAnalyticsRuntime",
-            appliedMigrations);
-        Assert.Contains(
-            "20260728250000_PhaseFiveIpSecurity",
-            appliedMigrations);
+        Assert.Contains("20260727220000_PhaseOneFoundation", appliedMigrations);
+        Assert.Contains("20260728220300_PhaseTwoMigrationPersistence", appliedMigrations);
+        Assert.Contains("20260728230000_PhaseThreeAuthenticationAndDomainManagement", appliedMigrations);
+        Assert.Contains("20260728240000_PhaseFourAnalyticsRuntime", appliedMigrations);
+        Assert.Contains("20260728250000_PhaseFiveIpSecurity", appliedMigrations);
+        Assert.Contains("20260728270000_PhaseSevenRouteManagement", appliedMigrations);
 
         var requiredTables = new[]
         {
@@ -71,6 +62,12 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             "caddy_ui.ip_block_rules",
             "caddy_ui.migration_runs",
             "caddy_ui.data_protection_keys",
+            "caddy_ui.access_groups",
+            "caddy_ui.access_credentials",
+            "caddy_ui.route_revisions",
+            "caddy_ui.apply_operations",
+            "caddy_ui.apply_operation_steps",
+            "caddy_ui.caddy_snapshots",
         };
 
         foreach (var table in requiredTables)
@@ -95,18 +92,40 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             .SingleAsync();
         Assert.Contains("wildcard", wildcardDefault, StringComparison.Ordinal);
 
-        var routeDomainColumnExists = await database.Database
+        var routePhaseSevenColumnsExist = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT COUNT(*) = 2 AS "Value"
+                FROM information_schema.columns
+                WHERE table_schema = 'caddy_ui'
+                  AND table_name = 'managed_routes'
+                  AND column_name IN ('access_group_id', 'sort_order')
+                """)
+            .SingleAsync();
+        Assert.True(routePhaseSevenColumnsExist);
+
+        var accessGroupColumnsExist = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT COUNT(*) = 2 AS "Value"
+                FROM information_schema.columns
+                WHERE table_schema = 'caddy_ui'
+                  AND table_name = 'access_groups'
+                  AND column_name IN ('enabled', 'description')
+                """)
+            .SingleAsync();
+        Assert.True(accessGroupColumnsExist);
+
+        var routeAccessGroupForeignKeyExists = await database.Database
             .SqlQueryRaw<bool>(
                 """
                 SELECT EXISTS(
                     SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_schema = 'caddy_ui'
-                      AND table_name = 'managed_routes'
-                      AND column_name = 'domain_id') AS "Value"
+                    FROM pg_constraint
+                    WHERE conname = 'fk_managed_routes_access_group') AS "Value"
                 """)
             .SingleAsync();
-        Assert.True(routeDomainColumnExists);
+        Assert.True(routeAccessGroupForeignKeyExists);
 
         var isPartitioned = await database.Database
             .SqlQueryRaw<bool>(
@@ -156,7 +175,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         database.DataProtectionKeys.Add(
             new DataProtectionKey
             {
-                FriendlyName = "phase-five-test",
+                FriendlyName = "phase-seven-test",
                 Xml = "<key />",
             });
         await database.SaveChangesAsync();

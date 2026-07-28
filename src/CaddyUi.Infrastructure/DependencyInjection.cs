@@ -4,6 +4,7 @@ using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Analytics;
 using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Persistence;
+using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Infrastructure.Security;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,7 @@ public static class DependencyInjection
             DefaultConnectionString;
         var analyticsOptions = AnalyticsIngestionOptions.FromConfiguration(configuration);
         var ipSecurityOptions = IpSecurityOptions.FromConfiguration(configuration);
+        var routingOptions = RoutingOptions.FromConfiguration(configuration);
 
         services.AddSingleton<FoundationStatusService>();
         services.AddDbContext<CaddyUiDbContext>(options => Configure(options, connectionString));
@@ -37,6 +39,13 @@ public static class DependencyInjection
         services.AddSingleton<AuthenticationStore>();
         services.AddSingleton<LoginProtectionService>();
         services.AddSingleton<DomainProviderStore>();
+        services.AddSingleton<RouteManagementStore>();
+        services.AddSingleton<RouteImportStore>();
+        services.AddSingleton<RouteTransferService>();
+        services.AddSingleton<AccessGroupStateStore>();
+        services.AddSingleton(routingOptions);
+        services.AddSingleton<ICaddyCommandRunner, ProcessCaddyCommandRunner>();
+        services.AddSingleton<CaddyApplyService>();
         services.AddSingleton(analyticsOptions);
         services.AddSingleton<CaddyAccessLogParser>();
         services.AddSingleton<RequestClassifier>();

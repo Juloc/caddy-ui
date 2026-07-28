@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using CaddyUi.Application.Security;
+using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Infrastructure.Security;
 using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -16,17 +17,20 @@ public sealed class LoginModel : PageModel
     private readonly LoginProtectionService _protection;
     private readonly PasswordHashService _passwords;
     private readonly RequestSurfaceResolver _surfaceResolver;
+    private readonly AccessGroupStateStore _groupState;
 
     public LoginModel(
         AuthenticationStore store,
         LoginProtectionService protection,
         PasswordHashService passwords,
-        RequestSurfaceResolver surfaceResolver)
+        RequestSurfaceResolver surfaceResolver,
+        AccessGroupStateStore groupState)
     {
         _store = store;
         _protection = protection;
         _passwords = passwords;
         _surfaceResolver = surfaceResolver;
+        _groupState = groupState;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -119,7 +123,8 @@ public sealed class LoginModel : PageModel
     private async Task<bool> LoadGroupAsync()
     {
         var group = await _store.FindAccessGroupAsync(Group, HttpContext.RequestAborted);
-        if (group is null)
+        if (group is null ||
+            !await _groupState.IsEnabledAsync(Group, HttpContext.RequestAborted))
         {
             return false;
         }

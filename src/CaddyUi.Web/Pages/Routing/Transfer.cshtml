@@ -1,0 +1,63 @@
+@page
+@model CaddyUi.Web.Pages.Routing.TransferModel
+@{
+    ViewData["Title"] = "Routen importieren & exportieren";
+}
+
+<section class="page-heading page-heading--compact">
+    <div>
+        <p class="eyebrow">Portabler Routenstand</p>
+        <h1>Import &amp; Export</h1>
+        <p class="page-description">Exportiert nur fachliche Routenwerte. Kennwörter, Provider-Secrets, Sitzungen und aktive Caddy-Snapshots sind nicht enthalten.</p>
+    </div>
+    <a class="button button--quiet" asp-page="/Routing/Index">Zurück zu Routen</a>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
+}
+<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+
+<section class="workspace-split workspace-split--wide-left">
+    <article class="workspace-section">
+        <header class="section-header">
+            <div>
+                <h2>Export</h2>
+                <p>@Model.RouteCount Route(n) im Schema <code>caddy-ui-routes-v1</code>.</p>
+            </div>
+            <a class="button button--primary" asp-page-handler="Download">JSON herunterladen</a>
+        </header>
+        <div class="panel-body">
+            <div class="notice notice--neutral">Der Export enthält Domainnamen und Zugriffsgruppennamen als Referenzen. Die Zielinstallation muss diese bereits besitzen.</div>
+            <textarea class="code-editor transfer-preview" rows="20" readonly spellcheck="false">@Model.ExportPreview</textarea>
+        </div>
+    </article>
+
+    <aside class="workspace-section">
+        <header class="section-header">
+            <div><h2>Import</h2><p>Der gesamte Import läuft in einer PostgreSQL-Transaktion.</p></div>
+        </header>
+        <form method="post" asp-page-handler="Import" class="form-stack panel-body">
+            <label class="field">
+                <span class="field-label">Routen-JSON</span>
+                <textarea asp-for="Input.Json" rows="20" class="code-editor" spellcheck="false" placeholder="{ &quot;schema&quot;: &quot;caddy-ui-routes-v1&quot;, ... }"></textarea>
+                <span asp-validation-for="Input.Json" class="field-error"></span>
+            </label>
+            <div class="notice notice--warning">Vorhandene aktive Ziele werden nicht überschrieben. Bei einem einzigen Fehler wird keine Route importiert.</div>
+            <button class="button button--primary" type="submit">Routen prüfen &amp; importieren</button>
+        </form>
+    </aside>
+</section>
+
+<section class="workspace-section transfer-contract">
+    <header class="section-header"><div><h2>Sicherheitsgrenzen</h2><p>Import ist ein Entwurfsschritt, kein Deployment.</p></div></header>
+    <div class="panel-body">
+        <ul class="check-list">
+            <li>Domains und Zugriffsgruppen müssen vorhanden und aktiviert sein.</li>
+            <li>Host, Pfad, Upstream, Port und Zertifikatsmodus werden erneut validiert.</li>
+            <li>Custom Routes werden abgelehnt, solange sie nicht ausdrücklich freigeschaltet sind.</li>
+            <li>Die laufende Caddy-Konfiguration ändert sich erst über Preview &amp; Apply.</li>
+        </ul>
+    </div>
+</section>

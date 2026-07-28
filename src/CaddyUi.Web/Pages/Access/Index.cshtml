@@ -1,0 +1,84 @@
+@page
+@model CaddyUi.Web.Pages.Access.IndexModel
+@{
+    ViewData["Title"] = "Zugriffsgruppen";
+}
+
+<section class="page-heading page-heading--compact">
+    <div>
+        <p class="eyebrow">Access Portal</p>
+        <h1>Zugriffsgruppen</h1>
+        <p class="page-description">Gruppen schützen einzelne Routen. Kennwörter werden ausschließlich gehasht gespeichert; bestehende Kennwörter werden nie angezeigt.</p>
+    </div>
+    <a class="button button--quiet" asp-page="/Routing/Index">Zu den Routen</a>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
+}
+<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+
+<section class="workspace-split workspace-split--wide-left">
+    <article class="workspace-section">
+        <header class="section-header"><div><h2>Gruppen</h2><p>@Model.Groups.Count Zugriffsgruppen</p></div></header>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead><tr><th>Gruppe</th><th>Zugänge</th><th>Routen</th><th>Status</th><th class="table-actions">Aktion</th></tr></thead>
+                <tbody>
+                @foreach (var group in Model.Groups)
+                {
+                    <tr class="@(group.Enabled ? string.Empty : "is-muted")">
+                        <td><strong>@group.Name</strong><small>@group.Description</small></td>
+                        <td>@group.CredentialCount</td>
+                        <td>@group.RouteCount</td>
+                        <td><span class="status-badge @(group.Enabled ? "status-badge--ok" : "status-badge--neutral")">@(group.Enabled ? "Aktiv" : "Deaktiviert")</span></td>
+                        <td class="table-actions"><form method="post" asp-page-handler="ToggleGroup"><input type="hidden" name="id" value="@group.Id" /><input type="hidden" name="enabled" value="@(!group.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(group.Enabled ? "Deaktivieren" : "Aktivieren")</button></form></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </article>
+    <aside class="workspace-section">
+        <header class="section-header"><div><h2>Gruppe anlegen</h2><p>Ein klarer Name und optionaler Zweck.</p></div></header>
+        <form method="post" asp-page-handler="CreateGroup" class="form-stack">
+            <label class="field"><span class="field-label">Name</span><input asp-for="NewGroup.Name" /><span asp-validation-for="NewGroup.Name" class="field-error"></span></label>
+            <label class="field"><span class="field-label">Beschreibung</span><textarea asp-for="NewGroup.Description" rows="4"></textarea></label>
+            <button class="button button--primary" type="submit">Gruppe anlegen</button>
+        </form>
+    </aside>
+</section>
+
+<section class="workspace-split workspace-split--wide-left">
+    <article class="workspace-section">
+        <header class="section-header"><div><h2>Portal-Zugänge</h2><p>Benutzerkonten für geschützte Routen.</p></div></header>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead><tr><th>Benutzer</th><th>Gruppe</th><th>Erstellt</th><th>Status</th><th class="table-actions">Aktion</th></tr></thead>
+                <tbody>
+                @foreach (var credential in Model.Credentials)
+                {
+                    var group = Model.Groups.FirstOrDefault(item => item.Id == credential.GroupId);
+                    <tr class="@(credential.Enabled ? string.Empty : "is-muted")">
+                        <td><strong>@credential.Username</strong></td>
+                        <td>@(group?.Name ?? "Unbekannt")</td>
+                        <td>@credential.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td><span class="status-badge @(credential.Enabled ? "status-badge--ok" : "status-badge--neutral")">@(credential.Enabled ? "Aktiv" : "Deaktiviert")</span></td>
+                        <td class="table-actions"><form method="post" asp-page-handler="ToggleCredential"><input type="hidden" name="id" value="@credential.Id" /><input type="hidden" name="enabled" value="@(!credential.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(credential.Enabled ? "Deaktivieren" : "Aktivieren")</button></form></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </article>
+    <aside class="workspace-section">
+        <header class="section-header"><div><h2>Zugang anlegen</h2><p>Mindestens zwölf Zeichen. Das Kennwort wird danach nicht mehr angezeigt.</p></div></header>
+        <form method="post" asp-page-handler="CreateCredential" class="form-stack">
+            <label class="field"><span class="field-label">Gruppe</span><select asp-for="NewCredential.GroupId"><option value="">Bitte wählen</option>@foreach (var group in Model.Groups.Where(item => item.Enabled)){<option value="@group.Id">@group.Name</option>}</select><span asp-validation-for="NewCredential.GroupId" class="field-error"></span></label>
+            <label class="field"><span class="field-label">Benutzername</span><input asp-for="NewCredential.Username" autocomplete="off" /><span asp-validation-for="NewCredential.Username" class="field-error"></span></label>
+            <label class="field"><span class="field-label">Kennwort</span><input asp-for="NewCredential.Password" autocomplete="new-password" /><span asp-validation-for="NewCredential.Password" class="field-error"></span></label>
+            <button class="button button--primary" type="submit">Zugang anlegen</button>
+        </form>
+    </aside>
+</section>
