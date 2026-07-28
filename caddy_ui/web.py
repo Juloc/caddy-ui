@@ -22,7 +22,7 @@ from .audit import Actor, AuditLog
 from .caddy import CaddyManager
 from .config import Settings
 from .db import Database, utc_now
-from .domain import AccessGroup, HeaderOperation, ManagedRoute, Permission, Role, RouteKind, Upstream
+from .domain import AccessGroup, CertificateMode, HeaderOperation, ManagedRoute, Permission, Role, RouteKind, Upstream
 from .jobs import JobRunner
 from .migration import import_legacy
 from .monitoring import caddy_status, certificate_files, parse_access_logs, route_health, tail_lines, traffic_summary
@@ -76,6 +76,7 @@ def route_from_form(form: dict[str, list[str]], default_domain: str, is_admin: b
         health_uri=first(form, "health_uri").strip(),
         health_interval=first(form, "health_interval", "30s").strip(),
         tls_skip_verify=first(form, "tls_skip_verify") == "1",
+        certificate_mode=CertificateMode(first(form, "certificate_mode", CertificateMode.WILDCARD.value)),
         redirect_to=first(form, "redirect_to").strip(),
         redirect_status=int(first(form, "redirect_status", "308")),
         access_group_id=first(form, "access_group_id").strip(),

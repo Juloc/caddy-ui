@@ -8,7 +8,7 @@ from pathlib import Path
 from caddy_ui.audit import Actor, AuditLog
 from caddy_ui.caddy import DEFAULT_CADDYFILE, CaddyManager, render_route, render_site
 from caddy_ui.db import Database
-from caddy_ui.domain import HeaderOperation, ManagedRoute, RouteKind, Upstream
+from caddy_ui.domain import CertificateMode, HeaderOperation, ManagedRoute, RouteKind, Upstream
 from tests.helpers import settings
 
 
@@ -46,6 +46,40 @@ class CaddyTests(unittest.TestCase):
         site = render_site("app.example.com", [self.route()])
         self.assertIn("app.example.com {", site)
         self.assertIn("respond \"Service not configured\" 404", site)
+
+    def test_netcup_provider_creates_and_reuses_wildcard_certificate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = settings(Path(directory))
+            database = Database(config)
+            database.initialize()
+            manager = TestManager(config, database, AuditLog(database))
+            manager.providers.save({"id": "netcup", "type": "netcup", "label": "Netcup", "domains": ["example.com"]})
+            manager.routes.save(self.route())
+            rendered = manager.rendered()
+            self.assertEqual(len(rendered), 2)
+            wildcard = next(value for value in rendered.values() if "*.example.com {" in value)
+            host = next(value for value in rendered.values() if "app.example.com {" in value)
+            self.assertIn("dns netcup", wildcard)
+            self.assertIn("abort", wildcard)
+            self.assertNotIn("dns netcup", host)
+            self.assertNotIn("force_automate", host)
+
+    def test_individual_certificate_is_explicit_and_uses_netcup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = settings(Path(directory))
+            database = Database(config)
+            database.initialize()
+            manager = TestManager(config, database, AuditLog(database))
+            manager.providers.save({"id": "netcup", "type": "netcup", "label": "Netcup", "domains": ["example.com"]})
+            route = self.route()
+            route.certificate_mode = CertificateMode.INDIVIDUAL
+            manager.routes.save(route)
+            rendered = manager.rendered()
+            self.assertEqual(len(rendered), 1)
+            host = next(iter(rendered.values()))
+            self.assertIn("dns netcup", host)
+            self.assertIn("force_automate", host)
+            self.assertNotIn("*.example.com {", host)
 
     def test_apply_records_revision_and_rolls_back_database_and_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

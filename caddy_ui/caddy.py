@@ -17,7 +17,7 @@ from pathlib import Path
 from .audit import Actor, AuditLog
 from .config import Settings
 from .db import Database, utc_now
-from .domain import HeaderOperation, ManagedRoute, RouteKind
+from .domain import CertificateMode, HeaderOperation, ManagedRoute, RouteKind
 from .repositories import ProviderRepository, RouteRepository
 
 
@@ -152,6 +152,40 @@ def render_site(host: str, routes: list[ManagedRoute], tls_lines: list[str] | No
     lines.extend(["    handle {", '        respond "Service not configured" 404', "    }", "}", ""])
     return "\n".join(lines)
 
+def _netcup_tls_lines(provider: dict[str, object], force_automate: bool = False) -> list[str]:
+    lines = [
+        "dns netcup {",
+        f"    customer_number {provider.get('customer_number', '{env.NETCUP_CUSTOMER_NUMBER}')}",
+        f"    api_key {provider.get('api_key', '{env.NETCUP_API_KEY}')}",
+        f"    api_password {provider.get('api_password', '{env.NETCUP_API_PASSWORD}')}",
+        "}",
+        "propagation_timeout 600s",
+        "resolvers 1.1.1.1 8.8.8.8",
+    ]
+    if force_automate:
+        lines.append("force_automate")
+    return lines
+
+
+def _wildcard_covers(host: str, domain: str) -> bool:
+    host = host.lower().rstrip(".")
+    domain = domain.lower().rstrip(".")
+    return host.endswith(f".{domain}") and len(host.split(".")) == len(domain.split(".")) + 1
+
+
+def render_wildcard_site(domain: str, tls_lines: list[str]) -> str:
+    lines = [
+        MANAGED_HEADER,
+        f"*.{domain} {{",
+        "    tls {",
+        *[f"        {line}" for line in tls_lines],
+        "    }",
+        "    abort",
+        "}",
+        "",
+    ]
+    return "\n".join(lines)
+
 
 class CaddyManager:
     def __init__(self, settings: Settings, database: Database, audit: AuditLog):
@@ -171,6 +205,13 @@ class CaddyManager:
             grouped.setdefault(route.effective_host, []).append(route)
         content: dict[str, str] = {}
         providers = self.providers.list()
+        provider_by_domain = {
+            str(domain).lower().rstrip("."): provider
+            for provider in providers
+            if provider.get("type") == "netcup"
+            for domain in provider.get("domains", [])
+        }
+        wildcard_domains: set[str] = set()
         for host, routes in sorted(grouped.items()):
             enabled = [route for route in routes if route.enabled]
             catch_all = [route for route in enabled if not route.paths]
@@ -183,22 +224,39 @@ class CaddyManager:
                     if path in claimed_paths:
                         raise ValueError(f"Path {path} on {host} is used by both {claimed_paths[path]} and {route.name}.")
                     claimed_paths[path] = route.name
+            domains = {route.domain.lower().rstrip(".") for route in routes}
+            if len(domains) != 1:
+                raise ValueError(f"Host {host} is assigned to multiple certificate domains.")
+            modes = {route.certificate_mode for route in routes}
+            if len(modes) != 1:
+                raise ValueError(f"Host {host} uses conflicting certificate modes.")
             routes = sorted(routes, key=lambda route: (not bool(route.paths), -max((len(path) for path in route.paths), default=0), route.name.lower()))
+            domain = next(iter(domains))
+            mode = next(iter(modes))
+            provider = provider_by_domain.get(domain)
             tls_lines: list[str] = []
-            domain = routes[0].domain
-            provider = next((item for item in providers if domain in item.get("domains", []) and item.get("type") == "netcup"), None)
             if provider:
-                tls_lines = [
-                    "dns netcup {",
-                    f"    customer_number {provider.get('customer_number', '{env.NETCUP_CUSTOMER_NUMBER}')}",
-                    f"    api_key {provider.get('api_key', '{env.NETCUP_API_KEY}')}",
-                    f"    api_password {provider.get('api_password', '{env.NETCUP_API_PASSWORD}')}",
-                    "}",
-                    "propagation_timeout 600s",
-                    "resolvers 1.1.1.1 8.8.8.8",
-                ]
+                if host == f"*.{domain}":
+                    tls_lines = _netcup_tls_lines(provider)
+                elif mode == CertificateMode.INDIVIDUAL:
+                    tls_lines = _netcup_tls_lines(provider, force_automate=True)
+                elif _wildcard_covers(host, domain):
+                    wildcard_domains.add(domain)
+                else:
+                    tls_lines = _netcup_tls_lines(provider)
+            elif mode == CertificateMode.INDIVIDUAL:
+                tls_lines = ["force_automate"]
             digest = hashlib.sha256(host.encode("utf-8")).hexdigest()[:12]
             content[f"site-{digest}.caddy"] = render_site(host, routes, tls_lines)
+        for domain in sorted(wildcard_domains):
+            wildcard_host = f"*.{domain}"
+            if wildcard_host in grouped:
+                continue
+            digest = hashlib.sha256(wildcard_host.encode("utf-8")).hexdigest()[:12]
+            content[f"site-wildcard-{digest}.caddy"] = render_wildcard_site(
+                domain,
+                _netcup_tls_lines(provider_by_domain[domain]),
+            )
         return content
 
     def preview(self, proposed: ManagedRoute | None = None, delete_id: str = "") -> tuple[str, str]:

@@ -7,7 +7,7 @@ import urllib.parse
 from dataclasses import asdict
 from typing import Any, Iterable
 
-from .domain import AccessGroup, ManagedRoute, Role, RouteKind
+from .domain import AccessGroup, CertificateMode, ManagedRoute, Role, RouteKind
 
 
 ICONS = {
@@ -192,6 +192,7 @@ def _route_form(route: ManagedRoute, csrf: str, groups: list[AccessGroup], previ
         <label>Health URI<input name="health_uri" value="{e(route.health_uri)}" placeholder="/health"></label>
         <label>Health interval<input name="health_interval" value="{e(route.health_interval)}"></label>
         <label>Access group<select name="access_group_id">{group_options}</select></label>
+        <label>Certificate<select name="certificate_mode">{''.join(f'<option value="{mode.value}" {"selected" if route.certificate_mode == mode else ""}>{"Wildcard (default)" if mode == CertificateMode.WILDCARD else "Individual certificate"}</option>' for mode in CertificateMode)}</select></label>
         <label class="check"><input name="tls_skip_verify" type="checkbox" value="1" {'checked' if route.tls_skip_verify else ''}>Skip upstream TLS verification</label>
         <label class="wide">Request headers <span class="muted">set/add/delete Header: value</span><textarea name="request_headers">{e(request_headers)}</textarea></label>
         <label class="wide">Response headers<textarea name="response_headers">{e(response_headers)}</textarea></label>

@@ -31,6 +31,11 @@ class RouteKind(StrEnum):
     CUSTOM = "custom"
 
 
+class CertificateMode(StrEnum):
+    WILDCARD = "wildcard"
+    INDIVIDUAL = "individual"
+
+
 class Permission(StrEnum):
     VIEW = "view"
     MANAGE_ROUTES = "manage_routes"
@@ -101,6 +106,7 @@ class ManagedRoute:
     health_uri: str = ""
     health_interval: str = "30s"
     tls_skip_verify: bool = False
+    certificate_mode: CertificateMode = CertificateMode.WILDCARD
     redirect_to: str = ""
     redirect_status: int = 308
     access_group_id: str = ""
@@ -158,6 +164,7 @@ class ManagedRoute:
     def from_json(cls, raw: str | dict[str, Any]) -> "ManagedRoute":
         data = json.loads(raw) if isinstance(raw, str) else dict(raw)
         data["kind"] = RouteKind(data.get("kind", RouteKind.PROXY))
+        data["certificate_mode"] = CertificateMode(data.get("certificate_mode", CertificateMode.WILDCARD))
         data["upstreams"] = [Upstream(**item) for item in data.get("upstreams", [])]
         data["request_headers"] = [HeaderOperation(**item) for item in data.get("request_headers", [])]
         data["response_headers"] = [HeaderOperation(**item) for item in data.get("response_headers", [])]
