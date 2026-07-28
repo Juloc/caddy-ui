@@ -1,4 +1,6 @@
 using CaddyUi.Application;
+using CaddyUi.Application.Analytics;
+using CaddyUi.Infrastructure.Analytics;
 using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Persistence;
 using CaddyUi.Infrastructure.Security;
@@ -24,6 +26,7 @@ public static class DependencyInjection
         var connectionString =
             configuration.GetConnectionString("CaddyUi") ??
             DefaultConnectionString;
+        var analyticsOptions = AnalyticsIngestionOptions.FromConfiguration(configuration);
 
         services.AddSingleton<FoundationStatusService>();
         services.AddDbContext<CaddyUiDbContext>(options => Configure(options, connectionString));
@@ -32,6 +35,14 @@ public static class DependencyInjection
         services.AddSingleton<AuthenticationStore>();
         services.AddSingleton<LoginProtectionService>();
         services.AddSingleton<DomainProviderStore>();
+        services.AddSingleton(analyticsOptions);
+        services.AddSingleton<CaddyAccessLogParser>();
+        services.AddSingleton<RequestClassifier>();
+        services.AddSingleton<AnalyticsLogTailer>();
+        services.AddSingleton<AnalyticsIngestionStore>();
+        services.AddSingleton<AnalyticsClientKeyProvider>();
+        services.AddHostedService<AnalyticsIngestionWorker>();
+        services.AddHostedService<AnalyticsMaintenanceWorker>();
 
         var dataProtection = services.AddDataProtection()
             .SetApplicationName("CaddyUi");
