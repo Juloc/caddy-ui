@@ -36,7 +36,7 @@ public sealed class IpBlockServiceTests : IAsyncLifetime
             Path.GetTempPath(),
             $"caddy-ui-block-service-{Guid.NewGuid():N}");
         var blocklistPath = Path.Combine(directory, "blocked.txt");
-        var now = DateTimeOffset.Parse("2026-07-28T12:00:00Z");
+        var now = DateTimeOffset.UtcNow;
         var options = new IpSecurityOptions
         {
             BlockWriteMode = IpBlockWriteMode.Shadow,
@@ -58,13 +58,13 @@ public sealed class IpBlockServiceTests : IAsyncLifetime
                 null,
                 "integration-test",
                 null,
-                TestContext.Current.CancellationToken);
+                CancellationToken.None);
 
             Assert.Equal("203.0.113.10/32", block.Target);
             Assert.Equal("shadow", block.ActivationState);
             var blocklist = await File.ReadAllTextAsync(
                 blocklistPath,
-                TestContext.Current.CancellationToken);
+                CancellationToken.None);
             Assert.Contains("203.0.113.10", blocklist, StringComparison.Ordinal);
 
             var released = await service.UnblockAsync(
@@ -73,14 +73,14 @@ public sealed class IpBlockServiceTests : IAsyncLifetime
                 null,
                 "integration-test",
                 null,
-                TestContext.Current.CancellationToken);
+                CancellationToken.None);
             Assert.Equal("released", released.ActivationState);
             Assert.NotNull(released.ReleasedAt);
             Assert.Equal(
                 string.Empty,
                 await File.ReadAllTextAsync(
                     blocklistPath,
-                    TestContext.Current.CancellationToken));
+                    CancellationToken.None));
 
             await using var verification = factory.CreateDbContext();
             Assert.Equal(

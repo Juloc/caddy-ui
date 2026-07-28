@@ -13,7 +13,10 @@ public sealed class AtomicBlocklistWriterTests
             $"caddy-ui-blocklist-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "blocked.txt");
-        await File.WriteAllTextAsync(path, "198.51.100.1|2030-01-01T00:00:00.0000000+00:00|existing\n");
+        await File.WriteAllTextAsync(
+            path,
+            "198.51.100.1|2030-01-01T00:00:00.0000000+00:00|existing\n",
+            CancellationToken.None);
         var writer = new AtomicBlocklistWriter();
         var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
 
@@ -27,15 +30,15 @@ public sealed class AtomicBlocklistWriterTests
                         expiresAt,
                         "manual|reason"),
                 ],
-                TestContext.Current.CancellationToken);
-            var applied = await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken);
+                CancellationToken.None);
+            var applied = await File.ReadAllTextAsync(path, CancellationToken.None);
 
             Assert.Contains("203.0.113.10", applied, StringComparison.Ordinal);
             Assert.Contains("manual/reason", applied, StringComparison.Ordinal);
             Assert.DoesNotContain("198.51.100.1", applied, StringComparison.Ordinal);
 
-            await writer.RollbackAsync(receipt, TestContext.Current.CancellationToken);
-            var rolledBack = await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken);
+            await writer.RollbackAsync(receipt, CancellationToken.None);
+            var rolledBack = await File.ReadAllTextAsync(path, CancellationToken.None);
             Assert.Contains("198.51.100.1", rolledBack, StringComparison.Ordinal);
         }
         finally

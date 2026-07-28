@@ -16,7 +16,7 @@ public sealed class RipeStatIpIntelligenceProviderTests
 
         var result = await provider.LookupAsync(
             IPAddress.Parse("192.168.1.10"),
-            TestContext.Current.CancellationToken);
+            CancellationToken.None);
 
         Assert.True(result.Available);
         Assert.Equal(IpAddressScope.Private, result.Scope);
@@ -67,7 +67,7 @@ public sealed class RipeStatIpIntelligenceProviderTests
 
         var result = await provider.LookupAsync(
             IPAddress.Parse("8.8.8.8"),
-            TestContext.Current.CancellationToken);
+            CancellationToken.None);
 
         Assert.True(result.Available);
         Assert.Equal(IpAddressScope.Public, result.Scope);
