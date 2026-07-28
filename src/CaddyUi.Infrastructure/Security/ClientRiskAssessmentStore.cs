@@ -190,6 +190,8 @@ public sealed class ClientRiskAssessmentStore
         var regularity = averageGap <= 0
             ? 0
             : Math.Clamp(1 - (standardDeviation / averageGap), 0, 1);
+        await reader.DisposeAsync();
+
         var scannerPathCount = await CountScannerPathsAsync(
             connection,
             clientId,
