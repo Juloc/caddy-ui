@@ -1,0 +1,121 @@
+.workbench {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgb(16 24 40 / 5%);
+}
+
+.workbench-header {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-subtle);
+}
+
+.workbench-header h2 {
+    margin: 1px 0 0;
+    font-size: 15px;
+}
+
+.workbench-body {
+    padding: 14px;
+}
+
+.operations-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 14px;
+}
+
+.operations-grid--sidebar {
+    grid-template-columns: minmax(0, 3fr) minmax(300px, 1fr);
+}
+
+.operations-section {
+    margin-top: 14px;
+}
+
+.form-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.form-grid--two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-span {
+    grid-column: 1 / -1;
+}
+
+.form-actions,
+.page-actions,
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.table-actions {
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.table-actions form {
+    margin: 0;
+}
+
+.value-cell {
+    max-width: 420px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.value-cell code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.metric-value--small {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+.notice--success {
+    border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+@media (max-width: 1100px) {
+    .operations-grid,
+    .operations-grid--sidebar {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    .form-grid--two {
+        grid-template-columns: 1fr;
+    }
+
+    .form-span {
+        grid-column: auto;
+    }
+
+    .page-actions,
+    .table-actions {
+        justify-content: flex-start;
+    }
+}

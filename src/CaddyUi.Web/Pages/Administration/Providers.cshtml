@@ -4,135 +4,35 @@
 @{
     ViewData["Title"] = "DNS-Provider";
 }
-
 <section class="page-heading">
-    <div>
-        <p class="eyebrow">DNS und Zertifikate</p>
-        <h1>Provider</h1>
-        <p class="page-description">Provider werden zentral angelegt und anschließend Domains zugeordnet. API-Secrets werden nur als Umgebungsvariablen- oder Secret-Referenzen gespeichert.</p>
-    </div>
-    <span class="status-badge status-badge--ok">@DnsProviderCatalog.All.Count Provider-Typen</span>
+    <div><p class="eyebrow">DNS und Zertifikate</p><h1>DNS-Provider</h1><p class="page-description">Provider werden zentral angelegt und Domains fest zugeordnet. Direkt-API, DDNS und Caddy-DNS-01 sind getrennte Fähigkeiten und werden sichtbar ausgewiesen.</p></div>
+    <span class="status-badge status-badge--neutral">@DnsProviderCatalog.All.Count Provider-Typen</span>
 </section>
-
+@if (TempData["Message"] is string message) { <div class="notice notice--success">@message</div> }
+@if (TempData["Error"] is string error) { <div class="notice notice--warning">@error</div> }
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
-
-<section class="workspace-grid">
-    <article class="panel panel--wide">
-        <header class="panel-header">
-            <div>
-                <p class="eyebrow">Konfiguriert</p>
-                <h2>@Model.Providers.Count Provider</h2>
-            </div>
-        </header>
-        <div class="panel-body table-wrap">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Typ</th>
-                        <th>Status</th>
-                        <th>API-Test</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var provider in Model.Providers)
-                    {
-                        <tr>
-                            <td><strong>@provider.Label</strong></td>
-                            <td><code>@provider.ProviderType</code></td>
-                            <td>@(provider.Enabled ? "Aktiv" : "Deaktiviert")</td>
-                            <td>
-                                <span class="status-badge @(provider.LastTestStatus == "ok" ? "status-badge--ok" : "status-badge--neutral")">
-                                    @provider.LastTestStatus
-                                </span>
-                                @if (!string.IsNullOrWhiteSpace(provider.LastTestError))
-                                {
-                                    <small>@provider.LastTestError</small>
-                                }
-                            </td>
-                            <td>
-                                <form method="post" asp-page-handler="Toggle">
-                                    <input type="hidden" name="providerId" value="@provider.Id" />
-                                    <input type="hidden" name="enabled" value="@(!provider.Enabled)" />
-                                    <button class="button button--quiet" type="submit">@(provider.Enabled ? "Deaktivieren" : "Aktivieren")</button>
-                                </form>
-                            </td>
-                        </tr>
-                    }
-                    @if (Model.Providers.Count == 0)
-                    {
-                        <tr><td colspan="5">Noch kein DNS-Provider konfiguriert.</td></tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </article>
-
-    <aside class="panel">
-        <header class="panel-header">
-            <div>
-                <p class="eyebrow">Neu</p>
-                <h2>Provider hinzufügen</h2>
-            </div>
-        </header>
-        <div class="panel-body">
-            <form method="post" asp-page-handler="Create" class="form-stack">
-                <label>
-                    <span>Provider-Typ</span>
-                    <select asp-for="Input.ProviderType">
-                        @foreach (var definition in DnsProviderCatalog.All)
-                        {
-                            <option value="@definition.Type">@definition.DisplayName</option>
-                        }
-                    </select>
-                </label>
-                <label>
-                    <span>Anzeigename</span>
-                    <input asp-for="Input.Label" placeholder="Netcup Produktion" />
-                </label>
-                <label>
-                    <span>Provider-Einstellungen als JSON</span>
-                    <textarea asp-for="Input.ConfigJson" rows="6"></textarea>
-                    <small>Nur nicht geheime Werte wie Region, Projekt, Kundennummer oder API-Endpunkt.</small>
-                </label>
-                <label>
-                    <span>Secret-Referenzen als JSON</span>
-                    <textarea asp-for="Input.SecretReferencesJson" rows="6"></textarea>
-                    <small>Beispiel: <code>{"api_token":"CLOUDFLARE_API_TOKEN"}</code>. Keine Tokenwerte eintragen.</small>
-                </label>
-                <button class="button button--primary" type="submit">Provider anlegen</button>
-            </form>
-        </div>
-    </aside>
+<section class="operations-grid operations-grid--sidebar">
+<article class="workbench"><header class="workbench-header"><div><p class="eyebrow">Konfiguriert</p><h2>@Model.Providers.Count Provider</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Typ</th><th>Direkt-API</th><th>Caddy DNS-01</th><th>Letzter Test</th><th class="table-actions">Aktionen</th></tr></thead><tbody>
+@foreach (var provider in Model.Providers)
+{
+    var domains = Model.Domains.Where(domain => domain.DnsProviderId == provider.Id && domain.Enabled).ToArray();
+    <tr>
+        <td><strong>@provider.Label</strong><small>@(provider.Enabled ? "aktiv" : "deaktiviert")</small></td>
+        <td><code>@provider.ProviderType</code></td>
+        <td><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? "verfügbar" : "nur Management")</span></td>
+        <td><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? "Modul vorhanden" : "nicht installiert")</span></td>
+        <td><span class="status-badge @(provider.LastTestStatus == "ok" ? "status-badge--ok" : provider.LastTestStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@provider.LastTestStatus</span>@if (!string.IsNullOrWhiteSpace(provider.LastTestError)) { <small>@provider.LastTestError</small> }</td>
+        <td class="table-actions">
+            @if (domains.Length > 0 && Model.SupportsDirectApi(provider.ProviderType))
+            {
+                <form method="post" asp-page-handler="Test" class="inline-control"><input type="hidden" name="providerId" value="@provider.Id" /><select name="domainId" aria-label="Testdomain">@foreach (var domain in domains) { <option value="@domain.Id">@domain.Name</option> }</select><button class="button button--compact button--primary" type="submit" disabled="@(!provider.Enabled)">Testen</button></form>
+            }
+            <form method="post" asp-page-handler="Toggle"><input type="hidden" name="providerId" value="@provider.Id" /><input type="hidden" name="enabled" value="@(!provider.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(provider.Enabled ? "Deaktivieren" : "Aktivieren")</button></form>
+        </td>
+    </tr>
+}
+@if (Model.Providers.Count == 0) { <tr><td colspan="6" class="empty-state">Noch kein DNS-Provider konfiguriert.</td></tr> }
+</tbody></table></div></article>
+<aside class="workbench"><header class="workbench-header"><div><p class="eyebrow">Neu</p><h2>Provider hinzufügen</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="Create" class="form-stack"><label><span>Provider-Typ</span><select asp-for="Input.ProviderType">@foreach (var definition in DnsProviderCatalog.All) { <option value="@definition.Type">@definition.DisplayName</option> }</select></label><label><span>Anzeigename</span><input asp-for="Input.Label" placeholder="Netcup Produktion" /></label><label><span>Nicht geheime Einstellungen als JSON</span><textarea asp-for="Input.ConfigJson" rows="7"></textarea><small>Beispiel Netcup: <code>{"customer_number":"123456"}</code></small></label><label><span>Secret-Referenzen als JSON</span><textarea asp-for="Input.SecretReferencesJson" rows="7"></textarea><small>Beispiel: <code>{"api_key":"NETCUP_API_KEY","api_password":"NETCUP_API_PASSWORD"}</code>. Keine Tokenwerte eintragen.</small></label><button class="button button--primary" type="submit">Provider anlegen</button></form></div></aside>
 </section>
-
-<section class="panel">
-    <header class="panel-header">
-        <div>
-            <p class="eyebrow">Katalog</p>
-            <h2>Unterstützte API-Verträge</h2>
-        </div>
-    </header>
-    <div class="panel-body provider-grid">
-        @foreach (var definition in DnsProviderCatalog.All)
-        {
-            <article class="provider-card">
-                <div>
-                    <strong>@definition.DisplayName</strong>
-                    <code>@definition.Type</code>
-                </div>
-                <p>@definition.DocumentationHint</p>
-                <small>Funktionen: @definition.Capabilities</small>
-                @if (definition.Settings.Count > 0)
-                {
-                    <small>Einstellungen: @string.Join(", ", definition.Settings.Select(field => field.Key))</small>
-                }
-                @if (definition.Secrets.Count > 0)
-                {
-                    <small>Secrets: @string.Join(", ", definition.Secrets.Select(field => field.Key))</small>
-                }
-            </article>
-        }
-    </div>
-</section>
+<section class="workbench operations-section"><header class="workbench-header"><div><p class="eyebrow">Katalog</p><h2>Unterstützte Management-Verträge</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>Provider</th><th>Typ</th><th>Funktionen</th><th>Einstellungen</th><th>Secrets</th></tr></thead><tbody>@foreach (var definition in DnsProviderCatalog.All) { <tr><td><strong>@definition.DisplayName</strong><small>@definition.DocumentationHint</small></td><td><code>@definition.Type</code></td><td>@definition.Capabilities</td><td>@string.Join(", ", definition.Settings.Select(field => field.Key))</td><td>@string.Join(", ", definition.Secrets.Select(field => field.Key))</td></tr> }</tbody></table></div></section>

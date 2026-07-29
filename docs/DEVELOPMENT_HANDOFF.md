@@ -1,30 +1,39 @@
 # Caddy UI 2.0 – Entwicklungsübergabe
 
 Status: verbindliche zentrale Arbeitsgrundlage  
-Aktueller Entwicklungszweig: `agent/dotnet-postgres-phase-7`  
-Produktiver Stand: Python/SQLite bleibt bis zur kontrollierten Umschaltung aktiv
+Aktueller Entwicklungszweig: `agent/dotnet-postgres-phase-8`  
+Aktueller Draft-PR: #27  
+Produktiver Stand: Python/SQLite bleibt bis Phase 9 aktiv
 
-Dieses Dokument bündelt die Informationen für die Weiterentwicklung des .NET-/PostgreSQL-Neubaus. Detailverträge und `PHASE_*_STATUS.md`-Dateien ergänzen diese Übersicht. Bei Widersprüchen gelten die Sicherheits-, Domain-, Statistik-, UI- und Routingverträge sowie die zuletzt in CI verifizierte Implementierung.
+Dieses Dokument enthält den aktuellen Gesamtstand für die Weiterentwicklung. Detailregeln stehen zusätzlich in den Fachverträgen und `PHASE_*_STATUS.md`-Dateien. Bei Widersprüchen gelten der spezifischere Fachvertrag und die zuletzt vollständig in CI verifizierte Implementierung.
 
 ## 1. Produktziel
 
-Caddy UI ist eine kompakte, servergerenderte Verwaltungs- und Beobachtungsoberfläche für Caddy. Der Neubau ersetzt die Python-/SQLite-Anwendung schrittweise durch .NET 10, Razor Pages und PostgreSQL, ohne den produktiven Caddy-Betrieb während der Entwicklung zu gefährden.
+Caddy UI wird schrittweise von Python/SQLite auf folgenden Stack umgebaut:
 
-Zielbereiche:
+- .NET 10
+- ASP.NET Core Razor Pages
+- PostgreSQL mit EF Core/Npgsql
+- wenig JavaScript, kein SPA-Framework
+- ein Companion- und ein Bundle-Container
+- vorhandener externer Reverse Proxy
+
+Das Produkt verwaltet und beobachtet:
 
 - Admin- und Access-Portal-Authentifizierung
-- Domains, DNS-Provider und Zertifikate
-- echte Request-, Pageview-, Session- und Clientstatistik
-- IP Intelligence, Bot- und Risikobewertung
-- Routen, Zugriffsschutz und kontrollierter Caddy-Schreibpfad
-- DNS, DDNS, Benachrichtigungen, Backups und Diagnose
-- kontrollierter Shadow-Betrieb, Migration und Umschaltung
+- Domains und DNS-Provider
+- Wildcard- und Einzelzertifikate
+- Routen und Zugriffsschutz
+- Request-, Pageview-, Session- und Clientstatistik
+- IP Intelligence und Risikobewertung
+- DNS, DDNS, Jobs und Healthchecks
+- Benachrichtigungen, Backups und Diagnose
 
 Nicht Teil des Produkts:
 
 - Docker-Socket-Verwaltung
 - App-Templates
-- schweres SPA-Framework
+- schweres SPA-Frontend
 - dekorative Marketingoberfläche
 
 ## 2. Zielarchitektur
@@ -32,40 +41,40 @@ Nicht Teil des Produkts:
 ```text
 Browser
   -> Caddy
-      -> Admin UI auf 8098
-      -> internes Access Portal auf 8099
+      -> Admin UI :8098
+      -> Access Portal :8099
       -> verwaltete Upstreams
 
-Caddy JSON Access Logs
-  -> Dateitailer
-  -> Parser und Redaction
-  -> Request-Klassifikation
+Caddy JSON Logs
+  -> Tailer
+  -> Parser + Redaction
+  -> Klassifikation
   -> PostgreSQL Batch Writer
-  -> Navigation, Pageview, Page Load und Session
-  -> Aggregate und Read-only UI
+  -> Pageviews / Sessions / Aggregate
+  -> Razor-Pages-Analytics
 
-Routing-Verwaltung
+Management
   -> PostgreSQL-Entwurf
-  -> deterministischer Caddyfile-Compiler
+  -> Preview + Diff
   -> unveränderliche Revision
-  -> Preview und Diff
   -> Validate
-  -> Shadow oder atomischer Apply
-  -> Reload, Verify und Rollback
+  -> Shadow oder Active Apply
+  -> Reload + Verify + Rollback
 
-Caddy UI .NET
-  -> Razor Pages
-  -> Application/Domain-Verträge
-  -> Infrastructure Stores und Worker
-  -> PostgreSQL
+Betrieb
+  -> Provider-API
+  -> DNS / DDNS
+  -> Jobs / Healthchecks
+  -> Benachrichtigungen
+  -> Backup / Diagnose
 ```
 
-Containergrenze:
+Container:
 
 - `dotnet-companion`: UI, Portal und Jobs ohne gebündelten Caddy
-- `dotnet-bundle`: gleiches UI-Image plus eigener Caddy-Build
+- `dotnet-bundle`: gleicher .NET-Teil plus Caddy mit integrierten Modulen
 - kein Docker-Socket
-- Caddy-Admin-Port und Portal-Port dürfen nicht öffentlich veröffentlicht werden
+- Admin- und Portal-Port nicht direkt öffentlich veröffentlichen
 
 ## 3. Repository-Struktur
 
@@ -73,327 +82,330 @@ Containergrenze:
 src/CaddyUi.Contracts       Transport- und Statusverträge
 src/CaddyUi.Domain          Fachtypen und Invarianten
 src/CaddyUi.Application     Klassifikation, Compiler und Regeln
-src/CaddyUi.Infrastructure  PostgreSQL, Provider, Worker und Dateischreibpfade
-src/CaddyUi.Web             Razor Pages, Auth-Middleware und Assets
+src/CaddyUi.Infrastructure  PostgreSQL, Provider, Worker und Dateien
+src/CaddyUi.Web             Razor Pages, Auth-Middleware und CSS
 src/CaddyUi.Migration       idempotenter SQLite-/Legacy-Import
 
-tests/*                     Unit-, Web-, Infrastruktur-, Migrations- und Acceptance-Tests
-caddyguard                  integriertes Caddy-Schutzmodul
+tests/*                     Unit-, Web-, PostgreSQL- und Acceptance-Tests
+caddyguard                  Caddy-Schutzmodul
 caddynetcp                  Netcup-DNS-Modul
-docs                        Verträge, Status und diese Übergabe
+docs                        Verträge und Status
 ```
 
-## 4. Branch- und PR-Kette
-
-Die Phasen sind gestapelt. Eine spätere Phase basiert auf dem Branch der vorherigen Phase.
+## 4. Gestapelte Branch- und PR-Kette
 
 | Phase | Branch | PR | Inhalt |
 | --- | --- | --- | --- |
-| 1 | `agent/dotnet-postgres-phase-1` | #20 | Solution, Razor-Grundlage, Docker und CI |
-| 2 | `agent/dotnet-postgres-phase-2` | #21 | PostgreSQL-Schema und Legacy-Migration |
-| 3 | `agent/dotnet-postgres-phase-3` | #22 | Authentifizierung, Domains und Provider |
-| 4 | `agent/dotnet-postgres-phase-4` | #23 | Log-Ingestion und echte Statistik |
-| 5 | `agent/dotnet-postgres-phase-5` | #24 | IP Intelligence, Risiko und Blockierung |
-| 6 | `agent/dotnet-postgres-phase-6` | #25 | Read-only Statistikoberfläche |
-| 7 | `agent/dotnet-postgres-phase-7` | nächster Draft-PR | Routen, Zugriff und kontrollierter Apply |
+| 1 | `agent/dotnet-postgres-phase-1` | #20 | Solution, Razor, Docker, CI |
+| 2 | `agent/dotnet-postgres-phase-2` | #21 | PostgreSQL und Legacy-Migration |
+| 3 | `agent/dotnet-postgres-phase-3` | #22 | Auth, Domains und Provider-Katalog |
+| 4 | `agent/dotnet-postgres-phase-4` | #23 | Log-Ingestion und Statistik |
+| 5 | `agent/dotnet-postgres-phase-5` | #24 | IP Intelligence und Security |
+| 6 | `agent/dotnet-postgres-phase-6` | #25 | Read-only Analytics-UI |
+| 7 | `agent/dotnet-postgres-phase-7` | #26 | Routing und kontrollierter Apply |
+| 8 | `agent/dotnet-postgres-phase-8` | #27 | DNS, DDNS und Systemfunktionen |
 
-Vor einem Merge auf `main` wird die Kette der Reihe nach integriert oder kontrolliert auf die bereits integrierte Basis umgestellt. Kein unkontrollierter Rebase darf Sicherheits- oder Fachänderungen verlieren.
+Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits integrierte Basis umgestellt. Kein unkontrollierter Rebase darf Sicherheits-, Migrations- oder Vertragsänderungen verlieren.
 
 ## 5. Implementierter Stand
 
 ### Phase 1 – Grundlage
 
-- .NET-10-Solution mit getrennten Projekten
-- Razor Pages und PostgreSQL-Verbindung
-- Companion- und Bundle-Container
+- .NET-10-Solution
+- getrennte Projekte
+- Razor Pages
+- PostgreSQL-Verbindung
 - Healthchecks
-- CI für Restore, Format, Build, Tests und Container-Smoke
+- Companion- und Bundle-Container
+- Restore-, Format-, Build-, Test- und Container-CI
 
 ### Phase 2 – Persistenz und Migration
 
-- PostgreSQL-Schema `caddy_ui`
+- Schema `caddy_ui`
 - EF-Core-Migrationen
-- idempotenter SQLite-/Legacy-Import
-- Data-Protection-Schlüssel in PostgreSQL
-- Kern-, Analytics-, Security- und Jobtabellen
-- partitionierte `request_events`
+- idempotenter SQLite-Import
+- persistente Data-Protection-Schlüssel
+- partitionierte Request-Tabelle
+- Analytics-, Security-, Job- und Auditpersistenz
 
 ### Phase 3 – Authentifizierung und Domains
 
 - Rollen `admin`, `editor`, `viewer`
 - getrennte Admin- und Portal-Sitzungen
 - LAN-, Public- und Portal-Surface-Prüfung
-- Passwort-Hashing, Legacy-scrypt-Rehash, TOTP und Recovery-Codes
+- Passwort-Hashing und Legacy-Rehash
+- TOTP und Recovery-Codes
 - progressive Login-Sperren
-- Origin-/Referer-/CSRF-Prüfung
-- Domains, Provider-Katalog und Wildcard-Standard
-- `CADDY_UI_REQUIRE_TOTP=false` bleibt erlaubt und sichtbar gewarnt
+- CSRF-, Origin- und Proxy-Prüfung
+- mehrere Domains
+- Provider-Katalog
+- Domainstandard `wildcard`
+- Routenstandard `inherit`
 
-### Phase 4 – Analytics-Ingestion
+### Phase 4 – Analytics
 
 - Caddy-JSON-Parser
-- Secret-, Header- und Query-Redaction vor Speicherung
-- File-Tailer mit Byte-Checkpoint und Rotationserkennung
-- transaktionaler, idempotenter Import
-- pseudonyme Clientkennung mit geschütztem HMAC-Schlüssel
+- Redaction vor Speicherung
+- rotierbarer File-Tailer mit Checkpoints
+- idempotenter Batchimport
+- pseudonyme Clientkennung
 - Requests, Navigationen, Pageviews, Page Loads und Sessions
-- Stunden-, Tages-, Monats- und Routenaggregate
-- Retention und Partitionswartung
-- standardmäßig deaktivierter Shadow-Pfad
+- stündliche, tägliche, monatliche und routenbezogene Aggregate
+- Retention und Partitionspflege
 
 ### Phase 5 – IP Security
 
-- IPv4-/IPv6-Normalisierung und lokale Scope-Erkennung
-- kein externer Lookup für private oder reservierte Netze
-- RIPEstat Network Info und AS Overview
-- Cache und exponentielles Fehler-Backoff
-- versionierte deterministische Risikoengine `risk-v1`
-- Reasons und Evidence je Bewertung
-- Clientliste und Detailseite
-- manuelles Blockieren und Entsperren
-- atomische Blocklist mit Verifikation und Rollback
-- Security-, History- und Audit-Einträge
-- Betriebsmodi `disabled`, `shadow`, `active`
+- IPv4-/IPv6-Normalisierung
+- kein externer Lookup für private oder reservierte Adressen
+- RIPEstat-Anreicherung
+- Cache und Backoff
+- deterministische Risikoengine
+- Clientdetail und Evidenz
+- manuelle Sperren
+- atomische Blocklist mit Rollback
+- Security-, History- und Auditdaten
 
 ### Phase 6 – Read-only UI
 
-- Dashboard mit Nutzungs- und Lastkennzahlen
-- URL-basierte Filter für Zeitraum, Host, Akteur, Requesttyp und Status
-- Traffic, Clients, Requests und Routenanalyse
-- Bots & Sicherheit sowie Fehler & Performance
-- Live-Log über Server-Sent Events
+- Übersicht mit Nutzungs- und Lastkennzahlen
+- URL-basierte Filter
+- Traffic, Requests, Clients und Routenanalyse
+- Bots, Fehler und Performance
+- Live-Log per Server-Sent Events
 - System- und Ingestionstatus
-- keine schreibende Caddy-Aktion aus Analytics-Seiten
 
-### Phase 7 – Routing und kontrollierter Apply
+### Phase 7 – Routing
 
-- typisierte Routen für Proxy, Redirect, statische Antwort und optional Custom
-- Domain-/Subdomain-/Host-, Pfad-, Port- und Injektionsvalidierung
-- Routenliste und kompakter Editor
-- Zugriffsgruppen und gehashte Portalzugänge
+- Proxy-, Redirect-, statische und optionale Custom-Routen
+- Domain-, Host-, Pfad-, Port- und Injektionsvalidierung
+- Zugriffsgruppen und Portalzugänge
 - deterministischer Caddyfile-Compiler
-- unveränderliche Revisionen, Manifest und SHA-256-Digest
+- unveränderliche Revisionen
 - Preview und Zeilen-Diff
-- Schreibmodi `disabled`, `shadow`, `active`
-- Kandidatenvalidierung
+- `disabled`, `shadow`, `active`
 - atomischer Dateiaustausch
-- vollständige Validierung, Reload und Nachprüfung
-- automatische und manuelle Rollbacks
-- serialisierte Apply-/Rollback-Operationen
-- Snapshots, Operationsschritte und Auditdaten
-- produktive Sperre für Wildcard-/Inherit-Zertifikate bis Phase 8
-- AE01-inspirierter Fluent-Arbeitsstil für die gesamte Oberfläche
+- Validate, Reload, Verify und Rollback
+- serialisierte Schreiboperationen
+- Routenimport und -export
+
+### Phase 8 – DNS und Betrieb
+
+- verwaltete DNS-Records
+- DDNS-Ziele für A und AAAA
+- direkte Provider-APIs
+- Provider-Verbindungstests
+- geplante Jobs und Jobläufe
+- öffentliche und interne Healthchecks
+- SMTP, Webhook, Discord und Telegram
+- PostgreSQL-Backups
+- redigierte Diagnoseexporte
+- Netcup-Wildcard-/DNS-01-Renderer
+- kompakte Razor-Pages für alle Betriebsbereiche
 
 ## 6. Statistikvertrag
 
-### Request
+### Requests
 
-Jeder verarbeitete HTTP-Request zählt genau einmal: HTML, JavaScript, CSS, Bilder, Fonts, APIs, WebSocket-Upgrades, Healthchecks, Redirects, Bots und Fehler. Requests beschreiben technische Serverlast.
+Jeder serverseitig verarbeitete HTTP-Request zählt einmal. Dazu gehören HTML, JavaScript, CSS, Bilder, Fonts, APIs, WebSocket-Upgrades, Healthchecks, Redirects, Bots und Fehler.
 
-### Navigation
+### Pageviews
 
-Eine Navigation ist ein mutmaßlicher Dokumentaufruf. Evidenz:
+Ein Pageview entsteht nur bei:
 
-1. First-Party-Beacon
-2. `Sec-Fetch-Dest: document`
-3. HTML-Accept-/Content-Type-Merkmale
-4. `GET` oder `HEAD`
-5. kein Asset-, API-, Healthcheck- oder interner Pfad
-6. kein Bot-/Internal-Akteur
+- erfolgreicher menschlicher Dokumentnavigation mit `2xx` oder `304`
+- bestätigtem SPA-Routenwechsel über optionales First-Party-Beacon
 
-### Pageview
+Redirects und Dokumentfehler bleiben Requests beziehungsweise Navigationen, aber keine erfolgreichen Pageviews.
 
-Ein Pageview entsteht bei erfolgreicher menschlicher Dokumentnavigation mit `2xx` oder `304`, beziehungsweise einem bestätigten SPA-Routenwechsel. Redirects bleiben Requests und Navigationen, aber keine eigenen Pageviews. Dokumentfehler sind fehlgeschlagene Navigationen.
+### Beispiel Mealie/Nuxt
 
-### Page Load und Session
-
-Ein Page Load gruppiert Pageview, Assets und APIs über Client, Host, Referer, Ziel und Zeitfenster. Eine Session endet standardmäßig nach 30 Minuten Inaktivität. Bots und interne Requests erzeugen keine normalen Besuchersessions.
-
-### Client und Visitor
-
-- `Client`: pseudonymer, ohne Beacon geschätzter technischer Identifier
-- `Visitor`: optionaler First-Party-Identifier
-
-Geschätzte Clients werden nie als sicher identifizierte Personen oder exakte Unique Visitors dargestellt.
-
-### Mealie-/Nuxt-Beispiel
-
-Ein Dokument plus 100 JavaScript-/Nuxt-Assets ergibt:
-
-- 101 Requests
-- 1 Navigation
-- 1 Pageview
-- 1 Page Load
-- 100 Asset-Requests
-
-`human + asset` ist ein technischer Asset-Request und niemals ein Pageview. Gehashte Frameworkpfade werden normalisiert.
-
-## 7. UI-Vertrag
-
-Maßgeblich ist `docs/UI_DESIGN_CONTRACT.md`.
-
-Kernregeln:
-
-- AE01-inspirierter Fluent-/Windows-11-Arbeitsstil
-- kompakt, ruhig, schnell und aufgabenorientiert
-- 34 px Standardcontrols, 30 px kompakte Controls
-- 4/8/12/16/20/24/32-px-Abstandssystem
-- klare Rahmen, Hover-, Auswahl- und Fokuszustände
-- eine dominante Primäraktion pro Bereich
-- klar erkennbare Sekundär- und Gefahraktionen
-- neutrale Hintergrundfläche und sichtbar getrennte Arbeitsflächen
-- flache Arbeitsbereiche statt verschachtelter Kartenwände
-- dichte Tabellen statt einer Card je Zeile
-- keine Gradienten, Glows, Blur-/Glasflächen oder schwere Animationen
-- Segoe UI und Cascadia Code
-- responsive und `prefers-reduced-motion`
-- globaler Statusbereich ohne Layoutsprünge
-
-## 8. Routing- und Apply-Vertrag
-
-Maßgeblich ist `docs/ROUTING_APPLY_CONTRACT.md`.
-
-### Route
-
-Jede neue Route besitzt genau eine verwaltete Domain. Der vollständige Host wird aus Domain und Subdomain abgeleitet. Aktivierung bedeutet nur Aufnahme in die nächste Revision.
-
-### Revision
-
-Jede Revision ist unveränderlich und enthält vollständigen generierten Inhalt, Manifest, Digest, Grund, Ersteller und Zeitpunkt.
-
-### Apply
+Ein Dokument mit 100 JavaScript-/Nuxt-Assets ergibt:
 
 ```text
-Generate
-  -> Validate candidate
-  -> Atomic write
-  -> Validate complete config
-  -> Reload Caddy
-  -> Verify
-  -> Audit
+101 Requests
+1 Navigation
+1 Pageview
+1 Page Load
+100 Asset-Requests
 ```
 
-Bei Fehlern wird der vorherige Stand automatisch wiederhergestellt. Gleichzeitige Apply-/Rollback-Operationen werden verhindert.
+`human + asset` bleibt ein Asset-Request und ist kein Pageview.
 
-### Zertifikate
+### Clients
 
-- Domainstandard ist Wildcard.
-- Routen verwenden standardmäßig `inherit`.
-- kein stiller Rückfall auf Einzelzertifikate.
-- Phase 7 erlaubt Shadow für Wildcard/Inherited.
-- Active wird für Wildcard/Inherited bis zum Phase-8-Renderer blockiert.
+Ohne First-Party-Beacon ist ein Client ein pseudonymer, geschätzter technischer Identifier und keine sicher erkannte Person.
 
-### Legacy
+## 7. Domains und Zertifikate
 
-Legacy-Routen ohne `domain_id` müssen vor Active-Freigabe einer Domain zugeordnet und im Shadow-Vergleich geprüft werden.
+- jede Route besitzt eine `domain_id`
+- Host wird aus Domain und Subdomain abgeleitet
+- mehrere Domains werden unabhängig verwaltet
+- neue Domains verwenden standardmäßig `wildcard`
+- neue Routen verwenden standardmäßig `inherit`
+- kein stiller Fallback auf Einzelzertifikate
 
-## 9. Sicherheitsvertrag
+Effektiver Modus:
 
-- Public Admin und Portal sind getrennte Oberflächen.
-- Admin- und Portal-Cookies/Sitzungen werden nicht vermischt.
-- interne Identitätsheader werden entfernt oder kontrolliert überschrieben.
-- Secrets erscheinen nicht in Datenbank-Rohlogs, Preview, Diff, Diagnose oder UI.
-- private/reservierte IPs gehen nicht an RIPEstat.
-- Risikobewertung ist ein Hinweis, keine Identifikation.
-- automatische produktive IP-Sperren bleiben standardmäßig deaktiviert.
-- Dateiänderungen sind atomar, verifiziert und rückrollbar.
-- jede Sperr-, Routen- und Apply-Aktion braucht Audit und Correlation-ID.
-- Portalpasswörter werden gehasht und nie erneut angezeigt.
-- Custom Routes bleiben standardmäßig deaktiviert.
+```text
+route=individual -> Einzelzertifikat
+route=wildcard   -> Wildcard / DNS-01
+route=inherit    -> Domainstandard
+```
 
-## 10. PostgreSQL und Migrationen
+Ein aktiver Wildcard-Apply ist nur möglich, wenn Provider, Caddy-DNS-Modul, Renderer und Secret-Referenzen einsatzbereit sind. Andernfalls bleiben Preview und Shadow möglich, Active wird blockiert.
 
-Wichtige Tabellen:
+Der aktuelle Bundle-Renderer unterstützt Netcup mit Umgebungsvariablen für API-Key und API-Passwort.
 
-- `users`, `admin_sessions`, `portal_sessions`, `login_attempts`, `login_blocks`
-- `managed_domains`, `dns_providers`, `managed_routes`, `route_revisions`
-- `access_groups`, `access_credentials`
-- `caddy_snapshots`, `apply_operations`, `apply_operation_steps`
-- `anonymous_clients`, `analytics_sessions`
-- partitionierte `request_events`
-- `navigation_events`, `page_views`, `page_loads`
-- Traffic- und Performanceaggregate
-- `analytics_checkpoints`, `ingestion_failures`
-- `ip_intelligence_cache`, `client_assessments`, `client_assessment_reasons`
-- `security_events`, `ip_block_rules`, `ip_block_history`, `audit_events`
-- `scheduled_jobs`, `job_runs`
+## 8. Provider-Unterstützung
 
-Regeln:
+Management-Katalog:
 
-- jede Schemaänderung erhält eine neue Migration
-- veröffentlichte Migrationen werden nicht umgeschrieben
-- Migrationen werden gegen leere PostgreSQL-Datenbank und Legacy-Import getestet
-- Raw Requests bleiben partitioniert und retentionfähig
-- Import und Aggregate bleiben idempotent
-- keine unbeschränkten In-Memory-Warteschlangen
+- Netcup
+- Cloudflare
+- Amazon Route 53
+- DigitalOcean
+- Hetzner DNS
+- IONOS
+- OVHcloud
+- Porkbun
+- Namecheap
+- Gandi
+- deSEC
+- Google Cloud DNS
+- Azure DNS
+- Vultr
+- Linode/Akamai
+- GoDaddy
+- DuckDNS
+- RFC 2136
 
-## 11. Konfiguration und sichere Defaults
+Direkte Record-API und DDNS in Phase 8:
 
-### Analytics
+- Netcup
+- Cloudflare
+- DigitalOcean
+- Hetzner DNS
+- IONOS
+- Gandi
+- deSEC
+- DuckDNS
+
+Die UI unterscheidet klar zwischen:
+
+- Management-Katalog vorhanden
+- direkter API-Adapter vorhanden
+- Caddy-DNS-Modul installiert
+- Wildcard-Renderer geprüft
+
+## 9. Secret-Vertrag
+
+Erlaubte Referenzen:
+
+```text
+ENV_NAME
+secret://env/ENV_NAME
+secret://file/absolute/path
+```
+
+- PostgreSQL enthält keine Secretwerte.
+- Provider lösen Secrets erst beim Aufruf auf.
+- Diagnoseexporte enthalten nur Secret-Feldnamen.
+- Caddy-DNS-01 verwendet nur Umgebungsvariablen.
+- Logs, Diffs, Manifeste und UI zeigen keine aufgelösten Werte.
+
+## 10. Betriebsmodi und sichere Defaults
 
 ```text
 Analytics:Enabled=false
-Analytics:BatchSize=1000
-Analytics:SessionIdleMinutes=30
-Analytics:PageLoadWindowSeconds=15
-Analytics:RawRequestRetentionDays=30
-Analytics:PageViewRetentionDays=180
-```
-
-### IP Security
-
-```text
 IpSecurity:IntelligenceEnabled=false
 IpSecurity:RiskAssessmentEnabled=false
 IpSecurity:BlockWriteMode=disabled
-IpSecurity:MaximumBlockHours=720
-```
-
-### Routing
-
-```text
 Routing:WriteMode=disabled
-Routing:ManagedFragmentPath=/data/caddy-ui/generated/managed-routes.caddy
-Routing:ShadowFragmentPath=/data/caddy-ui/shadow/managed-routes.caddy
-Routing:RootConfigPath=/etc/caddy/Caddyfile
-Routing:CaddyBinaryPath=/usr/bin/caddy
-Routing:PortalUpstream=127.0.0.1:8099
-Routing:CommandTimeoutSeconds=30
-Routing:AllowCustomRoutes=false
-```
-
-Umgebungsvariablen:
-
-```text
-CADDY_UI_ROUTE_WRITE_MODE
-CADDY_UI_MANAGED_ROUTES_PATH
-CADDY_UI_ROUTE_SHADOW_PATH
-CADDY_UI_CADDY_ROOT_CONFIG
-CADDY_UI_CADDY_BINARY
-CADDY_UI_PORTAL_UPSTREAM
-CADDY_UI_CADDY_COMMAND_TIMEOUT_SECONDS
-CADDY_UI_ALLOW_CUSTOM_ROUTES
-```
-
-### Auth
-
-```text
-Security:RequireTotp=false
-DataProtection:PersistKeysToPostgreSql=true
+Operations:WorkerEnabled=false
+Operations:DnsWriteMode=disabled
 Database:ApplyMigrationsOnStartup=false
+DataProtection:PersistKeysToPostgreSql=true
 ```
 
-Abweichungen von sicheren Defaults werden sichtbar dokumentiert und getestet.
+Bedeutung:
 
-## 12. Rollen
+- `disabled`: kein produktiver Schreibzugriff
+- `shadow`: validierter Vorschau-/Shadowpfad ohne produktive Wirkung
+- `active`: explizit aktivierter produktiver Pfad
 
-- `viewer`: read-only Betriebs-, Analytics- und Detailansichten
-- `editor`: Viewer plus Routenentwurf, Preview, Shadow/Apply entsprechend Betriebsmodus
-- `admin`: Editor plus Domains, Provider, Zugriffsgruppen und Sicherheit
+Python/SQLite bleibt bis zur kontrollierten Umschaltung der produktive Schreibpfad.
 
-Analytics-Seiten bleiben GET/read-only. Schreibende Aktionen verwenden POST, CSRF-Schutz, Audit und klare Bestätigung.
+## 11. UI-Vertrag
 
-## 13. CI und Verifikation
+Maßgeblich: `docs/UI_DESIGN_CONTRACT.md`.
+
+- AE01-inspirierter Arbeitsstil
+- neutraler Hintergrund statt Weiß-auf-Weiß
+- klar abgegrenzte helle Arbeitsflächen
+- sichtbare Rahmen und Fokuszustände
+- 34-px-Standardcontrols
+- 30-px-Kompaktcontrols
+- klare Primär-, Sekundär- und Gefahraktionen
+- dichte Tabellen statt Card-Wänden
+- flache Arbeitsbereiche
+- keine Gradienten, Glows, Blur- oder Glasflächen
+- keine unnötigen Animationen
+- responsive und Reduced-Motion-kompatibel
+- servergerendert und schnell
+
+## 12. DNS, DDNS und Jobs
+
+Maßgeblich: `docs/DNS_OPERATIONS_CONTRACT.md`.
+
+DNS:
+
+- Records werden zuerst als PostgreSQL-Entwurf gespeichert.
+- Domain und Provider müssen einander fest zugeordnet sein.
+- Synchronisierung ist eine separate sichtbare Aktion.
+- Status und Fehler werden gespeichert.
+
+DDNS:
+
+- A und AAAA
+- öffentliche oder statische Adresse
+- mehrere öffentliche IP-Dienste als Fallback
+- kein Write bei unveränderter Adresse
+- exklusive Beanspruchung über `FOR UPDATE SKIP LOCKED`
+
+Jobs:
+
+- `ddns`
+- `provider-test`
+- `health`
+- `backup`
+- dauerhafte Run-Historie und Correlation-ID
+
+## 13. Benachrichtigungen, Health und Backups
+
+Benachrichtigungen:
+
+- dauerhafte In-App-Meldung
+- SMTP-E-Mail
+- HTTPS-Webhook
+- Discord
+- Telegram
+
+Health:
+
+- öffentliche URLs
+- interne Upstreams
+- Statusbereich und Timeout pro Ziel
+- Verlauf und Zustandswechsel
+
+Backup:
+
+- PostgreSQL-Custom-Dump
+- redigierter Diagnoseexport
+- vorhandene Caddy-Konfigurationsdateien
+- Manifest und SHA-256-Digest
+- begrenzte Aufbewahrung
+
+## 14. CI und lokale Verifikation
 
 ```sh
 dotnet restore CaddyUi.slnx
@@ -401,102 +413,94 @@ dotnet format CaddyUi.slnx --verify-no-changes
 dotnet build CaddyUi.slnx --configuration Release --no-restore
 dotnet test CaddyUi.slnx --configuration Release --no-build
 
+go test ./...
+
 docker build --file Dockerfile.dotnet --target dotnet-companion .
 docker build --file Dockerfile.dotnet --target dotnet-bundle .
-
-gofmt -w cmd caddyguard caddynetcp
-go test ./...
 ```
 
-CI verifiziert mindestens:
+Zusätzlich erforderlich:
 
-- Restore und Format
-- Release-Build ohne Warnungen
-- Unit-, Web-, Infrastruktur-, Migrations- und Acceptance-Tests
-- PostgreSQL-Migrationen
-- Companion- und Bundle-Container
-- HTTP-Healthflächen
-- SQLite-Migrations-CLI
+- PostgreSQL-Migration auf leerer Datenbank
+- Legacy-Import
+- Companion- und Bundle-Smoke
+- HTTP-Flächen
 - integriertes Caddy-Modul
-- Routenvalidierung und Compiler-Golden-Master
-- geschützte Phase-7-Webflächen
+- Routing-Golden-Master
+- DNS-/DDNS-Persistenztests
+- Authentifizierung aller Managementseiten
 
-## 14. Produktionsisolation und Rollback
+## 15. Produktionsisolation und Rollback
 
 Bis Phase 9:
 
-- Python-/SQLite bleibt produktive Quelle und Schreibpfad
+- Python/SQLite bleibt produktiv
 - .NET läuft intern oder im Shadow-Betrieb
-- Analytics-Ingestion ist standardmäßig aus
-- Route Write Mode ist standardmäßig `disabled`
-- Caddy, DNS und produktive Blocklist werden nicht automatisch umgestellt
-- keine Portumschaltung ohne Wartungsfenster
+- keine automatische Portumschaltung
+- keine automatische DNS-Aktivierung
+- keine automatische Routenaktivierung
+- keine automatische Blocklist-Aktivierung
+- keine ungeprüfte Migration produktiver Secrets
 
 Rollback:
 
-- .NET-Worker/UI deaktivieren
-- Python-Container mit unveränderter SQLite-Datei weiterverwenden
-- Caddy-Dateien aus Snapshot wiederherstellen
-- Phase-7-Apply verwendet eigenen automatischen Rollback
+- .NET-Worker deaktivieren
+- DNS- und Routingmodus auf `disabled`
+- Python-Container weiterverwenden
+- vorhandene SQLite-Datei unverändert behalten
+- Caddy-Snapshot wiederherstellen
 
-## 15. Offene Produktionsvalidierung
+## 16. Offene Produktionsvalidierung
 
-- längerer Last-/Burstlauf mit echten Caddy-Logs
-- Shadow-Vergleich der Statistiken gegen Python
-- Logrotation, Truncate und Neustart
-- Entscheidung über First-Party-Beacons
-- kontrollierter RIPEstat-Test
-- kontrollierter Blocklist-Test
-- Speicher-, Partitions- und Retentionprüfung
-- vollständiger LAN-/Public-/Portal-Sicherheitstest
-- Zuordnung aller Legacy-Routen ohne Domain
-- Caddyfile-Golden-Master gegen Python
-- Shadow-Apply mit echten Routen
-- kontrollierter Reload-/Rollbacktest
-- Dateirechte und Persistenz der generierten Fragmente
+- längerer Shadow-Lauf mit echten Logs
+- Statistikvergleich Python gegen .NET
+- Logrotation und Neustart
+- Provider-Test je produktiver Domain
+- Shadow-DNS und DDNS
+- Netcup-Wildcard-Zertifikat auf Testdomain
+- Caddy-Reload und Rollback
+- Health-Fehlerbenachrichtigung
+- Backup und Test-Wiederherstellung
+- Diagnoseexport auf Secret-Leaks
+- Worker-Sperre bei mehreren Instanzen
+- vollständiger LAN-/Public-/Portal-Security-Test
 
-## 16. Nächste Phasen
-
-### Phase 8 – DNS, DDNS und Systemfunktionen
-
-- produktive Provider-API-Clients
-- Wildcard-/DNS-01-Renderer
-- Netcup DNS und DDNS-Jobs
-- E-Mail, Webhook, Discord und Telegram
-- Backups und Diagnoseexport
-- Jobübersicht
-- Public- und Upstream-Health
+## 17. Nächste Phasen
 
 ### Phase 9 – Shadow-Betrieb und Umschaltung
 
 - paralleler interner Betrieb
-- Statistik- und Routingvergleich
-- Dry-Run-Migration
-- Wartungsfenster und finaler SQLite-Import
-- Umschaltung von 8098/8099
-- vollständige Login-, Route-, DNS- und Statistikverifikation
+- gleiche Logs read-only verarbeiten
+- Statistikvergleich
+- finaler Legacy-Dry-Run
+- Wartungsfenster
+- finaler SQLite-Import
+- Umschaltung von 8098 und 8099
+- Login-, Route-, DNS-, Zertifikat- und Statistikprüfung
+- dokumentierter Rückfall
 
 ### Phase 10 – Python entfernen
 
-Erst nach mindestens zwei stabilen Releases, abgeschlossener Migration und geprüftem Rollback:
+Erst nach mindestens zwei stabilen Releases:
 
 - Python-Laufzeit entfernen
-- Legacy-Hotfixmodule und SQLite-Schreibpfade entfernen
+- SQLite-Schreibpfade entfernen
+- Legacy-Hotfixmodule entfernen
 - Images verkleinern
 - Dokumentation finalisieren
 - Version `2.0.0` veröffentlichen
 
-## 17. Fortsetzungscheckliste
+## 18. Fortsetzungscheckliste
 
-1. richtigen gestapelten Branch und PR-Head prüfen
-2. diese Übergabe und betroffene Fachverträge lesen
-3. vorhandene Implementierung und Tests zuerst prüfen
-4. sichere Defaults und Python-Isolation erhalten
-5. Änderungen sauber in Domain, Application, Infrastructure und Web einordnen
-6. Unit-, Integrations-, Web-, Migrations- und Containerpfade ergänzen
-7. Statusdokument und diese Übergabe aktualisieren
-8. UI gegen `UI_DESIGN_CONTRACT.md` prüfen
+1. richtigen gestapelten Head prüfen
+2. dieses Dokument und betroffene Fachverträge lesen
+3. vorhandene Implementierung und Tests prüfen
+4. sichere Defaults beibehalten
+5. keine Secrets in Logs, UI, Diffs oder Diagnose aufnehmen
+6. Migrationen ergänzen, nicht umschreiben
+7. Unit-, PostgreSQL-, Web- und Containerpfade testen
+8. Phasenstatus und dieses Dokument aktualisieren
 9. CI vollständig grün abwarten
-10. erst danach PR aus Draft nehmen oder nächste Phase stapeln
+10. Phase vor Abschluss auf einen konsolidierten Commit reduzieren
 
-Keine Änderung gilt als abgeschlossen, solange Build, Tests, Migration und Container-Smoke nicht verifiziert sind.
+Keine Phase gilt als abgeschlossen, solange Restore, Format, Build, Tests, Migration und beide Containerpfade nicht verifiziert sind.
