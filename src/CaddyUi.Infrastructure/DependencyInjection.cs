@@ -2,6 +2,7 @@ using CaddyUi.Application;
 using CaddyUi.Application.Analytics;
 using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Analytics;
+using CaddyUi.Infrastructure.Cutover;
 using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Operations;
 using CaddyUi.Infrastructure.Persistence;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         var ipSecurityOptions = IpSecurityOptions.FromConfiguration(configuration);
         var routingOptions = RoutingOptions.FromConfiguration(configuration);
         var operationsOptions = OperationsOptions.FromConfiguration(configuration);
+        var cutoverOptions = CutoverOptions.FromConfiguration(configuration);
 
         services.AddSingleton<FoundationStatusService>();
         services.AddDbContext<CaddyUiDbContext>(options => Configure(options, connectionString));
@@ -109,6 +111,9 @@ public static class DependencyInjection
         });
         services.AddHostedService<IpIntelligenceRefreshWorker>();
         services.AddHostedService<ClientRiskAssessmentWorker>();
+
+        services.AddSingleton(cutoverOptions);
+        services.AddSingleton<CutoverReadinessService>();
 
         var dataProtection = services.AddDataProtection()
             .SetApplicationName("CaddyUi");

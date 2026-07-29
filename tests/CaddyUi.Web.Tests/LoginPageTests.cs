@@ -60,6 +60,7 @@ public sealed class LoginPageTests :
     [InlineData("/Operations/Notifications")]
     [InlineData("/Operations/Backup")]
     [InlineData("/Operations/Backup?handler=Diagnostics")]
+    [InlineData("/Operations/Cutover")]
     public async Task ProtectedWorkspace_RedirectsAnonymousUsersToLogin(string path)
     {
         using var response = await _client.GetAsync(path);
