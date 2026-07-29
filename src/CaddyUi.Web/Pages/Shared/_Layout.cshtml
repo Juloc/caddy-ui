@@ -1,3 +1,4 @@
+@inject CaddyUi.Web.Security.SecurityRuntimeOptions SecurityOptions
 <!DOCTYPE html>
 <html lang="de" data-theme="system">
 <head>
@@ -6,6 +7,7 @@
     <meta name="color-scheme" content="light dark" />
     <title>@ViewData["Title"] · Caddy UI</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/phase3.css" asp-append-version="true" />
 </head>
 <body>
     <div class="app-shell">
@@ -14,14 +16,18 @@
                 <span class="brand-mark" aria-hidden="true">C</span>
                 <span>
                     <strong>Caddy UI</strong>
-                    <small>2.0 Foundation</small>
+                    <small>2.0 Parallelbetrieb</small>
                 </span>
             </a>
 
             <nav class="primary-nav" aria-label="Hauptnavigation">
-                <a class="nav-item nav-item--active" asp-page="/Index">
-                    <span>Übersicht</span>
-                </a>
+                <a class="nav-item" asp-page="/Index">Übersicht</a>
+                @if (User.IsInRole("admin"))
+                {
+                    <a class="nav-item" asp-page="/Administration/Domains">Domains</a>
+                    <a class="nav-item" asp-page="/Administration/Providers">DNS-Provider</a>
+                    <a class="nav-item" asp-page="/Administration/Security">Sicherheit</a>
+                }
                 <span class="nav-item nav-item--disabled">Traffic</span>
                 <span class="nav-item nav-item--disabled">Besucher</span>
                 <span class="nav-item nav-item--disabled">Requests</span>
@@ -31,7 +37,7 @@
 
             <div class="sidebar-footer">
                 <span class="connection-dot" aria-hidden="true"></span>
-                <span>Foundation aktiv</span>
+                <span>Phase 3 aktiv</span>
             </div>
         </aside>
 
@@ -42,7 +48,18 @@
                     <strong>@ViewData["Title"]</strong>
                 </div>
                 <div class="topbar-actions">
+                    @if (SecurityOptions.PublicAccessWithoutMandatoryTotp)
+                    {
+                        <span class="environment-chip environment-chip--warning">Public ohne TOTP-Pflicht</span>
+                    }
                     <span class="environment-chip">Parallelbetrieb</span>
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <span class="user-chip">@User.Identity.Name · @User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</span>
+                        <form method="post" asp-page="/Logout">
+                            <button class="button button--quiet" type="submit">Abmelden</button>
+                        </form>
+                    }
                 </div>
             </header>
 

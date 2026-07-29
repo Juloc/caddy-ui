@@ -6,7 +6,7 @@ namespace CaddyUi.Migration.Tests;
 public sealed class MigrationDiscoveryTests
 {
     [Fact]
-    public void InfrastructureAssembly_ContainsPhaseOneAndPhaseTwoMigrations()
+    public void InfrastructureAssembly_ContainsPhaseOneThroughPhaseThreeMigrations()
     {
         using var database = new CaddyUiDbContextFactory()
             .CreateDbContext(Array.Empty<string>());
@@ -27,6 +27,9 @@ public sealed class MigrationDiscoveryTests
             migrations);
         Assert.Contains(
             "20260728220300_PhaseTwoMigrationPersistence",
+            migrations);
+        Assert.Contains(
+            "20260728230000_PhaseThreeAuthenticationAndDomainManagement",
             migrations);
     }
 }

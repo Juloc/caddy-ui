@@ -1,9 +1,11 @@
 using CaddyUi.Application;
 using CaddyUi.Contracts;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace CaddyUi.Web.Pages;
 
+[Authorize(Policy = "Viewer")]
 public sealed class IndexModel : PageModel
 {
     private readonly FoundationStatusService _foundationStatus;

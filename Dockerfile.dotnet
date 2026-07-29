@@ -38,14 +38,13 @@ RUN dotnet publish src/CaddyUi.Web/CaddyUi.Web.csproj \
         --no-restore \
         --output /out/migration \
         /p:UseAppHost=false \
-    && test -f /out/web/Microsoft.EntityFrameworkCore.Relational.dll \
-    && test -f /out/migration/Microsoft.Data.Sqlite.dll
+    && test -f /out/web/Microsoft.EntityFrameworkCore.Relational.dll
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-alpine AS dotnet-companion
 WORKDIR /app
-ARG APP_VERSION=2.0.0-phase2
+ARG APP_VERSION=2.0.0-phase3
 
-ENV ASPNETCORE_URLS=http://0.0.0.0:8098 \
+ENV ASPNETCORE_URLS="http://0.0.0.0:8098;http://0.0.0.0:8099" \
     DOTNET_EnableDiagnostics=0 \
     CADDY_UI_VERSION=${APP_VERSION}
 
@@ -56,8 +55,7 @@ COPY --from=dotnet-build /out/migration/ /app/migration/
 COPY scripts/dotnet-entrypoint.sh /usr/local/bin/caddy-ui
 
 RUN chmod 0755 /usr/local/bin/caddy-ui \
-    && test -f /app/Microsoft.EntityFrameworkCore.Relational.dll \
-    && test -f /app/migration/Microsoft.Data.Sqlite.dll
+    && test -f /app/Microsoft.EntityFrameworkCore.Relational.dll
 
 EXPOSE 8098 8099
 

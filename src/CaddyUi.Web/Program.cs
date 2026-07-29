@@ -1,6 +1,8 @@
 using System.Net.Mime;
+using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure;
 using CaddyUi.Infrastructure.Persistence;
+using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -14,8 +16,13 @@ builder.Logging.AddJsonConsole(options =>
     options.UseUtcTimestamp = true;
 });
 
+var securityOptions = SecurityRuntimeOptions.FromConfiguration(builder.Configuration);
 builder.Services.AddRazorPages();
 builder.Services.AddCaddyUiInfrastructure(builder.Configuration);
+builder.Services.AddSingleton<PasswordHashService>();
+builder.Services.AddSingleton<TotpService>();
+builder.Services.AddCaddyUiAuthentication(securityOptions);
+builder.Services.AddHostedService<AuthenticationBootstrapService>();
 builder.Services
     .AddHealthChecks()
     .AddCheck(
@@ -35,8 +42,17 @@ if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
     await database.Database.MigrateAsync();
 }
 
+if (securityOptions.PublicAccessWithoutMandatoryTotp)
+{
+    app.Logger.LogWarning(
+        "Public Caddy UI access is configured without mandatory TOTP. CADDY_UI_REQUIRE_TOTP=false remains supported, but the UI will display a warning.");
+}
+
+app.UseMiddleware<RequestSurfaceMiddleware>();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseMiddleware<OriginValidationMiddleware>();
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks(
@@ -55,6 +71,7 @@ app.MapHealthChecks(
         ResponseWriter = WriteHealthResponseAsync,
     });
 
+app.MapGet("/favicon.ico", () => Results.NoContent());
 app.MapRazorPages();
 app.Run();
 

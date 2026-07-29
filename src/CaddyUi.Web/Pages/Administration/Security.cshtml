@@ -1,0 +1,104 @@
+@page
+@model CaddyUi.Web.Pages.Administration.SecurityModel
+@{
+    ViewData["Title"] = "Sicherheit";
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Konto</p>
+        <h1>TOTP und Recovery-Codes</h1>
+        <p class="page-description">TOTP bleibt optional, solange <code>CADDY_UI_REQUIRE_TOTP=false</code> gesetzt ist. Öffentliche Installationen erhalten eine sichtbare Warnung.</p>
+    </div>
+    <span class="status-badge @(Model.TotpEnabled ? "status-badge--ok" : "status-badge--warning")">
+        @(Model.TotpEnabled ? "TOTP aktiv" : "TOTP aus")
+    </span>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok">@Model.StatusMessage</div>
+}
+
+@if (Model.RecoveryCodes.Count > 0)
+{
+    <section class="panel">
+        <header class="panel-header">
+            <div>
+                <p class="eyebrow">Einmalig anzeigen</p>
+                <h2>Recovery-Codes</h2>
+            </div>
+        </header>
+        <div class="panel-body">
+            <p>Diese Codes werden nur jetzt angezeigt. Jeder Code kann genau einmal verwendet werden.</p>
+            <div class="code-grid">
+                @foreach (var code in Model.RecoveryCodes)
+                {
+                    <code>@code</code>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+<section class="workspace-grid">
+    <article class="panel panel--wide">
+        <header class="panel-header">
+            <div>
+                <p class="eyebrow">Authenticator</p>
+                <h2>Neues TOTP einrichten</h2>
+            </div>
+        </header>
+        <div class="panel-body">
+            @if (string.IsNullOrWhiteSpace(Model.SetupSecret))
+            {
+                <form method="post" asp-page-handler="Begin">
+                    <button class="button button--primary" type="submit">Setup starten</button>
+                </form>
+            }
+            else
+            {
+                <div class="form-stack">
+                    <label>
+                        <span>Secret</span>
+                        <input value="@Model.SetupSecret" readonly />
+                    </label>
+                    <label>
+                        <span>Provisioning URI</span>
+                        <textarea readonly rows="3">@Model.ProvisioningUri</textarea>
+                    </label>
+                    <form method="post" asp-page-handler="Enable" class="form-stack">
+                        <input type="hidden" asp-for="SetupSecret" />
+                        <label>
+                            <span>Sechsstelligen Code bestätigen</span>
+                            <input asp-for="VerificationCode" inputmode="numeric" autocomplete="one-time-code" />
+                        </label>
+                        <button class="button button--primary" type="submit">TOTP aktivieren</button>
+                    </form>
+                </div>
+            }
+        </div>
+    </article>
+
+    <aside class="panel">
+        <header class="panel-header">
+            <div>
+                <p class="eyebrow">Zurücksetzen</p>
+                <h2>TOTP deaktivieren</h2>
+            </div>
+        </header>
+        <div class="panel-body">
+            <p>Alle vorhandenen Recovery-Codes werden dabei ungültig.</p>
+            <form method="post" asp-page-handler="Disable">
+                @if (Model.TotpEnabled)
+                {
+                    <button class="button button--danger" type="submit">Deaktivieren</button>
+                }
+                else
+                {
+                    <button class="button button--danger" type="button" disabled>Deaktivieren</button>
+                }
+            </form>
+        </div>
+    </aside>
+</section>
