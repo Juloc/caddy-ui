@@ -10,13 +10,16 @@ permissions:
   packages: write
   pull-requests: read
 
+# Automatic releases are intentionally paused while the .NET/PostgreSQL
+# cutover is being validated. A new push cancels any older queued/running
+# release workflow, while an explicit workflow_dispatch remains available.
 concurrency:
   group: caddy-ui-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   release:
-    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
