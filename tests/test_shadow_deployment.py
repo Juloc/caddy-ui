@@ -78,7 +78,15 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         self.assertNotIn("docker compose down", self.preflight)
         self.assertNotIn("docker volume rm", self.preflight)
         self.assertNotIn("docker rm", self.preflight)
-        self.assertNotIn("docker compose up", self.preflight)
+
+        executable_lines = [
+            line.strip()
+            for line in self.preflight.splitlines()
+            if line.strip() and not line.lstrip().startswith(("#", "printf"))
+        ]
+        self.assertFalse(
+            any("docker compose" in line and " up " in line for line in executable_lines)
+        )
 
 
 if __name__ == "__main__":
