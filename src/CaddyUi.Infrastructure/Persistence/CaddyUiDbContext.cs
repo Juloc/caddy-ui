@@ -1,13 +1,16 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace CaddyUi.Infrastructure.Persistence;
 
-public sealed class CaddyUiDbContext : DbContext
+public sealed class CaddyUiDbContext : DbContext, IDataProtectionKeyContext
 {
     public CaddyUiDbContext(DbContextOptions<CaddyUiDbContext> options)
         : base(options)
     {
     }
+
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     public DbSet<SchemaMarker> SchemaMarkers => Set<SchemaMarker>();
 
@@ -16,6 +19,19 @@ public sealed class CaddyUiDbContext : DbContext
         ArgumentNullException.ThrowIfNull(modelBuilder);
 
         modelBuilder.HasDefaultSchema("caddy_ui");
+
+        modelBuilder.Entity<DataProtectionKey>(entity =>
+        {
+            entity.ToTable("data_protection_keys");
+            entity.HasKey(key => key.Id)
+                .HasName("pk_data_protection_keys");
+            entity.Property(key => key.Id)
+                .HasColumnName("id");
+            entity.Property(key => key.FriendlyName)
+                .HasColumnName("friendly_name");
+            entity.Property(key => key.Xml)
+                .HasColumnName("xml");
+        });
 
         modelBuilder.Entity<SchemaMarker>(entity =>
         {

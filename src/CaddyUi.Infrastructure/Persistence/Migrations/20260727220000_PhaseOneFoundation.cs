@@ -11,32 +11,20 @@ public partial class PhaseOneFoundation : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.EnsureSchema(
-            name: "caddy_ui");
+        migrationBuilder.Sql(
+            """
+            CREATE SCHEMA IF NOT EXISTS caddy_ui;
 
-        migrationBuilder.CreateTable(
-            name: "schema_markers",
-            schema: "caddy_ui",
-            columns: table => new
-            {
-                id = table.Column<Guid>(type: "uuid", nullable: false),
-                name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                created_at = table.Column<DateTimeOffset>(
-                    type: "timestamp with time zone",
-                    nullable: false,
-                    defaultValueSql: "CURRENT_TIMESTAMP")
-            },
-            constraints: table =>
-            {
-                table.PrimaryKey("pk_schema_markers", value => value.id);
-            });
+            CREATE TABLE IF NOT EXISTS caddy_ui.schema_markers (
+                id uuid NOT NULL,
+                name character varying(128) NOT NULL,
+                created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT pk_schema_markers PRIMARY KEY (id)
+            );
 
-        migrationBuilder.CreateIndex(
-            name: "ix_schema_markers_name",
-            schema: "caddy_ui",
-            table: "schema_markers",
-            column: "name",
-            unique: true);
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_schema_markers_name
+                ON caddy_ui.schema_markers (name);
+            """);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
