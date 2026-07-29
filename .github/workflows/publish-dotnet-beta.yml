@@ -9,7 +9,7 @@ on:
       - .github/workflows/publish-dotnet-beta.yml
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -51,6 +51,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish companion beta
+        id: companion
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -66,6 +67,7 @@ jobs:
           provenance: true
           sbom: true
       - name: Publish bundle beta
+        id: bundle
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -80,3 +82,83 @@ jobs:
           cache-to: type=gha,mode=max,scope=dotnet-bundle
           provenance: true
           sbom: true
+      - name: Pull and smoke-test published images
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          companion="ghcr.io/juloc/caddy-ui-dotnet-companion:${VERSION}"
+          bundle="ghcr.io/juloc/caddy-ui-dotnet:${VERSION}"
+          docker pull "$companion"
+          docker pull "$bundle"
+          docker run --rm "$companion" sh -c 'test "$CADDY_UI_VERSION" = "'"$VERSION"'" && test -f /app/CaddyUi.Web.dll'
+          docker run --rm "$bundle" caddy list-modules | grep -F 'http.handlers.caddy_ui_guard'
+
+          docker network create caddy-ui-published-smoke
+          trap 'docker rm -f caddy-ui-published-web caddy-ui-published-postgres >/dev/null 2>&1 || true; docker network rm caddy-ui-published-smoke >/dev/null 2>&1 || true' EXIT
+          docker run -d \
+            --name caddy-ui-published-postgres \
+            --network caddy-ui-published-smoke \
+            -e POSTGRES_DB=caddy_ui \
+            -e POSTGRES_USER=caddy_ui \
+            -e POSTGRES_PASSWORD=caddy_ui_beta_smoke \
+            postgres:17-alpine
+          for attempt in {1..30}; do
+            if docker exec caddy-ui-published-postgres pg_isready -U caddy_ui -d caddy_ui; then break; fi
+            if [ "$attempt" = "30" ]; then docker logs caddy-ui-published-postgres; exit 1; fi
+            sleep 1
+          done
+          docker run -d \
+            --name caddy-ui-published-web \
+            --network caddy-ui-published-smoke \
+            -p 18098:8098 \
+            -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-published-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui_beta_smoke' \
+            -e Database__ApplyMigrationsOnStartup=true \
+            "$companion" web
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:18098/health/ready; then exit 0; fi
+            if [ "$attempt" = "40" ]; then docker logs caddy-ui-published-web; exit 1; fi
+            sleep 2
+          done
+      - name: Record verified publication
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMPANION_DIGEST: ${{ steps.companion.outputs.digest }}
+          BUNDLE_DIGEST: ${{ steps.bundle.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p deploy/shadow
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          payload = {
+              "version": os.environ["VERSION"],
+              "sourceCommit": os.environ["GITHUB_SHA"],
+              "publishedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+              "companion": {
+                  "image": f"ghcr.io/juloc/caddy-ui-dotnet-companion:{os.environ['VERSION']}",
+                  "digest": os.environ["COMPANION_DIGEST"],
+              },
+              "bundle": {
+                  "image": f"ghcr.io/juloc/caddy-ui-dotnet:{os.environ['VERSION']}",
+                  "digest": os.environ["BUNDLE_DIGEST"],
+              },
+              "smokeTested": True,
+          }
+          Path("deploy/shadow/PUBLISHED_BETA.json").write_text(
+              json.dumps(payload, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/shadow/PUBLISHED_BETA.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(dotnet): record verified ${VERSION} publication"
+            git push origin HEAD:main
+          fi
