@@ -14,6 +14,7 @@ The shadow stack:
 - mounts the legacy SQLite file read-only;
 - uses a Docker-internal network;
 - has no Docker socket;
+- uses a read-only root filesystem for the migration and web containers;
 - keeps route, DNS, worker, IP intelligence, risk and blocklist writes disabled;
 - keeps `Cutover:Enabled=false`;
 - does not modify the productive Caddy configuration, certificates, routes or ports.
@@ -81,26 +82,45 @@ Do not add this service to the productive Caddy routes during the observation pe
 Keep the stack running for at least the configured `CADDY_UI_SHADOW_MIN_HOURS`, default 24 hours. During this period verify:
 
 - ingestion checkpoint advances;
-- latest event lag remains within the configured limit;
+- the latest request is no more than 15 minutes old, which is the fixed application readiness threshold;
 - log rotation and container restart do not duplicate events;
 - one page load with many framework assets remains one pageview and many requests;
 - memory and PostgreSQL growth remain bounded;
 - no route, DNS, blocklist or Caddy files are changed;
 - no provider API calls occur while the corresponding workers are disabled.
 
-Create a fresh PostgreSQL backup before every migration or cutover rehearsal.
+Create a fresh PostgreSQL backup before every migration or cutover rehearsal. The readiness gate requires the latest successful backup to be no older than `CADDY_UI_SHADOW_MAX_BACKUP_AGE_HOURS`, default 24 hours.
 
 ## 6. Statistics comparison
 
-Create a legacy snapshot and compare exactly the same closed UTC interval. The required metrics are:
+Create a legacy snapshot for exactly the same closed UTC interval as the .NET comparison. Start with:
 
-- requests;
-- pageviews;
-- sessions;
-- clients;
-- HTTP 5xx errors.
+```sh
+cp deploy/shadow/legacy-statistics.example.json /tmp/legacy-statistics.json
+```
 
-The default accepted deviation is five percent per metric. A failed comparison blocks the cutover.
+The required JSON properties are:
+
+- `capturedAt`;
+- `windowStart`;
+- `windowEnd`;
+- `requests`;
+- `pageViews`;
+- `sessions`;
+- `clients`;
+- `errors` for HTTP 5xx responses.
+
+Place the completed snapshot in the writable shadow state volume:
+
+```sh
+docker compose \
+  --env-file deploy/shadow/.env \
+  -f deploy/shadow/docker-compose.yml \
+  exec -T caddy-ui sh -c 'cat > /state/legacy-statistics.json' \
+  < /tmp/legacy-statistics.json
+```
+
+The default accepted deviation is five percent per metric. A missing snapshot, invalid schema or failed comparison blocks the cutover. Readiness and comparison manifests are written below `/state/cutover-manifests`.
 
 ## 7. Stop without deleting evidence
 
@@ -115,4 +135,4 @@ Do not use `down -v` while validation evidence, PostgreSQL data or cutover manif
 
 ## Production cutover
 
-The shadow Compose file is not the production deployment file. Port switching, final SQLite import, Caddy validation and rollback follow `docs/CUTOVER_RUNBOOK.md` and require an explicit maintenance window.
+The shadow Compose file is not the production deployment file. Port switching, final SQLite import, Caddy validation and rollback follow `docs/CUTOVER_RUNBOOK.md` and require an explicit maintenance window. Complete `docs/SHADOW_DEPLOYMENT_CHECKLIST.md` before enabling the cutover gate.
