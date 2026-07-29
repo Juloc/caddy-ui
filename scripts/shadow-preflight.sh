@@ -1,0 +1,115 @@
+#!/bin/sh
+set -eu
+
+ENV_FILE="${1:-deploy/shadow/.env}"
+COMPOSE_FILE="deploy/shadow/docker-compose.yml"
+
+fail() {
+    printf 'ERROR: %s\n' "$1" >&2
+    exit 1
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || fail "Required command '$1' is missing."
+}
+
+require_value() {
+    name="$1"
+    eval "value=\${$name:-}"
+    [ -n "$value" ] || fail "$name is not set in $ENV_FILE."
+}
+
+require_absolute_path() {
+    name="$1"
+    eval "value=\${$name:-}"
+    case "$value" in
+        /*) ;;
+        *) fail "$name must be an absolute host path." ;;
+    esac
+}
+
+[ -f "$ENV_FILE" ] || fail "Environment file '$ENV_FILE' does not exist. Copy deploy/shadow/.env.example first."
+[ -f "$COMPOSE_FILE" ] || fail "Compose file '$COMPOSE_FILE' does not exist."
+
+require_command docker
+docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is unavailable."
+
+# The environment file is operator-controlled and intentionally sourced so the
+# exact values validated here are also passed to Docker Compose.
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
+for variable in \
+    CADDY_UI_SHADOW_DB_NAME \
+    CADDY_UI_SHADOW_DB_USER \
+    CADDY_UI_SHADOW_DB_PASSWORD \
+    CADDY_UI_SHADOW_ADMIN_USERNAME \
+    CADDY_UI_SHADOW_ADMIN_PASSWORD \
+    CADDY_UI_SHADOW_LOG_DIR \
+    CADDY_UI_SHADOW_LEGACY_SQLITE
+ do
+    require_value "$variable"
+ done
+
+require_absolute_path CADDY_UI_SHADOW_LOG_DIR
+require_absolute_path CADDY_UI_SHADOW_LEGACY_SQLITE
+
+[ -d "$CADDY_UI_SHADOW_LOG_DIR" ] || fail "CADDY_UI_SHADOW_LOG_DIR is not a readable directory."
+[ -r "$CADDY_UI_SHADOW_LOG_DIR" ] || fail "CADDY_UI_SHADOW_LOG_DIR is not readable."
+[ -f "$CADDY_UI_SHADOW_LEGACY_SQLITE" ] || fail "CADDY_UI_SHADOW_LEGACY_SQLITE is not a regular file."
+[ -r "$CADDY_UI_SHADOW_LEGACY_SQLITE" ] || fail "CADDY_UI_SHADOW_LEGACY_SQLITE is not readable."
+
+ACCESS_LOG="${CADDY_UI_SHADOW_ACCESS_LOG:-access.log}"
+case "$ACCESS_LOG" in
+    */*) fail "CADDY_UI_SHADOW_ACCESS_LOG must be a file name inside the configured log directory." ;;
+esac
+[ -f "$CADDY_UI_SHADOW_LOG_DIR/$ACCESS_LOG" ] || fail "Access log '$CADDY_UI_SHADOW_LOG_DIR/$ACCESS_LOG' does not exist."
+[ -r "$CADDY_UI_SHADOW_LOG_DIR/$ACCESS_LOG" ] || fail "Access log '$CADDY_UI_SHADOW_LOG_DIR/$ACCESS_LOG' is not readable."
+
+case "$CADDY_UI_SHADOW_DB_PASSWORD" in
+    replace-*|change-*|password|caddy_ui|caddy-ui) fail "Choose a non-default PostgreSQL password." ;;
+esac
+case "$CADDY_UI_SHADOW_ADMIN_PASSWORD" in
+    replace-*|change-*|password|admin) fail "Choose a non-default shadow administrator password." ;;
+esac
+
+[ "${#CADDY_UI_SHADOW_DB_PASSWORD}" -ge 20 ] || fail "PostgreSQL password must contain at least 20 characters."
+[ "${#CADDY_UI_SHADOW_ADMIN_PASSWORD}" -ge 20 ] || fail "Administrator password must contain at least 20 characters."
+
+ADMIN_PORT="${CADDY_UI_SHADOW_ADMIN_PORT:-18098}"
+case "$ADMIN_PORT" in
+    *[!0-9]*|'') fail "CADDY_UI_SHADOW_ADMIN_PORT must be numeric." ;;
+esac
+[ "$ADMIN_PORT" -ge 1024 ] && [ "$ADMIN_PORT" -le 65535 ] || fail "CADDY_UI_SHADOW_ADMIN_PORT must be between 1024 and 65535."
+
+if command -v ss >/dev/null 2>&1 && ss -H -ltn "sport = :$ADMIN_PORT" 2>/dev/null | grep -q .; then
+    fail "TCP port $ADMIN_PORT is already in use."
+fi
+
+MIN_HOURS="${CADDY_UI_SHADOW_MIN_HOURS:-24}"
+MAX_LAG="${CADDY_UI_SHADOW_MAX_LAG_MINUTES:-10}"
+TOLERANCE="${CADDY_UI_SHADOW_TOLERANCE_PERCENT:-5}"
+for pair in "MIN_HOURS:$MIN_HOURS" "MAX_LAG:$MAX_LAG" "TOLERANCE:$TOLERANCE"; do
+    name=${pair%%:*}
+    value=${pair#*:}
+    case "$value" in
+        *[!0-9]*|'') fail "$name must be a non-negative integer." ;;
+    esac
+ done
+[ "$MIN_HOURS" -ge 1 ] || fail "CADDY_UI_SHADOW_MIN_HOURS must be at least 1."
+[ "$MAX_LAG" -ge 1 ] || fail "CADDY_UI_SHADOW_MAX_LAG_MINUTES must be at least 1."
+[ "$TOLERANCE" -le 100 ] || fail "CADDY_UI_SHADOW_TOLERANCE_PERCENT must not exceed 100."
+
+# Render and validate interpolation without creating containers, networks, or volumes.
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config >/dev/null
+
+printf 'Shadow preflight successful.\n'
+printf 'Admin UI will bind to 127.0.0.1:%s only.\n' "$ADMIN_PORT"
+printf 'Legacy SQLite and Caddy logs will be mounted read-only.\n'
+printf 'Routing, DNS, workers, IP intelligence, risk processing, blocklist writes, and cutover remain disabled.\n'
+printf '\nNext commands:\n'
+printf '  docker compose --env-file %s -f %s build\n' "$ENV_FILE" "$COMPOSE_FILE"
+printf '  docker compose --env-file %s -f %s up -d\n' "$ENV_FILE" "$COMPOSE_FILE"
+printf '  curl --fail http://127.0.0.1:%s/health/ready\n' "$ADMIN_PORT"
