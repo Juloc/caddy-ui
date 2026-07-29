@@ -1,0 +1,132 @@
+@page
+@model CaddyUi.Web.Pages.Routing.PreviewModel
+@using CaddyUi.Application.Routing
+@using CaddyUi.Infrastructure.Routing
+@{
+    ViewData["Title"] = "Preview & Apply";
+}
+
+<section class="page-heading page-heading--compact">
+    <div>
+        <p class="eyebrow">Kontrollierter Schreibpfad</p>
+        <h1>Preview &amp; Apply</h1>
+        <p class="page-description">Generieren, Diff prüfen, validieren, atomisch schreiben, Caddy neu laden und verifizieren. Bei Fehlern wird automatisch zurückgerollt.</p>
+    </div>
+    <a class="button button--quiet" asp-page="/Routing/Index">Zurück zu Routen</a>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
+}
+<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+
+<section class="workspace-toolbar" aria-label="Apply-Modus">
+    <div class="toolbar-group">
+        <span class="toolbar-label">Modus</span>
+        <span class="status-badge @(Model.RoutingOptions.WriteMode == RouteWriteMode.Active ? "status-badge--warning" : "status-badge--neutral")">@Model.RoutingOptions.WriteMode.ToString().ToLowerInvariant()</span>
+        <span class="toolbar-separator"></span>
+        <code>@(Model.RoutingOptions.WriteMode == RouteWriteMode.Active ? Model.RoutingOptions.ManagedFragmentPath : Model.RoutingOptions.ShadowFragmentPath)</code>
+    </div>
+</section>
+
+<section class="workspace-section">
+    <header class="section-header"><div><h2>Neue Revision erzeugen</h2><p>Eine Revision ist unveränderlich und enthält den vollständigen generierten Routenstand.</p></div></header>
+    <form method="post" asp-page-handler="Preview" class="inline-form inline-form--reason">
+        <label class="field">
+            <span class="field-label">Grund</span>
+            <input asp-for="Input.Reason" autocomplete="off" />
+            <span asp-validation-for="Input.Reason" class="field-error"></span>
+        </label>
+        <button class="button button--primary" type="submit">Preview erstellen</button>
+    </form>
+</section>
+
+@if (Model.Preview is not null)
+{
+    var revisionLabel = Model.Preview.Revision.Id.ToString("N")[..8];
+    <section class="workspace-section feature-config-preview">
+        <header class="section-header">
+            <div>
+                <h2>Revision @revisionLabel</h2>
+                <p><code>@Model.Preview.Revision.Digest</code></p>
+            </div>
+            <div class="page-actions">
+                <span class="status-badge status-badge--neutral">@Model.Preview.Diff.Count(line => line.Kind == DiffLineKind.Added) hinzugefügt</span>
+                <span class="status-badge status-badge--neutral">@Model.Preview.Diff.Count(line => line.Kind == DiffLineKind.Removed) entfernt</span>
+                <form method="post" asp-page-handler="Apply">
+                    <input type="hidden" name="revisionId" value="@Model.Preview.Revision.Id" />
+                    @if (Model.RoutingOptions.WriteMode == RouteWriteMode.Disabled)
+                    {
+                        <button class="button button--primary" type="submit" disabled>Apply deaktiviert</button>
+                    }
+                    else
+                    {
+                        <button class="button button--primary" type="submit">@(Model.RoutingOptions.WriteMode == RouteWriteMode.Shadow ? "In Shadow schreiben" : "Validieren & anwenden")</button>
+                    }
+                </form>
+            </div>
+        </header>
+        @if (Model.Preview.Warnings.Count > 0)
+        {
+            <div class="notice notice--warning">@string.Join(" ", Model.Preview.Warnings)</div>
+        }
+        @if (Model.RoutingOptions.WriteMode == RouteWriteMode.Disabled)
+        {
+            <div class="notice notice--neutral">Schreibzugriffe sind deaktiviert. Die Vorschau kann vollständig geprüft werden, aber Apply bleibt gesperrt.</div>
+        }
+        <div class="diff-view" role="region" aria-label="Konfigurations-Diff" tabindex="0">
+            @foreach (var line in Model.Preview.Diff)
+            {
+                <div class="diff-line diff-line--@line.Kind.ToString().ToLowerInvariant()">
+                    <span class="diff-number">@(line.OldLine?.ToString() ?? string.Empty)</span>
+                    <span class="diff-number">@(line.NewLine?.ToString() ?? string.Empty)</span>
+                    <span class="diff-marker">@(line.Kind == DiffLineKind.Added ? "+" : line.Kind == DiffLineKind.Removed ? "−" : " ")</span>
+                    <code>@line.Text</code>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<section class="workspace-split">
+    <article class="workspace-section">
+        <header class="section-header"><div><h2>Revisionen</h2><p>Unveränderliche generierte Stände.</p></div></header>
+        <div class="compact-list">
+            @foreach (var revision in Model.Revisions)
+            {
+                var digestLabel = revision.Digest.Length > 8 ? revision.Digest[..8] : revision.Digest;
+                <a class="compact-list-row" asp-page="/Routing/Preview" asp-route-revision="@revision.Id">
+                    <span><strong>@revision.Reason</strong><small>@revision.CreatedAt.ToLocalTime().ToString("g") · @revision.ActorUsername</small></span>
+                    <span class="status-badge @(revision.Applied ? "status-badge--ok" : "status-badge--neutral")">@(revision.Applied ? "Aktiv" : digestLabel)</span>
+                </a>
+            }
+            @if (Model.Revisions.Count == 0) { <p class="empty-state">Noch keine Revision.</p> }
+        </div>
+    </article>
+    <article class="workspace-section">
+        <header class="section-header"><div><h2>Apply-Verlauf</h2><p>Jeder Versuch bleibt auditierbar.</p></div></header>
+        <div class="compact-list">
+            @foreach (var operation in Model.Operations)
+            {
+                var correlationLabel = operation.CorrelationId.Length > 8 ? operation.CorrelationId[..8] : operation.CorrelationId;
+                <div class="compact-list-row">
+                    <span><strong>@operation.State</strong><small>@operation.StartedAt.ToLocalTime().ToString("g") · @correlationLabel</small></span>
+                    <span class="status-badge @(operation.State == "applied" ? "status-badge--ok" : operation.State == "failed" ? "status-badge--warning" : "status-badge--neutral")">@(operation.CompletedAt is null ? "läuft" : operation.State)</span>
+                </div>
+            }
+            @if (Model.Operations.Count == 0) { <p class="empty-state">Noch kein Apply-Versuch.</p> }
+        </div>
+    </article>
+</section>
+
+@if (Model.RoutingOptions.WriteMode == RouteWriteMode.Active)
+{
+    <section class="workspace-section danger-zone">
+        <header class="section-header"><div><h2>Rollback</h2><p>Stellt den Snapshot vor dem letzten erfolgreichen Apply wieder her und lädt Caddy erneut.</p></div></header>
+        <form method="post" asp-page-handler="Rollback" class="inline-form inline-form--reason" onsubmit="return confirm('Letzte aktive Routenänderung zurückrollen?');">
+            <label class="field"><span class="field-label">Rollback-Grund</span><input asp-for="Input.Reason" /></label>
+            <button class="button button--danger" type="submit">Letzten Apply zurückrollen</button>
+        </form>
+    </section>
+}

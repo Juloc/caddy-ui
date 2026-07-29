@@ -47,7 +47,13 @@ public sealed class LoginPageTests :
     [InlineData("/LiveLog")]
     [InlineData("/System")]
     [InlineData("/events/live?once=true")]
-    public async Task ReadOnlyWorkspace_RedirectsAnonymousUsersToLogin(string path)
+    [InlineData("/Routing")]
+    [InlineData("/Routing/Edit")]
+    [InlineData("/Routing/Preview")]
+    [InlineData("/Routing/Transfer")]
+    [InlineData("/Routing/Transfer?handler=Download")]
+    [InlineData("/Access")]
+    public async Task ProtectedWorkspace_RedirectsAnonymousUsersToLogin(string path)
     {
         using var response = await _client.GetAsync(path);
 

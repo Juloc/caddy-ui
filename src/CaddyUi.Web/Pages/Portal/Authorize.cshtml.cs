@@ -1,3 +1,4 @@
+using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,10 +10,14 @@ namespace CaddyUi.Web.Pages.Portal;
 public sealed class AuthorizeModel : PageModel
 {
     private readonly AuthenticationStore _store;
+    private readonly AccessGroupStateStore _groupState;
 
-    public AuthorizeModel(AuthenticationStore store)
+    public AuthorizeModel(
+        AuthenticationStore store,
+        AccessGroupStateStore groupState)
     {
         _store = store;
+        _groupState = groupState;
     }
 
     public async Task<IActionResult> OnGetAsync(Guid group, string? returnTo = null)
@@ -21,6 +26,11 @@ public sealed class AuthorizeModel : PageModel
         if (accessGroup is null)
         {
             return NotFound();
+        }
+
+        if (!await _groupState.IsEnabledAsync(group, HttpContext.RequestAborted))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
         }
 
         var cookieName = PortalCookieName(group);
