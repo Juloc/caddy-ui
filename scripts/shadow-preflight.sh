@@ -34,14 +34,13 @@ require_absolute_path() {
 require_command docker
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is unavailable."
 
-# The environment file is operator-controlled and intentionally sourced so the
-# exact values validated here are also passed to Docker Compose.
 set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
 
 for variable in \
+    CADDY_UI_SHADOW_VERSION \
     CADDY_UI_SHADOW_DB_NAME \
     CADDY_UI_SHADOW_DB_USER \
     CADDY_UI_SHADOW_DB_PASSWORD \
@@ -52,6 +51,11 @@ for variable in \
  do
     require_value "$variable"
  done
+
+case "$CADDY_UI_SHADOW_VERSION" in
+    2.0.0-beta.[0-9]*) ;;
+    *) fail "CADDY_UI_SHADOW_VERSION must be an explicit 2.0.0-beta.N version." ;;
+esac
 
 require_absolute_path CADDY_UI_SHADOW_LOG_DIR
 require_absolute_path CADDY_UI_SHADOW_LEGACY_SQLITE
@@ -79,6 +83,7 @@ esac
 [ "${#CADDY_UI_SHADOW_ADMIN_PASSWORD}" -ge 20 ] || fail "Administrator password must contain at least 20 characters."
 [ "$CADDY_UI_SHADOW_DB_PASSWORD" != "$CADDY_UI_SHADOW_ADMIN_PASSWORD" ] || fail "PostgreSQL and administrator passwords must be different."
 
+BIND_ADDRESS="${CADDY_UI_SHADOW_BIND_ADDRESS:-127.0.0.1}"
 ADMIN_PORT="${CADDY_UI_SHADOW_ADMIN_PORT:-18098}"
 case "$ADMIN_PORT" in
     *[!0-9]*|'') fail "CADDY_UI_SHADOW_ADMIN_PORT must be numeric." ;;
@@ -103,15 +108,15 @@ for pair in "MIN_HOURS:$MIN_HOURS" "MAX_BACKUP_AGE:$MAX_BACKUP_AGE" "TOLERANCE:$
 [ "$MAX_BACKUP_AGE" -ge 1 ] || fail "CADDY_UI_SHADOW_MAX_BACKUP_AGE_HOURS must be at least 1."
 [ "$TOLERANCE" -le 100 ] || fail "CADDY_UI_SHADOW_TOLERANCE_PERCENT must not exceed 100."
 
-# Render and validate interpolation without creating containers, networks, or volumes.
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config >/dev/null
 
 printf 'Shadow preflight successful.\n'
-printf 'Admin UI will bind to 127.0.0.1:%s only.\n' "$ADMIN_PORT"
+printf 'Image: ghcr.io/juloc/caddy-ui-dotnet-companion:%s\n' "$CADDY_UI_SHADOW_VERSION"
+printf 'Admin UI will bind to %s:%s.\n' "$BIND_ADDRESS" "$ADMIN_PORT"
 printf 'Legacy SQLite and Caddy logs will be mounted read-only.\n'
 printf 'Routing, DNS, workers, IP intelligence, risk processing, blocklist writes, and cutover remain disabled.\n'
 printf 'The readiness freshness threshold is fixed at 15 minutes by the application.\n'
 printf '\nNext commands:\n'
-printf '  docker compose --env-file %s -f %s build\n' "$ENV_FILE" "$COMPOSE_FILE"
+printf '  docker compose --env-file %s -f %s pull\n' "$ENV_FILE" "$COMPOSE_FILE"
 printf '  docker compose --env-file %s -f %s up -d\n' "$ENV_FILE" "$COMPOSE_FILE"
-printf '  curl --fail http://127.0.0.1:%s/health/ready\n' "$ADMIN_PORT"
+printf '  curl --fail http://%s:%s/health/ready\n' "$BIND_ADDRESS" "$ADMIN_PORT"
