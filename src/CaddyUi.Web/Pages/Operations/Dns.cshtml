@@ -1,0 +1,56 @@
+@page
+@model CaddyUi.Web.Pages.Operations.DnsModel
+@inject CaddyUi.Infrastructure.Operations.OperationsOptions OperationsOptions
+@{
+    ViewData["Title"] = "DNS & DDNS";
+}
+<section class="page-heading">
+    <div><p class="eyebrow">Domains und Adressen</p><h1>DNS &amp; DDNS</h1><p class="page-description">DNS-Einträge bleiben zuerst verwaltete Entwürfe. Schreibzugriffe erfolgen nur im konfigurierten Modus und verwenden die feste Provider-Zuordnung der Domain.</p></div>
+    <span class="status-badge @(OperationsOptions.DnsWriteMode == CaddyUi.Infrastructure.Operations.OperationsWriteMode.Active ? "status-badge--warning" : "status-badge--neutral")">DNS: @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant()</span>
+</section>
+@if (TempData["Message"] is string message) { <div class="notice notice--success">@message</div> }
+@if (TempData["Error"] is string error) { <div class="notice notice--warning">@error</div> }
+<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+
+<section class="workbench">
+<header class="workbench-header"><div><p class="eyebrow">Verwaltete Records</p><h2>@Model.Records.Count DNS-Einträge</h2></div></header>
+<div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Typ</th><th>Wert</th><th>TTL</th><th>Provider</th><th>Sync</th><th class="table-actions">Aktionen</th></tr></thead><tbody>
+@foreach (var record in Model.Records)
+{
+<tr><td><strong>@record.Fqdn</strong><small>@record.Source</small></td><td><code>@record.RecordType</code></td><td class="value-cell"><code>@record.Value</code></td><td>@record.Ttl s</td><td>@record.ProviderLabel</td><td><span class="status-badge @(record.LastSyncStatus == "ok" ? "status-badge--ok" : record.LastSyncStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@record.LastSyncStatus</span>@if (!string.IsNullOrWhiteSpace(record.LastSyncError)) { <small>@record.LastSyncError</small> }</td><td class="table-actions"><form method="post" asp-page-handler="SyncRecord"><input type="hidden" name="recordId" value="@record.Id" /><button class="button button--compact button--primary" type="submit" disabled="@(!record.Enabled)">Synchronisieren</button></form><form method="post" asp-page-handler="ToggleRecord"><input type="hidden" name="recordId" value="@record.Id" /><input type="hidden" name="enabled" value="@(!record.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(record.Enabled ? "Deaktivieren" : "Aktivieren")</button></form></td></tr>
+}
+@if (Model.Records.Count == 0) { <tr><td colspan="7" class="empty-state">Noch keine verwalteten DNS-Einträge.</td></tr> }
+</tbody></table></div>
+</section>
+
+<section class="operations-grid">
+<article class="workbench"><header class="workbench-header"><div><p class="eyebrow">Neuer Eintrag</p><h2>DNS-Record anlegen</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="CreateRecord" class="form-grid form-grid--two">
+<label><span>Domain</span><select asp-for="RecordInput.DomainId"><option value="">Domain auswählen</option>@foreach (var domain in Model.Domains.Where(item => item.Enabled)) { <option value="@domain.Id">@domain.Name</option> }</select></label>
+<label><span>Provider</span><select asp-for="RecordInput.ProviderId"><option value="">Provider auswählen</option>@foreach (var provider in Model.Providers.Where(item => item.Enabled)) { <option value="@provider.Id">@provider.Label · @provider.ProviderType</option> }</select></label>
+<label><span>Name</span><input asp-for="RecordInput.Name" placeholder="@@ oder app" /></label>
+<label><span>Typ</span><select asp-for="RecordInput.RecordType"><option>A</option><option>AAAA</option><option>CNAME</option><option>TXT</option><option>MX</option><option>CAA</option><option>SRV</option></select></label>
+<label class="form-span"><span>Wert</span><input asp-for="RecordInput.Value" placeholder="203.0.113.10" /></label>
+<label><span>TTL</span><input asp-for="RecordInput.Ttl" type="number" min="30" max="86400" /></label>
+<label><span>Priorität</span><input asp-for="RecordInput.Priority" type="number" /></label>
+<div class="form-actions form-span"><button class="button button--primary" type="submit">Eintrag anlegen</button></div>
+</form></div></article>
+
+<article class="workbench"><header class="workbench-header"><div><p class="eyebrow">Automatische Adresse</p><h2>DDNS-Ziel anlegen</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="CreateDdns" class="form-grid form-grid--two">
+<label><span>Domain</span><select asp-for="DynamicInput.DomainId"><option value="">Domain auswählen</option>@foreach (var domain in Model.Domains.Where(item => item.Enabled)) { <option value="@domain.Id">@domain.Name</option> }</select></label>
+<label><span>Provider</span><select asp-for="DynamicInput.ProviderId"><option value="">Provider auswählen</option>@foreach (var provider in Model.Providers.Where(item => item.Enabled)) { <option value="@provider.Id">@provider.Label · @provider.ProviderType</option> }</select></label>
+<label><span>Name</span><input asp-for="DynamicInput.Name" placeholder="@@ oder home" /></label>
+<label><span>Recordtyp</span><select asp-for="DynamicInput.RecordType"><option>A</option><option>AAAA</option></select></label>
+<label><span>Adressquelle</span><select asp-for="DynamicInput.AddressSource"><option value="public">Öffentliche Adresse erkennen</option><option value="static">Statischer Wert</option></select></label>
+<label><span>Statische Adresse</span><input asp-for="DynamicInput.StaticValue" placeholder="nur bei statischer Quelle" /></label>
+<label><span>Intervall in Sekunden</span><input asp-for="DynamicInput.IntervalSeconds" type="number" min="60" max="86400" /></label>
+<div class="form-actions form-span"><button class="button button--primary" type="submit">DDNS-Ziel anlegen</button></div>
+</form></div></article>
+</section>
+
+<section class="workbench operations-section"><header class="workbench-header"><div><p class="eyebrow">Dynamische Ziele</p><h2>@Model.DdnsTargets.Count DDNS-Ziele</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>Ziel</th><th>Quelle</th><th>Intervall</th><th>Letzter Wert</th><th>Status</th><th class="table-actions">Aktionen</th></tr></thead><tbody>
+@foreach (var target in Model.DdnsTargets)
+{
+<tr><td><strong>@target.Fqdn</strong><small>@target.RecordType · @target.ProviderLabel</small></td><td>@target.AddressSource</td><td>@target.IntervalSeconds s</td><td><code>@(string.IsNullOrWhiteSpace(target.LastValue) ? "–" : target.LastValue)</code></td><td><span class="status-badge @(target.LastStatus == "ok" ? "status-badge--ok" : target.LastStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@target.LastStatus</span>@if (!string.IsNullOrWhiteSpace(target.LastError)) { <small>@target.LastError</small> }</td><td class="table-actions"><form method="post" asp-page-handler="RunDdns"><input type="hidden" name="targetId" value="@target.Id" /><button class="button button--compact button--primary" type="submit" disabled="@(!target.Enabled)">Jetzt ausführen</button></form><form method="post" asp-page-handler="ToggleDdns"><input type="hidden" name="targetId" value="@target.Id" /><input type="hidden" name="enabled" value="@(!target.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(target.Enabled ? "Deaktivieren" : "Aktivieren")</button></form></td></tr>
+}
+@if (Model.DdnsTargets.Count == 0) { <tr><td colspan="6" class="empty-state">Noch keine DDNS-Ziele.</td></tr> }
+</tbody></table></div></section>

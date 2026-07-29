@@ -4,8 +4,18 @@ using CaddyUi.Domain.Routing;
 
 namespace CaddyUi.Application.Tests;
 
-public sealed class CaddyRouteCompilerTests
+public sealed class CaddyRouteCompilerTests : IDisposable
 {
+    public CaddyRouteCompilerTests()
+    {
+        CaddyCertificateSourceRegistry.Clear();
+    }
+
+    public void Dispose()
+    {
+        CaddyCertificateSourceRegistry.Clear();
+    }
+
     [Fact]
     public void Compile_GeneratesDeterministicProtectedProxyRoute()
     {
@@ -27,10 +37,11 @@ public sealed class CaddyRouteCompilerTests
         Assert.Contains($"group={accessGroupId:D}", first.Content, StringComparison.Ordinal);
         Assert.Contains("reverse_proxy \"mealie:9925\"", first.Content, StringComparison.Ordinal);
         Assert.False(first.RequiresWildcardCertificateRenderer);
+        Assert.True(first.CertificateReadyForActiveApply);
     }
 
     [Fact]
-    public void Compile_MarksInheritedCertificatesAsRequiringPhaseEightRenderer()
+    public void Compile_MarksUnresolvedInheritedCertificateAsBlocked()
     {
         var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
         var compilation = compiler.Compile([
@@ -40,9 +51,72 @@ public sealed class CaddyRouteCompilerTests
         ]);
 
         Assert.True(compilation.RequiresWildcardCertificateRenderer);
+        Assert.False(compilation.CertificateReadyForActiveApply);
         Assert.NotEmpty(compilation.Warnings);
         using var manifest = JsonDocument.Parse(compilation.ManifestJson);
+        Assert.True(manifest.RootElement.GetProperty("usesWildcardCertificates").GetBoolean());
         Assert.True(manifest.RootElement.GetProperty("requiresWildcardCertificateRenderer").GetBoolean());
+        Assert.False(manifest.RootElement.GetProperty("certificateReadyForActiveApply").GetBoolean());
+    }
+
+    [Fact]
+    public void Compile_RendersNetcupDnsChallengeFromEnvironmentSecretReferences()
+    {
+        var route = CreateProxy(
+            "mealie.example.com",
+            "/",
+            RouteCertificateMode.Inherit,
+            null);
+        var provider = new CaddyDnsProviderSource(
+            "netcup",
+            true,
+            true,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["customer_number"] = "123456",
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["api_key"] = "secret://env/NETCUP_API_KEY",
+                ["api_password"] = "NETCUP_API_PASSWORD",
+            });
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var compilation = compiler.Compile([
+            new CaddyRouteSource(route, string.Empty, "wildcard", provider),
+        ]);
+
+        Assert.False(compilation.RequiresWildcardCertificateRenderer);
+        Assert.True(compilation.CertificateReadyForActiveApply);
+        Assert.Contains("tls {", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("dns netcup {", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("customer_number \"123456\"", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("api_key \"{env.NETCUP_API_KEY}\"", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("api_password \"{env.NETCUP_API_PASSWORD}\"", compilation.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Compile_BlocksWildcardWhenConfiguredModuleIsNotInstalled()
+    {
+        var provider = new CaddyDnsProviderSource(
+            "cloudflare",
+            true,
+            false,
+            new Dictionary<string, string>(),
+            new Dictionary<string, string> { ["api_token"] = "CLOUDFLARE_API_TOKEN" });
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var compilation = compiler.Compile([
+            new CaddyRouteSource(
+                CreateProxy("app.example.com", "/", RouteCertificateMode.Wildcard, null),
+                string.Empty,
+                "wildcard",
+                provider),
+        ]);
+
+        Assert.True(compilation.RequiresWildcardCertificateRenderer);
+        Assert.False(compilation.CertificateReadyForActiveApply);
+        Assert.Contains(compilation.Warnings, warning => warning.Contains("nicht als installiert", StringComparison.Ordinal));
     }
 
     [Fact]

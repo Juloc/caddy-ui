@@ -3,6 +3,7 @@ using CaddyUi.Application.Analytics;
 using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Analytics;
 using CaddyUi.Infrastructure.Management;
+using CaddyUi.Infrastructure.Operations;
 using CaddyUi.Infrastructure.Persistence;
 using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Infrastructure.Security;
@@ -31,6 +32,7 @@ public static class DependencyInjection
         var analyticsOptions = AnalyticsIngestionOptions.FromConfiguration(configuration);
         var ipSecurityOptions = IpSecurityOptions.FromConfiguration(configuration);
         var routingOptions = RoutingOptions.FromConfiguration(configuration);
+        var operationsOptions = OperationsOptions.FromConfiguration(configuration);
 
         services.AddSingleton<FoundationStatusService>();
         services.AddDbContext<CaddyUiDbContext>(options => Configure(options, connectionString));
@@ -46,6 +48,41 @@ public static class DependencyInjection
         services.AddSingleton(routingOptions);
         services.AddSingleton<ICaddyCommandRunner, ProcessCaddyCommandRunner>();
         services.AddSingleton<CaddyApplyService>();
+
+        services.AddSingleton(operationsOptions);
+        services.AddSingleton<OperationsStore>();
+        services.AddSingleton<ISecretReferenceResolver, SecretReferenceResolver>();
+        services.AddSingleton<IDnsProviderAdapter, NetcupDnsProviderAdapter>();
+        services.AddSingleton<IDnsProviderAdapter, CommonRestDnsProviderAdapter>();
+        services.AddSingleton<DnsProviderRuntimeService>();
+        services.AddSingleton<NotificationDispatcher>();
+        services.AddSingleton<PublicIpAddressResolver>();
+        services.AddSingleton<DdnsService>();
+        services.AddSingleton<HealthProbeService>();
+        services.AddSingleton<BackupDiagnosticsService>();
+        services.AddSingleton<OperationsCommandService>();
+        services.AddHttpClient("dns-providers", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(operationsOptions.ProviderTimeoutSeconds);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-DNS/2.0");
+        });
+        services.AddHttpClient("notifications", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-Notifications/2.0");
+        });
+        services.AddHttpClient("health-probes", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(120);
+        });
+        services.AddHttpClient("public-ip", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-DDNS/2.0");
+        });
+        services.AddHostedService<CaddyCertificateSourceRefreshWorker>();
+        services.AddHostedService<SystemJobWorker>();
+
         services.AddSingleton(analyticsOptions);
         services.AddSingleton<CaddyAccessLogParser>();
         services.AddSingleton<RequestClassifier>();
