@@ -26,10 +26,13 @@ x-caddy-ui-environment: &caddy-ui-environment
   CADDY_UI_RISK_ASSESSMENT_ENABLED: "false"
   Cutover__Enabled: "false"
   Cutover__LegacySqlitePath: /legacy/caddy-ui.db
+  Cutover__LegacyStatisticsPath: /state/legacy-statistics.json
   Cutover__ManifestDirectory: /state/cutover-manifests
   Cutover__MinimumShadowHours: ${CADDY_UI_SHADOW_MIN_HOURS:-24}
-  Cutover__MaximumIngestionLagMinutes: ${CADDY_UI_SHADOW_MAX_LAG_MINUTES:-10}
-  Cutover__StatisticsTolerancePercent: ${CADDY_UI_SHADOW_TOLERANCE_PERCENT:-5}
+  Cutover__MaximumBackupAgeHours: ${CADDY_UI_SHADOW_MAX_BACKUP_AGE_HOURS:-24}
+  Cutover__MaximumMetricDifferencePercent: ${CADDY_UI_SHADOW_TOLERANCE_PERCENT:-5}
+  Cutover__AdminPort: "8098"
+  Cutover__PortalPort: "8099"
   ASPNETCORE_URLS: http://0.0.0.0:8098;http://0.0.0.0:8099
 
 services:
@@ -61,6 +64,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -91,6 +97,7 @@ services:
         target: /legacy/caddy-ui.db
         read_only: true
       - shadow-state:/state
+    read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
     security_opt:
