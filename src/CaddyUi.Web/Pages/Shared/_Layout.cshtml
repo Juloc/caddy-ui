@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="system">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@ViewData["Title"] · Caddy UI</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <a class="brand" asp-page="/Index" aria-label="Caddy UI Übersicht">
+                <span class="brand-mark" aria-hidden="true">C</span>
+                <span>
+                    <strong>Caddy UI</strong>
+                    <small>2.0 Foundation</small>
+                </span>
+            </a>
+
+            <nav class="primary-nav" aria-label="Hauptnavigation">
+                <a class="nav-item nav-item--active" asp-page="/Index">
+                    <span>Übersicht</span>
+                </a>
+                <span class="nav-item nav-item--disabled">Traffic</span>
+                <span class="nav-item nav-item--disabled">Besucher</span>
+                <span class="nav-item nav-item--disabled">Requests</span>
+                <span class="nav-item nav-item--disabled">Bots &amp; Sicherheit</span>
+                <span class="nav-item nav-item--disabled">System</span>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span class="connection-dot" aria-hidden="true"></span>
+                <span>Foundation aktiv</span>
+            </div>
+        </aside>
+
+        <div class="app-content">
+            <header class="topbar">
+                <div>
+                    <span class="topbar-label">Arbeitsbereich</span>
+                    <strong>@ViewData["Title"]</strong>
+                </div>
+                <div class="topbar-actions">
+                    <span class="environment-chip">Parallelbetrieb</span>
+                </div>
+            </header>
+
+            <main class="main-content">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+</body>
+</html>

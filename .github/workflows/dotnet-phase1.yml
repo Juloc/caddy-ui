@@ -1,0 +1,160 @@
+name: Verify .NET foundation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dotnet-phase1.yml"
+      - "CaddyUi.slnx"
+      - "Directory.Build.props"
+      - "Directory.Build.targets"
+      - "Directory.Packages.props"
+      - "Dockerfile.dotnet"
+      - "global.json"
+      - "scripts/dotnet-entrypoint.sh"
+      - "src/**"
+      - "tests/CaddyUi.*/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/dotnet-phase1.yml"
+      - "CaddyUi.slnx"
+      - "Directory.Build.props"
+      - "Directory.Build.targets"
+      - "Directory.Packages.props"
+      - "Dockerfile.dotnet"
+      - "global.json"
+      - "scripts/dotnet-entrypoint.sh"
+      - "src/**"
+      - "tests/CaddyUi.*/**"
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - name: Restore
+        run: dotnet restore CaddyUi.slnx
+      - name: Capture canonical formatting
+        shell: bash
+        run: |
+          set +e
+          dotnet format CaddyUi.slnx --no-restore --verbosity diagnostic > /tmp/dotnet-format.log 2>&1
+          format_status=$?
+          set -e
+          git diff --binary > /tmp/dotnet-format.patch
+          git checkout -- .
+          printf '%s\n' "$format_status" > /tmp/dotnet-format.status
+      - name: Build
+        run: dotnet build CaddyUi.slnx --configuration Release --no-restore
+      - name: Test
+        run: dotnet test CaddyUi.slnx --configuration Release --no-build --logger "console;verbosity=normal"
+      - name: Upload formatting diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dotnet-format-diagnostics
+          path: |
+            /tmp/dotnet-format.log
+            /tmp/dotnet-format.patch
+            /tmp/dotnet-format.status
+          retention-days: 1
+      - name: Verify formatting
+        shell: bash
+        run: |
+          test "$(cat /tmp/dotnet-format.status)" = "0"
+          test ! -s /tmp/dotnet-format.patch
+
+  containers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [dotnet-companion, dotnet-bundle]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build ${{ matrix.target }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.dotnet
+          target: ${{ matrix.target }}
+          push: false
+          load: true
+          tags: caddy-ui:${{ matrix.target }}-phase1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Start PostgreSQL and Caddy UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create caddy-ui-phase1
+          docker run -d \
+            --name caddy-ui-postgres \
+            --network caddy-ui-phase1 \
+            -e POSTGRES_DB=caddy_ui \
+            -e POSTGRES_USER=caddy_ui \
+            -e POSTGRES_PASSWORD=caddy_ui \
+            postgres:17-alpine
+          for attempt in {1..30}; do
+            if docker exec caddy-ui-postgres pg_isready -U caddy_ui -d caddy_ui; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              docker logs caddy-ui-postgres
+              exit 1
+            fi
+            sleep 1
+          done
+          docker run -d \
+            --name caddy-ui-web \
+            --network caddy-ui-phase1 \
+            -p 18098:8098 \
+            -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui' \
+            -e Database__ApplyMigrationsOnStartup=true \
+            caddy-ui:${{ matrix.target }}-phase1 web
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:18098/health/ready >/tmp/ready.json; then
+              cat /tmp/ready.json
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Verify HTTP surface
+        run: |
+          curl --fail --silent http://127.0.0.1:18098/health/live
+          curl --fail --silent http://127.0.0.1:18098/
+      - name: Verify bundled Caddy module
+        if: matrix.target == 'dotnet-bundle'
+        run: |
+          docker run --rm \
+            caddy-ui:dotnet-bundle-phase1 \
+            caddy list-modules \
+            | grep -F 'http.handlers.caddy_ui_guard'
+      - name: Capture container logs
+        if: always()
+        run: |
+          mkdir -p /tmp/caddy-ui-container-logs
+          docker logs caddy-ui-postgres > /tmp/caddy-ui-container-logs/postgres.log 2>&1 || true
+          docker logs caddy-ui-web > /tmp/caddy-ui-container-logs/web.log 2>&1 || true
+      - name: Upload container logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: container-logs-${{ matrix.target }}
+          path: /tmp/caddy-ui-container-logs
+          retention-days: 1
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f caddy-ui-web caddy-ui-postgres || true
+          docker network rm caddy-ui-phase1 || true

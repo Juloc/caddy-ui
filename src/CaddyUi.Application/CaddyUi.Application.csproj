@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../CaddyUi.Contracts/CaddyUi.Contracts.csproj" />
+    <ProjectReference Include="../CaddyUi.Domain/CaddyUi.Domain.csproj" />
+  </ItemGroup>
+</Project>

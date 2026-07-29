@@ -6,3 +6,10 @@ __pycache__/
 routes/
 .local/
 
+**/bin/
+**/obj/
+TestResults/
+*.user
+*.suo
+.vs/
+.idea/

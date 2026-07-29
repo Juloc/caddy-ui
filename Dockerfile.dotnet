@@ -1,0 +1,69 @@
+ARG DOTNET_VERSION=10.0
+ARG CADDY_VERSION=2.11.4
+
+FROM caddy:${CADDY_VERSION}-builder AS caddy-builder
+WORKDIR /src
+
+COPY go.mod go.sum ./
+COPY cmd ./cmd
+COPY caddyguard ./caddyguard
+COPY caddynetcp ./caddynetcp
+
+RUN go mod download
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/bin/caddy ./cmd/caddy
+
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-alpine AS dotnet-build
+WORKDIR /src
+
+COPY Directory.Build.props Directory.Build.targets Directory.Packages.props global.json ./
+COPY src/CaddyUi.Contracts/CaddyUi.Contracts.csproj src/CaddyUi.Contracts/
+COPY src/CaddyUi.Domain/CaddyUi.Domain.csproj src/CaddyUi.Domain/
+COPY src/CaddyUi.Application/CaddyUi.Application.csproj src/CaddyUi.Application/
+COPY src/CaddyUi.Infrastructure/CaddyUi.Infrastructure.csproj src/CaddyUi.Infrastructure/
+COPY src/CaddyUi.Web/CaddyUi.Web.csproj src/CaddyUi.Web/
+COPY src/CaddyUi.Migration/CaddyUi.Migration.csproj src/CaddyUi.Migration/
+
+RUN dotnet restore src/CaddyUi.Web/CaddyUi.Web.csproj \
+    && dotnet restore src/CaddyUi.Migration/CaddyUi.Migration.csproj
+
+COPY src ./src
+
+RUN dotnet publish src/CaddyUi.Web/CaddyUi.Web.csproj \
+        --configuration Release \
+        --no-restore \
+        --output /out/web \
+        /p:UseAppHost=false \
+    && dotnet publish src/CaddyUi.Migration/CaddyUi.Migration.csproj \
+        --configuration Release \
+        --no-restore \
+        --output /out/migration \
+        /p:UseAppHost=false \
+    && test -f /out/web/Microsoft.EntityFrameworkCore.Relational.dll
+
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-alpine AS dotnet-companion
+WORKDIR /app
+ARG APP_VERSION=2.0.0-phase1
+
+ENV ASPNETCORE_URLS=http://0.0.0.0:8098 \
+    DOTNET_EnableDiagnostics=0 \
+    CADDY_UI_VERSION=${APP_VERSION}
+
+RUN apk add --no-cache curl
+
+COPY --from=dotnet-build /out/web/ /app/
+COPY --from=dotnet-build /out/migration/ /app/migration/
+COPY scripts/dotnet-entrypoint.sh /usr/local/bin/caddy-ui
+
+RUN chmod 0755 /usr/local/bin/caddy-ui \
+    && test -f /app/Microsoft.EntityFrameworkCore.Relational.dll
+
+EXPOSE 8098 8099
+
+ENTRYPOINT ["/usr/local/bin/caddy-ui"]
+CMD ["web"]
+
+FROM dotnet-companion AS dotnet-bundle
+
+COPY --from=caddy-builder /usr/bin/caddy /usr/bin/caddy
+
+CMD ["caddy"]
