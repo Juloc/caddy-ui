@@ -77,6 +77,7 @@ esac
 
 [ "${#CADDY_UI_SHADOW_DB_PASSWORD}" -ge 20 ] || fail "PostgreSQL password must contain at least 20 characters."
 [ "${#CADDY_UI_SHADOW_ADMIN_PASSWORD}" -ge 20 ] || fail "Administrator password must contain at least 20 characters."
+[ "$CADDY_UI_SHADOW_DB_PASSWORD" != "$CADDY_UI_SHADOW_ADMIN_PASSWORD" ] || fail "PostgreSQL and administrator passwords must be different."
 
 ADMIN_PORT="${CADDY_UI_SHADOW_ADMIN_PORT:-18098}"
 case "$ADMIN_PORT" in
@@ -89,9 +90,9 @@ if command -v ss >/dev/null 2>&1 && ss -H -ltn "sport = :$ADMIN_PORT" 2>/dev/nul
 fi
 
 MIN_HOURS="${CADDY_UI_SHADOW_MIN_HOURS:-24}"
-MAX_LAG="${CADDY_UI_SHADOW_MAX_LAG_MINUTES:-10}"
+MAX_BACKUP_AGE="${CADDY_UI_SHADOW_MAX_BACKUP_AGE_HOURS:-24}"
 TOLERANCE="${CADDY_UI_SHADOW_TOLERANCE_PERCENT:-5}"
-for pair in "MIN_HOURS:$MIN_HOURS" "MAX_LAG:$MAX_LAG" "TOLERANCE:$TOLERANCE"; do
+for pair in "MIN_HOURS:$MIN_HOURS" "MAX_BACKUP_AGE:$MAX_BACKUP_AGE" "TOLERANCE:$TOLERANCE"; do
     name=${pair%%:*}
     value=${pair#*:}
     case "$value" in
@@ -99,7 +100,7 @@ for pair in "MIN_HOURS:$MIN_HOURS" "MAX_LAG:$MAX_LAG" "TOLERANCE:$TOLERANCE"; do
     esac
  done
 [ "$MIN_HOURS" -ge 1 ] || fail "CADDY_UI_SHADOW_MIN_HOURS must be at least 1."
-[ "$MAX_LAG" -ge 1 ] || fail "CADDY_UI_SHADOW_MAX_LAG_MINUTES must be at least 1."
+[ "$MAX_BACKUP_AGE" -ge 1 ] || fail "CADDY_UI_SHADOW_MAX_BACKUP_AGE_HOURS must be at least 1."
 [ "$TOLERANCE" -le 100 ] || fail "CADDY_UI_SHADOW_TOLERANCE_PERCENT must not exceed 100."
 
 # Render and validate interpolation without creating containers, networks, or volumes.
@@ -109,6 +110,7 @@ printf 'Shadow preflight successful.\n'
 printf 'Admin UI will bind to 127.0.0.1:%s only.\n' "$ADMIN_PORT"
 printf 'Legacy SQLite and Caddy logs will be mounted read-only.\n'
 printf 'Routing, DNS, workers, IP intelligence, risk processing, blocklist writes, and cutover remain disabled.\n'
+printf 'The readiness freshness threshold is fixed at 15 minutes by the application.\n'
 printf '\nNext commands:\n'
 printf '  docker compose --env-file %s -f %s build\n' "$ENV_FILE" "$COMPOSE_FILE"
 printf '  docker compose --env-file %s -f %s up -d\n' "$ENV_FILE" "$COMPOSE_FILE"
