@@ -1,0 +1,82 @@
+name: Publish .NET shadow beta
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - VERSION_DOTNET
+      - .github/workflows/publish-dotnet-beta.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: caddy-ui-dotnet-beta
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - name: Validate beta version contract
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '\r\n' < VERSION_DOTNET)"
+          [[ "$VERSION" =~ ^2\.0\.0-beta\.[0-9]+$ ]]
+          grep -F "FoundationVersion = \"$VERSION\"" src/CaddyUi.Domain/ProductMetadata.cs
+          grep -F "ARG APP_VERSION=$VERSION" Dockerfile.dotnet
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Restore
+        run: dotnet restore CaddyUi.slnx
+      - name: Verify formatting
+        run: dotnet format CaddyUi.slnx --no-restore --verify-no-changes
+      - name: Build
+        run: dotnet build CaddyUi.slnx --configuration Release --no-restore
+      - name: Test
+        run: dotnet test CaddyUi.slnx --configuration Release --no-build
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish companion beta
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.dotnet
+          target: dotnet-companion
+          push: true
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/juloc/caddy-ui-dotnet-companion:${{ steps.version.outputs.version }}
+            ghcr.io/juloc/caddy-ui-dotnet-companion:beta
+          cache-from: type=gha,scope=dotnet-companion
+          cache-to: type=gha,mode=max,scope=dotnet-companion
+          provenance: true
+          sbom: true
+      - name: Publish bundle beta
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.dotnet
+          target: dotnet-bundle
+          push: true
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/juloc/caddy-ui-dotnet:${{ steps.version.outputs.version }}
+            ghcr.io/juloc/caddy-ui-dotnet:beta
+          cache-from: type=gha,scope=dotnet-bundle
+          cache-to: type=gha,mode=max,scope=dotnet-bundle
+          provenance: true
+          sbom: true
