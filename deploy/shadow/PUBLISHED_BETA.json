@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0-beta.1",
+  "sourceCommit": "902685417fbadb032f9c777995834677eaabcbb2",
+  "publishedAt": "2026-07-29T22:38:57.940229Z",
+  "companion": {
+    "image": "ghcr.io/juloc/caddy-ui-dotnet-companion:2.0.0-beta.1",
+    "digest": "sha256:1e34f8e1296cdc8ebfe1754e9a3f6426006e50e952f52e8bc24d1801224ea10f"
+  },
+  "bundle": {
+    "image": "ghcr.io/juloc/caddy-ui-dotnet:2.0.0-beta.1",
+    "digest": "sha256:d123231cdbffd57597ea232797b83222ee88af3f2af3324d4d5bc907dcb8d641"
+  },
+  "smokeTested": true
+}
