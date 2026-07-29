@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
     paths:
+      - VERSION_DOTNET
       - deploy/shadow/**
       - scripts/shadow-preflight.sh
       - tests/test_shadow_deployment.py
       - .github/workflows/shadow-contract.yml
   pull_request:
     paths:
+      - VERSION_DOTNET
       - deploy/shadow/**
       - scripts/shadow-preflight.sh
       - tests/test_shadow_deployment.py
@@ -37,7 +39,8 @@ jobs:
           : > /tmp/caddy-ui-shadow-logs/access.log
           : > /tmp/caddy-ui-shadow.db
           cat > /tmp/caddy-ui-shadow.env <<'EOF'
-          CADDY_UI_SHADOW_IMAGE_TAG=ci
+          CADDY_UI_SHADOW_VERSION=2.0.0-beta.1
+          CADDY_UI_SHADOW_BIND_ADDRESS=127.0.0.1
           CADDY_UI_SHADOW_ADMIN_PORT=18098
           CADDY_UI_SHADOW_DB_NAME=caddy_ui_shadow
           CADDY_UI_SHADOW_DB_USER=caddy_ui_shadow
@@ -55,5 +58,7 @@ jobs:
             --env-file /tmp/caddy-ui-shadow.env \
             -f deploy/shadow/docker-compose.yml \
             config > /tmp/caddy-ui-shadow-compose.yml
-          grep -F '127.0.0.1:18098:8098' /tmp/caddy-ui-shadow-compose.yml
+          grep -F 'host_ip: 127.0.0.1' /tmp/caddy-ui-shadow-compose.yml
+          grep -F 'published: "18098"' /tmp/caddy-ui-shadow-compose.yml
+          grep -F 'ghcr.io/juloc/caddy-ui-dotnet-companion:2.0.0-beta.1' /tmp/caddy-ui-shadow-compose.yml
           ! grep -F '/var/run/docker.sock' /tmp/caddy-ui-shadow-compose.yml

@@ -10,6 +10,7 @@ COMPOSE = ROOT / "deploy" / "shadow" / "docker-compose.yml"
 ENV_EXAMPLE = ROOT / "deploy" / "shadow" / ".env.example"
 LEGACY_STATISTICS = ROOT / "deploy" / "shadow" / "legacy-statistics.example.json"
 PREFLIGHT = ROOT / "scripts" / "shadow-preflight.sh"
+VERSION = ROOT / "VERSION_DOTNET"
 
 
 class ShadowDeploymentContractTests(unittest.TestCase):
@@ -19,18 +20,24 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         cls.environment = ENV_EXAMPLE.read_text(encoding="utf-8")
         cls.legacy_statistics = json.loads(LEGACY_STATISTICS.read_text(encoding="utf-8"))
         cls.preflight = PREFLIGHT.read_text(encoding="utf-8")
+        cls.version = VERSION.read_text(encoding="utf-8").strip()
 
-    def test_shadow_stack_uses_local_dotnet_build(self) -> None:
-        self.assertIn("dockerfile: Dockerfile.dotnet", self.compose)
-        self.assertIn("target: dotnet-companion", self.compose)
-        self.assertNotIn("ghcr.io/juloc/caddy-ui:latest", self.compose)
-        self.assertNotIn("ghcr.io/juloc/caddy-ui-companion:latest", self.compose)
-
-    def test_shadow_admin_port_is_loopback_only(self) -> None:
+    def test_shadow_stack_uses_immutable_dotnet_beta_image(self) -> None:
+        self.assertEqual("2.0.0-beta.1", self.version)
         self.assertIn(
-            "127.0.0.1:${CADDY_UI_SHADOW_ADMIN_PORT:-18098}:8098",
+            "ghcr.io/juloc/caddy-ui-dotnet-companion:${CADDY_UI_SHADOW_VERSION:-2.0.0-beta.1}",
             self.compose,
         )
+        self.assertIn("pull_policy: always", self.compose)
+        self.assertNotIn("dockerfile: Dockerfile.dotnet", self.compose)
+        self.assertNotIn("ghcr.io/juloc/caddy-ui:latest", self.compose)
+
+    def test_shadow_admin_port_has_safe_loopback_default(self) -> None:
+        self.assertIn(
+            "${CADDY_UI_SHADOW_BIND_ADDRESS:-127.0.0.1}:${CADDY_UI_SHADOW_ADMIN_PORT:-18098}:8098",
+            self.compose,
+        )
+        self.assertIn("CADDY_UI_SHADOW_BIND_ADDRESS=127.0.0.1", self.environment)
         self.assertNotIn('"80:80"', self.compose)
         self.assertNotIn('"443:443"', self.compose)
         self.assertNotIn("8099:8099", self.compose)
