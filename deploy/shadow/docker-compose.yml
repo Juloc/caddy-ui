@@ -1,11 +1,8 @@
 name: caddy-ui-shadow
 
 x-caddy-ui-image: &caddy-ui-image
-  image: caddy-ui-dotnet-shadow:${CADDY_UI_SHADOW_IMAGE_TAG:-phase9-local}
-  build:
-    context: ../..
-    dockerfile: Dockerfile.dotnet
-    target: dotnet-companion
+  image: ghcr.io/juloc/caddy-ui-dotnet-companion:${CADDY_UI_SHADOW_VERSION:-2.0.0-beta.1}
+  pull_policy: always
 
 x-caddy-ui-environment: &caddy-ui-environment
   ConnectionStrings__CaddyUi: Host=postgres;Port=5432;Database=${CADDY_UI_SHADOW_DB_NAME};Username=${CADDY_UI_SHADOW_DB_USER};Password=${CADDY_UI_SHADOW_DB_PASSWORD}
@@ -84,7 +81,7 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - 127.0.0.1:${CADDY_UI_SHADOW_ADMIN_PORT:-18098}:8098
+      - ${CADDY_UI_SHADOW_BIND_ADDRESS:-127.0.0.1}:${CADDY_UI_SHADOW_ADMIN_PORT:-18098}:8098
     expose:
       - "8099"
     volumes:
