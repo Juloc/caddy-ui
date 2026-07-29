@@ -1,6 +1,7 @@
 @inject CaddyUi.Web.Security.SecurityRuntimeOptions SecurityOptions
 @inject CaddyUi.Infrastructure.Routing.RoutingOptions RoutingOptions
 @inject CaddyUi.Infrastructure.Operations.OperationsOptions OperationsOptions
+@inject CaddyUi.Infrastructure.Cutover.CutoverOptions CutoverOptions
 <!DOCTYPE html>
 <html lang="de" data-theme="system">
 <head>
@@ -56,13 +57,14 @@
                     <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Administration/Providers") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Providers"><span class="nav-icon">API</span><span>DNS-Provider</span></a>
                     <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Notifications") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Notifications"><span class="nav-icon">!</span><span>Benachrichtigungen</span></a>
                     <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Backup") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Backup"><span class="nav-icon">⇩</span><span>Backup &amp; Diagnose</span></a>
+                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Cutover") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Cutover"><span class="nav-icon">→</span><span>Umschaltung</span></a>
                     <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Administration/Security") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Security"><span class="nav-icon">🔒</span><span>Sicherheit</span></a>
                 }
             </nav>
 
             <div class="sidebar-footer">
                 <span class="connection-dot" aria-hidden="true"></span>
-                <span>Phase 8 · DNS @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant()</span>
+                <span>Phase 9 · Cutover @(CutoverOptions.Enabled ? "freigegeben" : "gesperrt")</span>
             </div>
         </aside>
 
@@ -74,6 +76,10 @@
                     {
                         <span class="environment-chip environment-chip--warning">Public ohne TOTP-Pflicht</span>
                     }
+                    @if (CutoverOptions.Enabled)
+                    {
+                        <span class="environment-chip environment-chip--warning">Cutover freigegeben</span>
+                    }
                     <span class="environment-chip">Routen @RoutingOptions.WriteMode.ToString().ToLowerInvariant()</span>
                     <span class="environment-chip">DNS @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant()</span>
                     @if (User.Identity?.IsAuthenticated == true)
@@ -84,7 +90,7 @@
                 </div>
             </header>
             <main class="main-content">@RenderBody()</main>
-            <footer class="app-statusbar"><span><i class="connection-dot"></i>Bereit</span><span>Routen: @RoutingOptions.WriteMode.ToString().ToLowerInvariant() · DNS: @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant() · Worker: @(OperationsOptions.WorkerEnabled ? "aktiv" : "aus")</span></footer>
+            <footer class="app-statusbar"><span><i class="connection-dot"></i>Bereit</span><span>Routen: @RoutingOptions.WriteMode.ToString().ToLowerInvariant() · DNS: @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant() · Worker: @(OperationsOptions.WorkerEnabled ? "aktiv" : "aus") · Cutover: @(CutoverOptions.Enabled ? "freigegeben" : "gesperrt")</span></footer>
         </div>
     </div>
 </body>

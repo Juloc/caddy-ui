@@ -1,0 +1,92 @@
+@page
+@model CaddyUi.Web.Pages.Operations.CutoverModel
+@using CaddyUi.Infrastructure.Cutover
+@{
+    ViewData["Title"] = "Umschaltung";
+    static string Badge(CutoverCheckState state) => state switch
+    {
+        CutoverCheckState.Passed => "status-badge--ok",
+        CutoverCheckState.Warning => "status-badge--warning",
+        _ => "status-badge--danger",
+    };
+    static string Label(CutoverCheckState state) => state switch
+    {
+        CutoverCheckState.Passed => "Bestanden",
+        CutoverCheckState.Warning => "Hinweis",
+        _ => "Blockiert",
+    };
+}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Phase 9</p>
+        <h1>Shadow-Betrieb &amp; Umschaltung</h1>
+        <p class="page-description">Diese Seite prüft den parallelen Betrieb, die Datenmigration, den Statistikvergleich und die Rückfallvoraussetzungen. Sie schaltet keine Ports, DNS-Zonen oder Caddy-Routen automatisch um.</p>
+    </div>
+    <div class="page-actions">
+        <form method="post" asp-page-handler="Compare"><button class="button button--quiet" type="submit">Statistik vergleichen</button></form>
+        <form method="post" asp-page-handler="Capture"><button class="button button--primary" type="submit">Manifest erfassen</button></form>
+    </div>
+</section>
+@if (TempData["Message"] is string message) { <div class="notice notice--success">@message</div> }
+@if (TempData["Error"] is string error) { <div class="notice notice--warning">@error</div> }
+@if (!Model.Report.IsReady) { <div class="notice notice--warning"><strong>Umschaltung blockiert.</strong> @Model.Report.BlockedCount Prüfungen müssen vor dem Wartungsfenster behoben werden.</div> }
+<section class="metric-grid">
+    <article class="metric-card"><span class="metric-label">Readiness</span><strong class="metric-value">@(Model.Report.IsReady ? "Bereit" : "Blockiert")</strong><span class="metric-detail">@Model.Report.BlockedCount Blocker · @Model.Report.WarningCount Hinweise</span></article>
+    <article class="metric-card"><span class="metric-label">Shadow-Daten</span><strong class="metric-value">@Model.Report.Inventory.Requests</strong><span class="metric-detail">Requests · @Model.Report.Inventory.PageViews Pageviews</span></article>
+    <article class="metric-card"><span class="metric-label">Konfiguration</span><strong class="metric-value">@Model.Report.Inventory.Routes</strong><span class="metric-detail">Routen · @Model.Report.Inventory.Domains Domains</span></article>
+    <article class="metric-card"><span class="metric-label">Legacy-Quelle</span><strong class="metric-value metric-value--small">@(string.IsNullOrWhiteSpace(Model.Report.Inventory.LegacySourceDigest) ? "nicht verfügbar" : Model.Report.Inventory.LegacySourceDigest[..12])</strong><span class="metric-detail">SHA-256 · @Model.Report.Inventory.LegacySourceSizeBytes Bytes</span></article>
+</section>
+<section class="workbench operations-section">
+    <header class="workbench-header"><div><p class="eyebrow">Gate</p><h2>Produktionsbereitschaft</h2></div><span class="status-badge @(Model.Report.IsReady ? "status-badge--ok" : "status-badge--danger")">@(Model.Report.IsReady ? "Bereit" : "Blockiert")</span></header>
+    <div class="workbench-body table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Status</th><th>Prüfung</th><th>Ergebnis</th><th>Maßnahme</th></tr></thead>
+            <tbody>
+            @foreach (var check in Model.Report.Checks)
+            {
+                <tr>
+                    <td><span class="status-badge @Badge(check.State)">@Label(check.State)</span></td>
+                    <td><strong>@check.Title</strong><small><code>@check.Code</code></small></td>
+                    <td>@check.Detail</td>
+                    <td>@if (!string.IsNullOrWhiteSpace(check.Remediation)) { <span>@check.Remediation</span> } else { <span class="is-muted">Keine</span> }</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+<section class="operations-grid operations-grid--sidebar">
+    <article class="workbench operations-section">
+        <header class="workbench-header"><div><p class="eyebrow">Gleiches UTC-Fenster</p><h2>Statistikvergleich</h2></div>@if (Model.Comparison is not null) { <span class="status-badge @(Model.Comparison.IsWithinTolerance ? "status-badge--ok" : "status-badge--danger")">@(Model.Comparison.IsWithinTolerance ? "Innerhalb Toleranz" : "Abweichung")</span> }</header>
+        <div class="workbench-body table-wrap">
+            @if (Model.Comparison is null)
+            {
+                <p class="empty-state">Snapshot fehlt oder ist ungültig: <code>@Model.Options.LegacyStatisticsPath</code></p>
+            }
+            else
+            {
+                <table class="data-table"><thead><tr><th>Kennzahl</th><th>Legacy</th><th>.NET</th><th>Differenz</th><th>Status</th></tr></thead><tbody>
+                @foreach (var metric in Model.Comparison.Metrics)
+                {
+                    <tr><td><strong>@metric.Metric</strong></td><td>@metric.LegacyValue</td><td>@metric.DotNetValue</td><td>@metric.AbsoluteDifference · @metric.DifferencePercent.ToString("F2") %</td><td><span class="status-badge @(metric.WithinTolerance ? "status-badge--ok" : "status-badge--danger")">@(metric.WithinTolerance ? "OK" : "Prüfen")</span></td></tr>
+                }
+                </tbody></table>
+            }
+        </div>
+    </article>
+    <aside class="workbench operations-section">
+        <header class="workbench-header"><div><p class="eyebrow">Vertrag</p><h2>Wartungsfenster</h2></div></header>
+        <div class="workbench-body definition-list">
+            <div><span>Cutover freigegeben</span><strong>@(Model.Options.Enabled ? "ja" : "nein")</strong></div>
+            <div><span>Mindest-Shadowzeit</span><strong>@Model.Options.MinimumShadowHours h</strong></div>
+            <div><span>Max. Abweichung</span><strong>@Model.Options.MaximumMetricDifferencePercent.ToString("F1") %</strong></div>
+            <div><span>Admin-Port</span><strong>:@Model.Options.AdminPort</strong></div>
+            <div><span>Portal-Port</span><strong>:@Model.Options.PortalPort</strong></div>
+            <div><span>Manifestverzeichnis</span><strong class="value-cell">@Model.Options.ManifestDirectory</strong></div>
+        </div>
+    </aside>
+</section>
+<section class="workbench operations-section">
+    <header class="workbench-header"><div><p class="eyebrow">Reihenfolge</p><h2>Kontrollierte Umschaltung</h2></div></header>
+    <div class="workbench-body"><ol class="reason-list"><li>Legacy-Schreibzugriffe stoppen und SQLite konsistent sichern.</li><li>Finalen Dry-Run, Import und Verify gegen genau dieses Backup ausführen.</li><li>PostgreSQL-Backup sowie Readiness- und Statistikmanifest unveränderlich sichern.</li><li>Admin- und Portal-Upstreams kontrolliert auf :@Model.Options.AdminPort und :@Model.Options.PortalPort umstellen.</li><li>Login, TOTP, Portal, Routenpreview, DNS, Zertifikat, Requests und Pageviews prüfen.</li><li>Erst danach Worker und produktive Schreibmodi einzeln aktivieren.</li><li>Bei einem Blocker sofort auf Python/SQLite und den vorherigen Caddy-Snapshot zurückfallen.</li></ol></div>
+</section>

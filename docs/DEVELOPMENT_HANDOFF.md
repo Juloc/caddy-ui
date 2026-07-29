@@ -1,21 +1,22 @@
 # Caddy UI 2.0 – Entwicklungsübergabe
 
 Status: verbindliche zentrale Arbeitsgrundlage  
-Aktueller Entwicklungszweig: `agent/dotnet-postgres-phase-8`  
-Aktueller Draft-PR: #27  
-Produktiver Stand: Python/SQLite bleibt bis Phase 9 aktiv
+Aktueller Entwicklungszweig: `agent/dotnet-postgres-phase-9`  
+Aktueller Draft-PR: #28  
+Basis: Phase 8 / PR #27  
+Produktiver Stand: Python/SQLite bleibt bis zur kontrollierten Phase-9-Umschaltung aktiv
 
-Dieses Dokument enthält den aktuellen Gesamtstand für die Weiterentwicklung. Detailregeln stehen zusätzlich in den Fachverträgen und `PHASE_*_STATUS.md`-Dateien. Bei Widersprüchen gelten der spezifischere Fachvertrag und die zuletzt vollständig in CI verifizierte Implementierung.
+Dieses Dokument ist die zentrale Fortsetzungsgrundlage. Detailregeln stehen in den Fachverträgen und `PHASE_*_STATUS.md`. Bei Widersprüchen gelten der spezifischere Vertrag und die zuletzt vollständig in CI verifizierte Implementierung.
 
 ## 1. Produktziel
 
-Caddy UI wird schrittweise von Python/SQLite auf folgenden Stack umgebaut:
+Caddy UI wird schrittweise auf folgenden Stack umgebaut:
 
 - .NET 10
 - ASP.NET Core Razor Pages
 - PostgreSQL mit EF Core/Npgsql
 - wenig JavaScript, kein SPA-Framework
-- ein Companion- und ein Bundle-Container
+- Companion- und Bundle-Container
 - vorhandener externer Reverse Proxy
 
 Das Produkt verwaltet und beobachtet:
@@ -24,10 +25,11 @@ Das Produkt verwaltet und beobachtet:
 - Domains und DNS-Provider
 - Wildcard- und Einzelzertifikate
 - Routen und Zugriffsschutz
-- Request-, Pageview-, Session- und Clientstatistik
-- IP Intelligence und Risikobewertung
+- Requests, Pageviews, Sessions und Clients
+- IP Intelligence, Bot- und Risikobewertung
 - DNS, DDNS, Jobs und Healthchecks
 - Benachrichtigungen, Backups und Diagnose
+- Shadow-Betrieb, Legacy-Migration und kontrollierte Umschaltung
 
 Nicht Teil des Produkts:
 
@@ -50,7 +52,8 @@ Caddy JSON Logs
   -> Parser + Redaction
   -> Klassifikation
   -> PostgreSQL Batch Writer
-  -> Pageviews / Sessions / Aggregate
+  -> Navigationen / Pageviews / Sessions / Page Loads
+  -> Aggregate
   -> Razor-Pages-Analytics
 
 Management
@@ -67,6 +70,15 @@ Betrieb
   -> Jobs / Healthchecks
   -> Benachrichtigungen
   -> Backup / Diagnose
+
+Cutover
+  -> paralleler Shadow-Betrieb
+  -> Readiness-Gate
+  -> Legacy-Dry-Run / Import / Verify
+  -> Statistikvergleich
+  -> Wartungsfenster
+  -> Portumschaltung
+  -> Abnahme oder Rückfall
 ```
 
 Container:
@@ -82,14 +94,14 @@ Container:
 src/CaddyUi.Contracts       Transport- und Statusverträge
 src/CaddyUi.Domain          Fachtypen und Invarianten
 src/CaddyUi.Application     Klassifikation, Compiler und Regeln
-src/CaddyUi.Infrastructure  PostgreSQL, Provider, Worker und Dateien
+src/CaddyUi.Infrastructure  PostgreSQL, Provider, Worker, Dateien und Cutover
 src/CaddyUi.Web             Razor Pages, Auth-Middleware und CSS
 src/CaddyUi.Migration       idempotenter SQLite-/Legacy-Import
 
 tests/*                     Unit-, Web-, PostgreSQL- und Acceptance-Tests
 caddyguard                  Caddy-Schutzmodul
 caddynetcp                  Netcup-DNS-Modul
-docs                        Verträge und Status
+docs                        Verträge, Status und Runbooks
 ```
 
 ## 4. Gestapelte Branch- und PR-Kette
@@ -104,6 +116,7 @@ docs                        Verträge und Status
 | 6 | `agent/dotnet-postgres-phase-6` | #25 | Read-only Analytics-UI |
 | 7 | `agent/dotnet-postgres-phase-7` | #26 | Routing und kontrollierter Apply |
 | 8 | `agent/dotnet-postgres-phase-8` | #27 | DNS, DDNS und Systemfunktionen |
+| 9 | `agent/dotnet-postgres-phase-9` | #28 | Shadow-Readiness und kontrollierte Umschaltung |
 
 Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits integrierte Basis umgestellt. Kein unkontrollierter Rebase darf Sicherheits-, Migrations- oder Vertragsänderungen verlieren.
 
@@ -111,11 +124,9 @@ Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits i
 
 ### Phase 1 – Grundlage
 
-- .NET-10-Solution
-- getrennte Projekte
+- .NET-10-Solution mit getrennten Projekten
 - Razor Pages
-- PostgreSQL-Verbindung
-- Healthchecks
+- PostgreSQL-Verbindung und Healthchecks
 - Companion- und Bundle-Container
 - Restore-, Format-, Build-, Test- und Container-CI
 
@@ -127,6 +138,7 @@ Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits i
 - persistente Data-Protection-Schlüssel
 - partitionierte Request-Tabelle
 - Analytics-, Security-, Job- und Auditpersistenz
+- konsistente SQLite-Backups, Inspect, Dry-Run, Import und Verify
 
 ### Phase 3 – Authentifizierung und Domains
 
@@ -137,8 +149,7 @@ Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits i
 - TOTP und Recovery-Codes
 - progressive Login-Sperren
 - CSRF-, Origin- und Proxy-Prüfung
-- mehrere Domains
-- Provider-Katalog
+- mehrere Domains und Provider-Katalog
 - Domainstandard `wildcard`
 - Routenstandard `inherit`
 
@@ -157,8 +168,7 @@ Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits i
 
 - IPv4-/IPv6-Normalisierung
 - kein externer Lookup für private oder reservierte Adressen
-- RIPEstat-Anreicherung
-- Cache und Backoff
+- RIPEstat-Anreicherung mit Cache und Backoff
 - deterministische Risikoengine
 - Clientdetail und Evidenz
 - manuelle Sperren
@@ -182,7 +192,7 @@ Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits i
 - deterministischer Caddyfile-Compiler
 - unveränderliche Revisionen
 - Preview und Zeilen-Diff
-- `disabled`, `shadow`, `active`
+- Modi `disabled`, `shadow`, `active`
 - atomischer Dateiaustausch
 - Validate, Reload, Verify und Rollback
 - serialisierte Schreiboperationen
@@ -192,15 +202,31 @@ Die Phasen werden in Reihenfolge integriert oder kontrolliert auf eine bereits i
 
 - verwaltete DNS-Records
 - DDNS-Ziele für A und AAAA
-- direkte Provider-APIs
-- Provider-Verbindungstests
+- direkte Provider-APIs und Verbindungstests
 - geplante Jobs und Jobläufe
 - öffentliche und interne Healthchecks
 - SMTP, Webhook, Discord und Telegram
 - PostgreSQL-Backups
 - redigierte Diagnoseexporte
 - Netcup-Wildcard-/DNS-01-Renderer
-- kompakte Razor-Pages für alle Betriebsbereiche
+- kompakte Razor Pages für alle Betriebsbereiche
+
+### Phase 9 – Shadow und Umschaltung
+
+- `Cutover:Enabled=false` als expliziter sicherer Standard
+- Readiness-Gate für PostgreSQL, Migrationen, Benutzer, Domains und Routen
+- SHA-256-Identifikation der read-only Legacy-SQLite-Datei
+- Prüfung gemeinsamer Caddy-Logs
+- Mindestdauer und Aktualität des Shadow-Laufs
+- Blockierung vorzeitig aktiver Schreibmodi
+- Prüfung eines aktuellen PostgreSQL-Backups
+- Legacy-/PostgreSQL-Statistikvergleich über dasselbe UTC-Zeitfenster
+- konfigurierbare Abweichungstoleranz
+- unveränderliche Readiness- und Statistikmanifeste
+- administratorgeschützter Cutover-Arbeitsbereich
+- vollständiges Produktions-, Abnahme- und Rollback-Runbook
+
+Phase 9 bereitet die Umschaltung vor, führt sie aber nicht automatisch aus.
 
 ## 6. Statistikvertrag
 
@@ -219,8 +245,6 @@ Redirects und Dokumentfehler bleiben Requests beziehungsweise Navigationen, aber
 
 ### Beispiel Mealie/Nuxt
 
-Ein Dokument mit 100 JavaScript-/Nuxt-Assets ergibt:
-
 ```text
 101 Requests
 1 Navigation
@@ -234,6 +258,18 @@ Ein Dokument mit 100 JavaScript-/Nuxt-Assets ergibt:
 ### Clients
 
 Ohne First-Party-Beacon ist ein Client ein pseudonymer, geschätzter technischer Identifier und keine sicher erkannte Person.
+
+### Cutover-Vergleich
+
+Legacy und .NET werden nur über dasselbe geschlossene UTC-Zeitfenster verglichen:
+
+- Requests
+- Pageviews
+- Sessions
+- Clients
+- HTTP-5xx-Fehler
+
+Standardtoleranz: höchstens 5 Prozent Abweichung je Kennzahl.
 
 ## 7. Domains und Zertifikate
 
@@ -252,9 +288,7 @@ route=wildcard   -> Wildcard / DNS-01
 route=inherit    -> Domainstandard
 ```
 
-Ein aktiver Wildcard-Apply ist nur möglich, wenn Provider, Caddy-DNS-Modul, Renderer und Secret-Referenzen einsatzbereit sind. Andernfalls bleiben Preview und Shadow möglich, Active wird blockiert.
-
-Der aktuelle Bundle-Renderer unterstützt Netcup mit Umgebungsvariablen für API-Key und API-Passwort.
+Ein aktiver Wildcard-Apply ist nur möglich, wenn Provider, Caddy-DNS-Modul, Renderer und Secret-Referenzen einsatzbereit sind. Der aktuelle Bundle-Renderer unterstützt Netcup.
 
 ## 8. Provider-Unterstützung
 
@@ -279,7 +313,7 @@ Management-Katalog:
 - DuckDNS
 - RFC 2136
 
-Direkte Record-API und DDNS in Phase 8:
+Direkte Record-API und DDNS:
 
 - Netcup
 - Cloudflare
@@ -290,12 +324,7 @@ Direkte Record-API und DDNS in Phase 8:
 - deSEC
 - DuckDNS
 
-Die UI unterscheidet klar zwischen:
-
-- Management-Katalog vorhanden
-- direkter API-Adapter vorhanden
-- Caddy-DNS-Modul installiert
-- Wildcard-Renderer geprüft
+Die UI unterscheidet Management-Katalog, direkten API-Adapter, installiertes Caddy-DNS-Modul und geprüften Wildcard-Renderer.
 
 ## 9. Secret-Vertrag
 
@@ -311,7 +340,7 @@ secret://file/absolute/path
 - Provider lösen Secrets erst beim Aufruf auf.
 - Diagnoseexporte enthalten nur Secret-Feldnamen.
 - Caddy-DNS-01 verwendet nur Umgebungsvariablen.
-- Logs, Diffs, Manifeste und UI zeigen keine aufgelösten Werte.
+- Logs, Diffs, Manifeste, Cutover-Reports und UI zeigen keine aufgelösten Werte.
 
 ## 10. Betriebsmodi und sichere Defaults
 
@@ -323,6 +352,7 @@ IpSecurity:BlockWriteMode=disabled
 Routing:WriteMode=disabled
 Operations:WorkerEnabled=false
 Operations:DnsWriteMode=disabled
+Cutover:Enabled=false
 Database:ApplyMigrationsOnStartup=false
 DataProtection:PersistKeysToPostgreSql=true
 ```
@@ -330,7 +360,7 @@ DataProtection:PersistKeysToPostgreSql=true
 Bedeutung:
 
 - `disabled`: kein produktiver Schreibzugriff
-- `shadow`: validierter Vorschau-/Shadowpfad ohne produktive Wirkung
+- `shadow`: validierter Vorschaupfad ohne produktive Wirkung
 - `active`: explizit aktivierter produktiver Pfad
 
 Python/SQLite bleibt bis zur kontrollierten Umschaltung der produktive Schreibpfad.
@@ -343,8 +373,7 @@ Maßgeblich: `docs/UI_DESIGN_CONTRACT.md`.
 - neutraler Hintergrund statt Weiß-auf-Weiß
 - klar abgegrenzte helle Arbeitsflächen
 - sichtbare Rahmen und Fokuszustände
-- 34-px-Standardcontrols
-- 30-px-Kompaktcontrols
+- 34-px-Standardcontrols und 30-px-Kompaktcontrols
 - klare Primär-, Sekundär- und Gefahraktionen
 - dichte Tabellen statt Card-Wänden
 - flache Arbeitsbereiche
@@ -359,10 +388,10 @@ Maßgeblich: `docs/DNS_OPERATIONS_CONTRACT.md`.
 
 DNS:
 
-- Records werden zuerst als PostgreSQL-Entwurf gespeichert.
-- Domain und Provider müssen einander fest zugeordnet sein.
-- Synchronisierung ist eine separate sichtbare Aktion.
-- Status und Fehler werden gespeichert.
+- Records zuerst als PostgreSQL-Entwurf speichern
+- Domain und Provider fest zuordnen
+- Synchronisierung als separate sichtbare Aktion
+- Status und Fehler speichern
 
 DDNS:
 
@@ -380,30 +409,30 @@ Jobs:
 - `backup`
 - dauerhafte Run-Historie und Correlation-ID
 
-## 13. Benachrichtigungen, Health und Backups
+## 13. Cutover-Vertrag
 
-Benachrichtigungen:
+Maßgeblich: `docs/CUTOVER_RUNBOOK.md`.
 
-- dauerhafte In-App-Meldung
-- SMTP-E-Mail
-- HTTPS-Webhook
-- Discord
-- Telegram
+Readiness blockiert bei:
 
-Health:
+- fehlender expliziter Freigabe
+- nicht erreichbarem PostgreSQL oder ausstehenden Migrationen
+- fehlender Legacy-SQLite-Datei
+- deaktivierter, veralteter oder zu kurzer Shadow-Ingestion
+- aktiven produktiven Schreibmodi vor der Abnahme
+- fehlendem Administratorkonto oder fehlenden Domains
+- fehlendem beziehungsweise veraltetem PostgreSQL-Backup
+- fehlendem oder abweichendem Statistik-Snapshot
+- nicht beschreibbarem Manifestverzeichnis
 
-- öffentliche URLs
-- interne Upstreams
-- Statusbereich und Timeout pro Ziel
-- Verlauf und Zustandswechsel
+Portumschaltung:
 
-Backup:
+```text
+Admin UI      -> .NET :8098
+Access Portal -> .NET :8099
+```
 
-- PostgreSQL-Custom-Dump
-- redigierter Diagnoseexport
-- vorhandene Caddy-Konfigurationsdateien
-- Manifest und SHA-256-Digest
-- begrenzte Aufbewahrung
+Die Anwendung schaltet diese Ports nicht automatisch um. Das Wartungsfenster verwendet Inspect, Dry-Run, finalen Import, Verify, Caddy-Validate, Snapshot, Reload, Abnahme und dokumentierten Rückfall.
 
 ## 14. CI und lokale Verifikation
 
@@ -422,66 +451,61 @@ docker build --file Dockerfile.dotnet --target dotnet-bundle .
 Zusätzlich erforderlich:
 
 - PostgreSQL-Migration auf leerer Datenbank
-- Legacy-Import
+- Legacy-Import und Verify
 - Companion- und Bundle-Smoke
 - HTTP-Flächen
 - integriertes Caddy-Modul
 - Routing-Golden-Master
 - DNS-/DDNS-Persistenztests
 - Authentifizierung aller Managementseiten
+- Cutover-Komparator und Snapshotvalidierung
+
+Phase 9 wurde in folgenden Läufen verifiziert:
+
+- `Verify` `30471183169`
+- `Verify .NET rebuild` `30471183630`
 
 ## 15. Produktionsisolation und Rollback
 
-Bis Phase 9:
+Bis zum Wartungsfenster:
 
 - Python/SQLite bleibt produktiv
-- .NET läuft intern oder im Shadow-Betrieb
+- .NET läuft intern im Shadow-Betrieb
 - keine automatische Portumschaltung
-- keine automatische DNS-Aktivierung
-- keine automatische Routenaktivierung
-- keine automatische Blocklist-Aktivierung
+- keine automatische DNS-, Routen- oder Blocklist-Aktivierung
 - keine ungeprüfte Migration produktiver Secrets
 
 Rollback:
 
 - .NET-Worker deaktivieren
-- DNS- und Routingmodus auf `disabled`
-- Python-Container weiterverwenden
+- DNS, Routing und Blocklist auf `disabled`
+- vorherigen Caddy-Snapshot wiederherstellen
+- Upstreams wieder auf Python/SQLite stellen
 - vorhandene SQLite-Datei unverändert behalten
-- Caddy-Snapshot wiederherstellen
+- PostgreSQL und Manifeste für die Analyse erhalten
 
 ## 16. Offene Produktionsvalidierung
 
 - längerer Shadow-Lauf mit echten Logs
 - Statistikvergleich Python gegen .NET
 - Logrotation und Neustart
+- finaler Legacy-Dry-Run, Import und Verify
 - Provider-Test je produktiver Domain
 - Shadow-DNS und DDNS
 - Netcup-Wildcard-Zertifikat auf Testdomain
-- Caddy-Reload und Rollback
+- Caddy-Reload und Rückfall
 - Health-Fehlerbenachrichtigung
 - Backup und Test-Wiederherstellung
 - Diagnoseexport auf Secret-Leaks
 - Worker-Sperre bei mehreren Instanzen
 - vollständiger LAN-/Public-/Portal-Security-Test
+- kontrollierte Portumschaltung
 
-## 17. Nächste Phasen
-
-### Phase 9 – Shadow-Betrieb und Umschaltung
-
-- paralleler interner Betrieb
-- gleiche Logs read-only verarbeiten
-- Statistikvergleich
-- finaler Legacy-Dry-Run
-- Wartungsfenster
-- finaler SQLite-Import
-- Umschaltung von 8098 und 8099
-- Login-, Route-, DNS-, Zertifikat- und Statistikprüfung
-- dokumentierter Rückfall
+## 17. Nächste Phase
 
 ### Phase 10 – Python entfernen
 
-Erst nach mindestens zwei stabilen Releases:
+Erst nach mindestens zwei stabilen .NET-Releases:
 
 - Python-Laufzeit entfernen
 - SQLite-Schreibpfade entfernen
@@ -496,7 +520,7 @@ Erst nach mindestens zwei stabilen Releases:
 2. dieses Dokument und betroffene Fachverträge lesen
 3. vorhandene Implementierung und Tests prüfen
 4. sichere Defaults beibehalten
-5. keine Secrets in Logs, UI, Diffs oder Diagnose aufnehmen
+5. keine Secrets in Logs, UI, Diffs, Diagnose oder Cutover-Manifeste aufnehmen
 6. Migrationen ergänzen, nicht umschreiben
 7. Unit-, PostgreSQL-, Web- und Containerpfade testen
 8. Phasenstatus und dieses Dokument aktualisieren
