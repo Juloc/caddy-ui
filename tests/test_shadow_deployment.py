@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import unittest
 
@@ -7,6 +8,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMPOSE = ROOT / "deploy" / "shadow" / "docker-compose.yml"
 ENV_EXAMPLE = ROOT / "deploy" / "shadow" / ".env.example"
+LEGACY_STATISTICS = ROOT / "deploy" / "shadow" / "legacy-statistics.example.json"
 PREFLIGHT = ROOT / "scripts" / "shadow-preflight.sh"
 
 
@@ -15,6 +17,7 @@ class ShadowDeploymentContractTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.compose = COMPOSE.read_text(encoding="utf-8")
         cls.environment = ENV_EXAMPLE.read_text(encoding="utf-8")
+        cls.legacy_statistics = json.loads(LEGACY_STATISTICS.read_text(encoding="utf-8"))
         cls.preflight = PREFLIGHT.read_text(encoding="utf-8")
 
     def test_shadow_stack_uses_local_dotnet_build(self) -> None:
@@ -32,10 +35,10 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         self.assertNotIn('"443:443"', self.compose)
         self.assertNotIn("8099:8099", self.compose)
 
-    def test_productive_inputs_are_read_only(self) -> None:
+    def test_productive_inputs_and_root_filesystems_are_read_only(self) -> None:
         self.assertIn("source: ${CADDY_UI_SHADOW_LOG_DIR}", self.compose)
         self.assertIn("source: ${CADDY_UI_SHADOW_LEGACY_SQLITE}", self.compose)
-        self.assertGreaterEqual(self.compose.count("read_only: true"), 2)
+        self.assertGreaterEqual(self.compose.count("read_only: true"), 4)
 
     def test_all_productive_write_paths_are_disabled(self) -> None:
         required_settings = (
@@ -50,6 +53,36 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         for setting in required_settings:
             with self.subTest(setting=setting):
                 self.assertIn(setting, self.compose)
+
+    def test_cutover_settings_match_application_options(self) -> None:
+        self.assertIn(
+            "Cutover__LegacyStatisticsPath: /state/legacy-statistics.json",
+            self.compose,
+        )
+        self.assertIn("Cutover__MaximumBackupAgeHours:", self.compose)
+        self.assertIn("Cutover__MaximumMetricDifferencePercent:", self.compose)
+        self.assertNotIn("Cutover__MaximumIngestionLagMinutes", self.compose)
+        self.assertNotIn("Cutover__StatisticsTolerancePercent", self.compose)
+        self.assertNotIn("CADDY_UI_SHADOW_MAX_LAG_MINUTES", self.environment)
+
+    def test_legacy_statistics_example_matches_required_schema(self) -> None:
+        self.assertEqual(
+            {
+                "capturedAt",
+                "windowStart",
+                "windowEnd",
+                "requests",
+                "pageViews",
+                "sessions",
+                "clients",
+                "errors",
+            },
+            set(self.legacy_statistics),
+        )
+        self.assertLess(
+            self.legacy_statistics["windowStart"],
+            self.legacy_statistics["windowEnd"],
+        )
 
     def test_stack_has_no_docker_socket_and_uses_internal_network(self) -> None:
         self.assertNotIn("/var/run/docker.sock", self.compose)
@@ -78,6 +111,7 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         self.assertNotIn("docker compose down", self.preflight)
         self.assertNotIn("docker volume rm", self.preflight)
         self.assertNotIn("docker rm", self.preflight)
+        self.assertNotIn("CADDY_UI_SHADOW_MAX_LAG_MINUTES", self.preflight)
 
         executable_lines = [
             line.strip()
