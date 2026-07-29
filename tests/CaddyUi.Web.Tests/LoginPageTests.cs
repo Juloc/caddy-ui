@@ -37,10 +37,19 @@ public sealed class LoginPageTests :
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [Fact]
-    public async Task Overview_RedirectsToLogin()
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/Traffic")]
+    [InlineData("/Requests")]
+    [InlineData("/Routes/Analytics")]
+    [InlineData("/Security/Overview")]
+    [InlineData("/Performance")]
+    [InlineData("/LiveLog")]
+    [InlineData("/System")]
+    [InlineData("/events/live?once=true")]
+    public async Task ReadOnlyWorkspace_RedirectsAnonymousUsersToLogin(string path)
     {
-        using var response = await _client.GetAsync("/");
+        using var response = await _client.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.StartsWith("/Login", response.Headers.Location?.OriginalString, StringComparison.Ordinal);

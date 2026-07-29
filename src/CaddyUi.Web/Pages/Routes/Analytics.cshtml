@@ -1,0 +1,16 @@
+@page
+@model CaddyUi.Web.Pages.Routes.AnalyticsModel
+@{
+    ViewData["Title"] = "Routenanalyse";
+}
+<section class="page-heading"><div><p class="eyebrow">Normalisierte Pfade</p><h1>Routenanalyse</h1><p class="page-description">UUIDs, Nummern und lange Build-Token werden normalisiert. Framework-Assets wie Nuxt bleiben technische Requests und erscheinen nicht als Seitenaufrufe.</p></div><span class="status-badge status-badge--neutral">@Model.Routes.Count Gruppen</span></section>
+<partial name="Shared/_AnalyticsFilters" model="Model" />
+<section class="panel panel--wide"><div class="panel-body table-wrap">
+<table class="data-table"><thead><tr><th>Host / Pfad</th><th>Typ</th><th>Requests</th><th>Fehler</th><th>Traffic</th><th>Ø Laufzeit</th><th>Maximum</th></tr></thead><tbody>
+@foreach (var route in Model.Routes)
+{
+<tr><td><strong>@route.Host</strong><small><code>@route.Path</code></small></td><td>@route.RequestType</td><td>@route.RequestCount.ToString("N0")</td><td>@route.ErrorCount.ToString("N0")</td><td>@AnalyticsPageModelBase.FormatBytes(route.BytesSent)</td><td>@AnalyticsPageModelBase.FormatDuration(route.AverageDurationMilliseconds)</td><td>@AnalyticsPageModelBase.FormatDuration(route.MaximumDurationMilliseconds)</td></tr>
+}
+</tbody></table>
+@if (Model.Routes.Count == 0) { <p class="empty-state">Keine Routendaten für den Filter.</p> }
+</div></section>

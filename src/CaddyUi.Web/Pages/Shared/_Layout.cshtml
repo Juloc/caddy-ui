@@ -8,45 +8,41 @@
     <title>@ViewData["Title"] · Caddy UI</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/phase3.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/phase6.css" asp-append-version="true" />
 </head>
 <body>
     <div class="app-shell">
         <aside class="sidebar">
             <a class="brand" asp-page="/Index" aria-label="Caddy UI Übersicht">
                 <span class="brand-mark" aria-hidden="true">C</span>
-                <span>
-                    <strong>Caddy UI</strong>
-                    <small>2.0 Parallelbetrieb</small>
-                </span>
+                <span><strong>Caddy UI</strong><small>2.0 Parallelbetrieb</small></span>
             </a>
 
             <nav class="primary-nav" aria-label="Hauptnavigation">
                 <a class="nav-item" asp-page="/Index">Übersicht</a>
+                <a class="nav-item" asp-page="/Traffic/Index">Traffic</a>
+                <a class="nav-item" asp-page="/Security/Clients">Besucher &amp; Clients</a>
+                <a class="nav-item" asp-page="/Requests/Index">Requests</a>
+                <a class="nav-item" asp-page="/Routes/Analytics">Routenanalyse</a>
+                <a class="nav-item" asp-page="/Security/Overview">Bots &amp; Sicherheit</a>
+                <a class="nav-item" asp-page="/Performance/Index">Fehler &amp; Performance</a>
+                <a class="nav-item" asp-page="/LiveLog/Index">Live-Log</a>
+                <a class="nav-item" asp-page="/SystemStatus/Index">System</a>
                 @if (User.IsInRole("admin"))
                 {
+                    <span class="nav-section">Administration</span>
                     <a class="nav-item" asp-page="/Administration/Domains">Domains</a>
                     <a class="nav-item" asp-page="/Administration/Providers">DNS-Provider</a>
                     <a class="nav-item" asp-page="/Administration/Security">Sicherheit</a>
                 }
-                <span class="nav-item nav-item--disabled">Traffic</span>
-                <span class="nav-item nav-item--disabled">Besucher</span>
-                <span class="nav-item nav-item--disabled">Requests</span>
-                <a class="nav-item" asp-page="/Security/Clients">Bots &amp; Sicherheit</a>
-                <span class="nav-item nav-item--disabled">System</span>
             </nav>
 
-            <div class="sidebar-footer">
-                <span class="connection-dot" aria-hidden="true"></span>
-                <span>Phase 5 Preview</span>
-            </div>
+            <div class="sidebar-footer"><span class="connection-dot" aria-hidden="true"></span><span>Phase 6 Read-only</span></div>
         </aside>
 
         <div class="app-content">
             <header class="topbar">
-                <div>
-                    <span class="topbar-label">Arbeitsbereich</span>
-                    <strong>@ViewData["Title"]</strong>
-                </div>
+                <div><span class="topbar-label">Arbeitsbereich</span><strong>@ViewData["Title"]</strong></div>
                 <div class="topbar-actions">
                     @if (SecurityOptions.PublicAccessWithoutMandatoryTotp)
                     {
@@ -55,17 +51,12 @@
                     <span class="environment-chip">Parallelbetrieb</span>
                     @if (User.Identity?.IsAuthenticated == true)
                     {
-                        <span class="user-chip">@User.Identity.Name · @User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</span>
-                        <form method="post" asp-page="/Logout">
-                            <button class="button button--quiet" type="submit">Abmelden</button>
-                        </form>
+                        <span class="user-chip">@User.Identity.Name · @User.FindFirst(global::System.Security.Claims.ClaimTypes.Role)?.Value</span>
+                        <form method="post" asp-page="/Logout"><button class="button button--quiet" type="submit">Abmelden</button></form>
                     }
                 </div>
             </header>
-
-            <main class="main-content">
-                @RenderBody()
-            </main>
+            <main class="main-content">@RenderBody()</main>
         </div>
     </div>
 </body>

@@ -2,71 +2,126 @@
 @model IndexModel
 @{
     ViewData["Title"] = "Übersicht";
+    var series = Model.Dashboard.Series;
+    var maximum = Math.Max(1L, series.Count == 0 ? 1 : series.Max(point => point.Requests));
+    var barWidth = series.Count == 0 ? 1 : Math.Max(1, 700 / series.Count);
 }
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Caddy UI 2.0</p>
-        <h1>Sicherer Parallelbetrieb</h1>
+        <p class="eyebrow">Caddy UI 2.0 · Read-only</p>
+        <h1>Traffic und Nutzung getrennt auswerten</h1>
         <p class="page-description">
-            Die Razor-Pages-Anwendung nutzt PostgreSQL, getrennte Admin- und Portal-Sitzungen sowie eine domainbasierte Routing-Grundlage.
+            Pageviews beschreiben erfolgreiche Dokumentnavigationen. Requests zeigen die tatsächliche Serverlast einschließlich JavaScript, CSS, Bildern, APIs, Bots und Fehlern.
         </p>
     </div>
-    <span class="status-badge status-badge--ok">Phase 3</span>
+    <span class="status-badge status-badge--ok">Phase 6</span>
 </section>
 
-<section class="metric-grid" aria-label="Systemstatus">
-    <article class="metric-card">
-        <span class="metric-label">Anwendung</span>
-        <strong class="metric-value">@Model.Status.Product</strong>
-        <span class="metric-detail">@Model.Status.Version</span>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">Authentifizierung</span>
-        <strong class="metric-value">2 Bereiche</strong>
-        <span class="metric-detail">Admin und Access Portal</span>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">Zertifikatstandard</span>
-        <strong class="metric-value">Wildcard</strong>
-        <span class="metric-detail">Einzelzertifikat nur explizit</span>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">DNS-Katalog</span>
-        <strong class="metric-value">18 Provider</strong>
-        <span class="metric-detail">Secrets nur als Referenzen</span>
-    </article>
+<partial name="Shared/_AnalyticsFilters" model="Model" />
+
+<section class="metric-grid metric-grid--dense" aria-label="Analytics-Kennzahlen">
+    <article class="metric-card"><span class="metric-label">Pageviews</span><strong class="metric-value">@Model.Dashboard.PageViews.ToString("N0")</strong><span class="metric-detail">erfolgreiche Dokumente</span></article>
+    <article class="metric-card"><span class="metric-label">Fehlgeschlagene Navigationen</span><strong class="metric-value">@Model.Dashboard.FailedNavigations.ToString("N0")</strong><span class="metric-detail">4xx/5xx Dokumentaufrufe</span></article>
+    <article class="metric-card"><span class="metric-label">Sessions</span><strong class="metric-value">@Model.Dashboard.Sessions.ToString("N0")</strong><span class="metric-detail">30 Minuten Inaktivität</span></article>
+    <article class="metric-card"><span class="metric-label">Geschätzte Clients</span><strong class="metric-value">@Model.Dashboard.Clients.ToString("N0")</strong><span class="metric-detail">keine sichere Personenzahl</span></article>
+    <article class="metric-card"><span class="metric-label">Requests gesamt</span><strong class="metric-value">@Model.Dashboard.Requests.ToString("N0")</strong><span class="metric-detail">technische Serverlast</span></article>
+    <article class="metric-card"><span class="metric-label">Requests / Pageview</span><strong class="metric-value">@Model.Dashboard.RequestsPerPageView.ToString("N1")</strong><span class="metric-detail">inklusive Assets und APIs</span></article>
+    <article class="metric-card"><span class="metric-label">Traffic</span><strong class="metric-value">@AnalyticsPageModelBase.FormatBytes(Model.Dashboard.BytesSent)</strong><span class="metric-detail">gesendete Antwortdaten</span></article>
+    <article class="metric-card"><span class="metric-label">Fehlerquote</span><strong class="metric-value">@Model.Dashboard.ErrorRatePercent.ToString("N2") %</strong><span class="metric-detail">HTTP-Status ab 400</span></article>
+    <article class="metric-card"><span class="metric-label">p95-Latenz</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Dashboard.P95DurationMilliseconds)</strong><span class="metric-detail">95 Prozent schneller</span></article>
+    <article class="metric-card"><span class="metric-label">Bot-Anteil</span><strong class="metric-value">@Model.Dashboard.BotSharePercent.ToString("N1") %</strong><span class="metric-detail">Requestanteil, nicht Besucher</span></article>
 </section>
 
-<section class="workspace-grid">
+<section class="workspace-grid workspace-grid--analytics">
     <article class="panel panel--wide">
         <header class="panel-header">
-            <div>
-                <p class="eyebrow">Phase 3</p>
-                <h2>Ersetzte Sicherheitsgrundlage</h2>
-            </div>
+            <div><p class="eyebrow">Zeitreihe</p><h2>Requests und Pageviews</h2></div>
+            <div class="chart-legend"><span><i class="legend-request"></i>Requests</span><span><i class="legend-pageview"></i>Pageviews</span></div>
         </header>
         <div class="panel-body">
-            <ul class="check-list">
-                <li>Rollen Administrator, Editor und Viewer</li>
-                <li>Getrennte LAN-, Public- und Portal-Sitzungen</li>
-                <li>TOTP, Recovery-Codes und Legacy-scrypt-Rehash</li>
-                <li>Persistente progressive Login-Sperren</li>
-                <li>Origin-, CSRF- und Proxy-Surface-Prüfung</li>
-                <li>Mehrere Domains mit Wildcard-Zertifikaten als Standard</li>
-            </ul>
+            @if (series.Count == 0)
+            {
+                <p class="empty-state">Für den ausgewählten Zeitraum liegen keine Daten vor.</p>
+            }
+            else
+            {
+                <svg class="traffic-chart" viewBox="0 0 720 220" role="img" aria-label="Requests und Pageviews im Zeitverlauf">
+                    <line x1="10" y1="200" x2="710" y2="200" class="chart-axis" />
+                    @for (var index = 0; index < series.Count; index++)
+                    {
+                        var point = series[index];
+                        var requestHeight = (int)Math.Round(point.Requests * 180d / maximum);
+                        var pageViewHeight = (int)Math.Round(point.PageViews * 180d / maximum);
+                        var x = 10 + (index * barWidth);
+                        <rect x="@x" y="@(200 - requestHeight)" width="@Math.Max(1, barWidth - 2)" height="@requestHeight" class="chart-request" />
+                        <rect x="@x" y="@(200 - pageViewHeight)" width="@Math.Max(1, barWidth - 2)" height="@pageViewHeight" class="chart-pageview" />
+                    }
+                </svg>
+            }
         </div>
     </article>
 
     <aside class="panel">
-        <header class="panel-header">
-            <div>
-                <p class="eyebrow">Als Nächstes</p>
-                <h2>Phase 4</h2>
-            </div>
-        </header>
-        <div class="panel-body">
-            <p>Log-Ingestion, Request-Klassifikation, Pageviews, Sessions und Aggregate werden als nächster Schritt umgesetzt.</p>
+        <header class="panel-header"><div><p class="eyebrow">Laufzeit</p><h2>@Model.StatusInfo.Product</h2></div></header>
+        <div class="panel-body definition-list">
+            <div><span>Version</span><strong>@Model.StatusInfo.Version</strong></div>
+            <div><span>Stack</span><strong>@Model.StatusInfo.Runtime</strong></div>
+            <div><span>Modus</span><strong>Parallelbetrieb</strong></div>
         </div>
     </aside>
+</section>
+
+<section class="analytics-columns">
+    <article class="panel">
+        <header class="panel-header"><div><p class="eyebrow">Nutzung</p><h2>Top-Seiten</h2></div></header>
+        <div class="panel-body compact-list">
+            @foreach (var route in Model.Dashboard.TopPages)
+            {
+                <div><span><strong>@route.Path</strong><small>@route.Host</small></span><b>@route.RequestCount.ToString("N0")</b></div>
+            }
+            @if (Model.Dashboard.TopPages.Count == 0) { <p class="empty-state">Keine Pageviews.</p> }
+        </div>
+    </article>
+    <article class="panel">
+        <header class="panel-header"><div><p class="eyebrow">Backend</p><h2>Top-API-Routen</h2></div></header>
+        <div class="panel-body compact-list">
+            @foreach (var route in Model.Dashboard.TopApiRoutes)
+            {
+                <div><span><strong>@route.Path</strong><small>@route.Host</small></span><b>@route.RequestCount.ToString("N0")</b></div>
+            }
+            @if (Model.Dashboard.TopApiRoutes.Count == 0) { <p class="empty-state">Keine API-Requests.</p> }
+        </div>
+    </article>
+    <article class="panel">
+        <header class="panel-header"><div><p class="eyebrow">Übertragung</p><h2>Größte Assets</h2></div></header>
+        <div class="panel-body compact-list">
+            @foreach (var route in Model.Dashboard.LargestAssets)
+            {
+                <div><span><strong>@route.Path</strong><small>@route.Host</small></span><b>@AnalyticsPageModelBase.FormatBytes(route.BytesSent)</b></div>
+            }
+            @if (Model.Dashboard.LargestAssets.Count == 0) { <p class="empty-state">Keine Asset-Requests.</p> }
+        </div>
+    </article>
+</section>
+
+<section class="panel panel--wide analytics-section">
+    <header class="panel-header"><div><p class="eyebrow">Regelbasierte Hinweise</p><h2>Auffällige Clients</h2></div><a asp-page="/Security/Overview">Sicherheitsanalyse öffnen</a></header>
+    <div class="panel-body table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Client</th><th>IP</th><th>Klassifikation</th><th>Score</th><th>Zuletzt gesehen</th></tr></thead>
+            <tbody>
+            @foreach (var client in Model.Dashboard.SuspiciousClients)
+            {
+                <tr>
+                    <td><a asp-page="/Security/Client" asp-route-id="@client.ClientId"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? "geschätzt" : "First-Party-ID")</small></td>
+                    <td><code>@(client.RemoteAddress.Length == 0 ? "–" : client.RemoteAddress)</code></td>
+                    <td>@client.Classification</td>
+                    <td><span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">@client.AutomationScore · @client.RiskLevel</span></td>
+                    <td>@client.LastSeenAt.ToLocalTime().ToString("g")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
 </section>

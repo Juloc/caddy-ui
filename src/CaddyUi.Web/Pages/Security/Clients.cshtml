@@ -1,53 +1,31 @@
 @page
 @model CaddyUi.Web.Pages.Security.ClientsModel
 @{
-    ViewData["Title"] = "Bots & Sicherheit";
+    ViewData["Title"] = "Besucher & Clients";
 }
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Clientanalyse</p>
-        <h1>Bots &amp; Sicherheit</h1>
-        <p class="page-description">Client, Requests, Pageviews und Risikobewertung bleiben getrennte Größen. Bewertungen sind regelbasiert und nachvollziehbar.</p>
+        <p class="eyebrow">Technische Identitäten</p>
+        <h1>Besucher &amp; Clients</h1>
+        <p class="page-description">Ohne First-Party-Beacon ist ein Client nur eine pseudonyme, geschätzte technische Identität. Er darf nicht als sicher erkannte Person interpretiert werden.</p>
     </div>
     <span class="status-badge status-badge--neutral">@Model.Clients.Count Clients</span>
 </section>
 
 <section class="panel panel--wide">
-    <header class="panel-header">
-        <div>
-            <p class="eyebrow">Zuletzt aktiv</p>
-            <h2>Clients</h2>
-        </div>
-    </header>
+    <header class="panel-header"><div><p class="eyebrow">Zuletzt aktiv</p><h2>Clients</h2></div><a asp-page="/Security/Overview">Security Analytics</a></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Client</th>
-                    <th>Letzte IP</th>
-                    <th>Requests</th>
-                    <th>Pageviews</th>
-                    <th>Bewertung</th>
-                    <th>Zuletzt gesehen</th>
-                </tr>
-            </thead>
+            <thead><tr><th>Client</th><th>Letzte IP</th><th>Requests</th><th>Pageviews</th><th>Bewertung</th><th>Zuletzt gesehen</th></tr></thead>
             <tbody>
                 @foreach (var client in Model.Clients)
                 {
                     <tr>
-                        <td>
-                            <a asp-page="/Security/Client" asp-route-id="@client.Id"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a>
-                            <small>@(client.Estimated ? "geschätzter Client" : "First-Party-ID")</small>
-                        </td>
+                        <td><a asp-page="/Security/Client" asp-route-id="@client.Id"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? "geschätzter Client" : "First-Party-ID")</small></td>
                         <td><code>@(string.IsNullOrWhiteSpace(client.LatestAddress) ? "–" : client.LatestAddress)</code></td>
-                        <td>@client.RequestCount</td>
-                        <td>@client.PageViewCount</td>
-                        <td>
-                            <span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">
-                                @client.Classification · @client.AutomationScore
-                            </span>
-                        </td>
+                        <td>@client.RequestCount</td><td>@client.PageViewCount</td>
+                        <td><span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">@client.Classification · @client.AutomationScore</span></td>
                         <td>@client.LastSeenAt.ToLocalTime().ToString("g")</td>
                     </tr>
                 }

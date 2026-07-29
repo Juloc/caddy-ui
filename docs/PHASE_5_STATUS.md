@@ -1,6 +1,6 @@
 # Phase 5 – IP Intelligence, Bot-Erkennung und Blockierung
 
-Status: Implementierung begonnen  
+Status: implementiert und in CI verifiziert  
 Branch: `agent/dotnet-postgres-phase-5`  
 Basis: `agent/dotnet-postgres-phase-4`
 
@@ -19,6 +19,18 @@ Basis: `agent/dotnet-postgres-phase-4`
 - Security Events, Block-History und Audit Events mit Correlation-ID
 - Betriebsmodi disabled, shadow und active
 
+## Verifikation
+
+- `Verify`: erfolgreich
+- `Verify .NET rebuild`: erfolgreich
+- Restore, Format, Release-Build und alle Tests: erfolgreich
+- PostgreSQL-Migration und Legacy-Import: erfolgreich
+- Companion- und Bundle-Container: erfolgreich
+- private und reservierte IPs erzeugen keinen RIPEstat-Aufruf
+- Risikoengine ist für gleiche Eingaben deterministisch
+- Block- und Unblock-Pfad schreiben History, Security Event und Audit Event
+- atomische Blocklist kann auf den vorherigen Stand zurückgerollt werden
+
 ## Isolation
 
 - externe IP Intelligence ist standardmäßig deaktiviert
@@ -27,8 +39,7 @@ Basis: `agent/dotnet-postgres-phase-4`
 - der bestehende Python-Produktivpfad bleibt unverändert aktiv
 - keine produktive Caddy-Konfiguration wird in Phase 5 automatisch umgestellt
 
-## Noch ausstehend
+## Produktionsvalidierung
 
-- CI-Verifikation
 - Shadow-Vergleich mit realen Produktionslogs
 - kontrollierter aktiver Blocklist-Test mit absichtlich blockierter Test-IP
