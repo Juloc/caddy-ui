@@ -1,0 +1,123 @@
+name: caddy-ui-shadow
+
+x-caddy-ui-image: &caddy-ui-image
+  image: caddy-ui-dotnet-shadow:${CADDY_UI_SHADOW_IMAGE_TAG:-phase9-local}
+  build:
+    context: ../..
+    dockerfile: Dockerfile.dotnet
+    target: dotnet-companion
+
+x-caddy-ui-environment: &caddy-ui-environment
+  ConnectionStrings__CaddyUi: Host=postgres;Port=5432;Database=${CADDY_UI_SHADOW_DB_NAME};Username=${CADDY_UI_SHADOW_DB_USER};Password=${CADDY_UI_SHADOW_DB_PASSWORD}
+  Database__ApplyMigrationsOnStartup: "false"
+  DataProtection__PersistKeysToPostgreSql: "true"
+  Authentication__BootstrapUsername: ${CADDY_UI_SHADOW_ADMIN_USERNAME}
+  Authentication__BootstrapPassword: ${CADDY_UI_SHADOW_ADMIN_PASSWORD}
+  Security__PublicOrigin: ""
+  Security__RequireTotp: "false"
+  Analytics__Enabled: "true"
+  CADDY_UI_ANALYTICS_ENABLED: "true"
+  CADDY_UI_LOG_PATHS: /var/log/caddy/${CADDY_UI_SHADOW_ACCESS_LOG:-access.log}
+  CADDY_UI_ROUTE_WRITE_MODE: disabled
+  CADDY_UI_DNS_WRITE_MODE: disabled
+  CADDY_UI_OPERATIONS_WORKER_ENABLED: "false"
+  CADDY_UI_BLOCKLIST_WRITE_MODE: disabled
+  CADDY_UI_IP_INTELLIGENCE_ENABLED: "false"
+  CADDY_UI_RISK_ASSESSMENT_ENABLED: "false"
+  Cutover__Enabled: "false"
+  Cutover__LegacySqlitePath: /legacy/caddy-ui.db
+  Cutover__ManifestDirectory: /state/cutover-manifests
+  Cutover__MinimumShadowHours: ${CADDY_UI_SHADOW_MIN_HOURS:-24}
+  Cutover__MaximumIngestionLagMinutes: ${CADDY_UI_SHADOW_MAX_LAG_MINUTES:-10}
+  Cutover__StatisticsTolerancePercent: ${CADDY_UI_SHADOW_TOLERANCE_PERCENT:-5}
+  ASPNETCORE_URLS: http://0.0.0.0:8098;http://0.0.0.0:8099
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: caddy-ui-shadow-postgres
+    environment:
+      POSTGRES_DB: ${CADDY_UI_SHADOW_DB_NAME}
+      POSTGRES_USER: ${CADDY_UI_SHADOW_DB_USER}
+      POSTGRES_PASSWORD: ${CADDY_UI_SHADOW_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - shadow
+
+  migrate:
+    <<: *caddy-ui-image
+    container_name: caddy-ui-shadow-migrate
+    command: ["migrate", "schema"]
+    environment: *caddy-ui-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    networks:
+      - shadow
+
+  caddy-ui:
+    <<: *caddy-ui-image
+    container_name: caddy-ui-dotnet-shadow
+    command: ["web"]
+    environment: *caddy-ui-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - 127.0.0.1:${CADDY_UI_SHADOW_ADMIN_PORT:-18098}:8098
+    expose:
+      - "8099"
+    volumes:
+      - type: bind
+        source: ${CADDY_UI_SHADOW_LOG_DIR}
+        target: /var/log/caddy
+        read_only: true
+      - type: bind
+        source: ${CADDY_UI_SHADOW_LEGACY_SQLITE}
+        target: /legacy/caddy-ui.db
+        read_only: true
+      - shadow-state:/state
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - --show-error
+        - http://127.0.0.1:8098/health/ready
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - shadow
+
+volumes:
+  postgres-data:
+  shadow-state:
+
+networks:
+  shadow:
+    internal: true
