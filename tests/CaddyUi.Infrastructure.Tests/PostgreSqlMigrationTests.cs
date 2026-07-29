@@ -24,7 +24,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Migrations_CreatePhaseThreeSchemaAndPartitions()
+    public async Task Migrations_CreatePhaseFourSchemaAndPartitions()
     {
         var options = new DbContextOptionsBuilder<CaddyUiDbContext>()
             .UseNpgsql(
@@ -50,6 +50,9 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         Assert.Contains(
             "20260728230000_PhaseThreeAuthenticationAndDomainManagement",
             appliedMigrations);
+        Assert.Contains(
+            "20260728240000_PhaseFourAnalyticsRuntime",
+            appliedMigrations);
 
         var requiredTables = new[]
         {
@@ -61,7 +64,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             "caddy_ui.page_views",
             "caddy_ui.ip_intelligence_cache",
             "caddy_ui.migration_runs",
-            "caddy_ui.data_protection_keys"
+            "caddy_ui.data_protection_keys",
         };
 
         foreach (var table in requiredTables)
@@ -113,11 +116,29 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             .SingleAsync();
         Assert.True(isPartitioned);
 
+        var retentionFunctionExists = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT to_regprocedure(
+                    'caddy_ui.drop_expired_request_event_partitions(date)') IS NOT NULL AS "Value"
+                """)
+            .SingleAsync();
+        Assert.True(retentionFunctionExists);
+
+        var pageViewNavigationIndexExists = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT to_regclass(
+                    'caddy_ui.ix_page_views_navigation') IS NOT NULL AS "Value"
+                """)
+            .SingleAsync();
+        Assert.True(pageViewNavigationIndexExists);
+
         database.DataProtectionKeys.Add(
             new DataProtectionKey
             {
-                FriendlyName = "phase-three-test",
-                Xml = "<key />"
+                FriendlyName = "phase-four-test",
+                Xml = "<key />",
             });
         await database.SaveChangesAsync();
 
