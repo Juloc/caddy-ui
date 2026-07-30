@@ -24,8 +24,8 @@ public sealed class CaddyCertificateLogReaderTests
         try
         {
             var result = CaddyCertificateLogReader.Read(path);
+            var state = result["*.juloc.de"];
 
-            var state = Assert.Contains("*.juloc.de", result);
             Assert.Equal("retry-scheduled", state.CurrentState);
             Assert.Equal(3, state.AttemptCount);
             Assert.Equal(timestamp.AddMinutes(2), state.NextAttemptAt);
@@ -52,8 +52,8 @@ public sealed class CaddyCertificateLogReaderTests
         try
         {
             var result = CaddyCertificateLogReader.Read(path);
+            var state = result["*.juloc.de"];
 
-            var state = Assert.Contains("*.juloc.de", result);
             Assert.Equal("propagating", state.CurrentState);
             Assert.True(state.Active);
         }
@@ -89,12 +89,15 @@ public sealed class CaddyCertificateLogReaderTests
         try
         {
             var result = CaddyCertificateLogReader.Read(path);
+            var state = result["*.juloc.de"];
 
-            var state = Assert.Contains("*.juloc.de", result);
             Assert.Equal("succeeded", state.CurrentState);
             Assert.Equal(start.AddMinutes(1), state.LastSuccessAt);
             Assert.Equal(0, state.ConsecutiveFailures);
-            Assert.DoesNotContain("supersecret", string.Join(' ', state.RecentEvents.Select(item => item.Detail)), StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "supersecret",
+                string.Join(' ', state.RecentEvents.Select(item => item.Detail)),
+                StringComparison.Ordinal);
         }
         finally
         {
@@ -107,7 +110,7 @@ public sealed class CaddyCertificateLogReaderTests
         var directory = Path.Combine(Path.GetTempPath(), $"caddy-ui-certificate-tests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "caddy.log");
-        File.WriteAllLines(path, entries.Select(JsonSerializer.Serialize));
+        File.WriteAllLines(path, entries.Select(entry => JsonSerializer.Serialize(entry)));
         return path;
     }
 
