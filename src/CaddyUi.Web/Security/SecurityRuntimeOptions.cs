@@ -8,12 +8,14 @@ public sealed class SecurityRuntimeOptions
         Uri? publicOrigin,
         string adminProxySecret,
         string portalProxySecret,
-        bool requireTotp)
+        bool requireTotp,
+        string cookieNamespace)
     {
         PublicOrigin = publicOrigin;
         AdminProxySecret = adminProxySecret;
         PortalProxySecret = portalProxySecret;
         RequireTotp = requireTotp;
+        CookieNamespace = cookieNamespace;
     }
 
     public Uri? PublicOrigin { get; }
@@ -23,6 +25,12 @@ public sealed class SecurityRuntimeOptions
     public string PortalProxySecret { get; }
 
     public bool RequireTotp { get; }
+
+    public string CookieNamespace { get; }
+
+    public string LanAdminCookieName => $"{CookieNamespace}_admin";
+
+    public string PublicAdminCookieName => $"__Host-{CookieNamespace}_admin";
 
     public bool PublicAccessConfigured => PublicOrigin is not null;
 
@@ -50,6 +58,11 @@ public sealed class SecurityRuntimeOptions
             }
         }
 
+        var cookieNamespace = NormalizeCookieNamespace(
+            configuration["CADDY_UI_COOKIE_NAMESPACE"] ??
+            configuration["Security:CookieNamespace"] ??
+            "caddy_ui");
+
         return new SecurityRuntimeOptions(
             publicOrigin,
             configuration["CADDY_UI_ADMIN_PROXY_SECRET"] ??
@@ -60,7 +73,8 @@ public sealed class SecurityRuntimeOptions
                 string.Empty,
             ParseBoolean(
                 configuration["CADDY_UI_REQUIRE_TOTP"] ??
-                configuration["Security:RequireTotp"]));
+                configuration["Security:RequireTotp"]),
+            cookieNamespace);
     }
 
     public static bool IsPrivateOrLoopback(IPAddress? address)
@@ -94,6 +108,19 @@ public sealed class SecurityRuntimeOptions
             address.IsIPv6SiteLocal ||
             bytes[0] == 0xFC ||
             bytes[0] == 0xFD;
+    }
+
+    private static string NormalizeCookieNamespace(string value)
+    {
+        value = value.Trim();
+        if (value.Length is < 1 or > 40 ||
+            value.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '_' and not '-'))
+        {
+            throw new InvalidOperationException(
+                "CADDY_UI_COOKIE_NAMESPACE must contain 1 to 40 ASCII letters, digits, underscores, or hyphens.");
+        }
+
+        return value;
     }
 
     private static bool ParseBoolean(string? value)
