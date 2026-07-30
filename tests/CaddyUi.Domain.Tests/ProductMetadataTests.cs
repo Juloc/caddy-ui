@@ -5,8 +5,8 @@ namespace CaddyUi.Domain.Tests;
 public sealed class ProductMetadataTests
 {
     [Fact]
-    public void FoundationVersion_IdentifiesCurrentBeta()
+    public void FoundationVersion_IdentifiesCurrentStableRelease()
     {
-        Assert.Equal("2.0.0-beta.2", ProductMetadata.FoundationVersion);
+        Assert.Equal("2.0.0", ProductMetadata.FoundationVersion);
     }
 }
