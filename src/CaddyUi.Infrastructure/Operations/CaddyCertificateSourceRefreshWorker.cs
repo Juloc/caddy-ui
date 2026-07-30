@@ -12,6 +12,7 @@ namespace CaddyUi.Infrastructure.Operations;
 public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
 {
     private const string ProtectedSecretPrefix = "secret://protected/";
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(30);
     private readonly IDbContextFactory<CaddyUiDbContext> _contextFactory;
     private readonly OperationsOptions _options;
     private readonly ISecretReferenceResolver _secretResolver;
@@ -31,7 +32,21 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await RefreshAsync(cancellationToken);
+        try
+        {
+            await RefreshAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Initial managed-domain certificate source refresh was unavailable. The background worker will retry.");
+        }
+
         await base.StartAsync(cancellationToken);
     }
 
@@ -41,7 +56,6 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                 await RefreshAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -52,6 +66,8 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
             {
                 _logger.LogError(exception, "Could not refresh managed-domain certificate sources.");
             }
+
+            await Task.Delay(RefreshInterval, stoppingToken);
         }
     }
 
