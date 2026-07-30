@@ -61,7 +61,6 @@ public static class DependencyInjection
         services.AddSingleton(routingOptions);
         services.AddSingleton<GuidedSetupService>();
         services.AddSingleton<ICaddyCommandRunner, ProcessCaddyCommandRunner>();
-        services.AddSingleton<CaddyApplyService>();
 
         services.AddSingleton(operationsOptions);
         services.AddSingleton<OperationsStore>();
@@ -98,7 +97,10 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(10);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-DDNS/2.1");
         });
-        services.AddHostedService<CaddyCertificateSourceRefreshWorker>();
+        services.AddSingleton<CaddyCertificateSourceRefreshWorker>();
+        services.AddHostedService(serviceProvider =>
+            serviceProvider.GetRequiredService<CaddyCertificateSourceRefreshWorker>());
+        services.AddSingleton<CaddyApplyService>();
         services.AddHostedService<SystemJobWorker>();
 
         services.AddSingleton(analyticsOptions);
