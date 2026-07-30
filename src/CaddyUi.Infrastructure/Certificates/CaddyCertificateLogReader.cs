@@ -113,14 +113,15 @@ internal static partial class CaddyCertificateLogReader
 
     private static IReadOnlyList<CaddyCertificateLogEvent> ParseLine(string line)
     {
-        if (string.IsNullOrWhiteSpace(line) || line[0] != '{')
+        var candidate = line.TrimStart();
+        if (candidate.Length == 0 || candidate[0] != '{')
         {
             return [];
         }
 
         try
         {
-            using var document = JsonDocument.Parse(line);
+            using var document = JsonDocument.Parse(candidate);
             var root = document.RootElement;
             var message = ReadString(root, "msg");
             var logger = ReadString(root, "logger");
@@ -250,7 +251,7 @@ internal static partial class CaddyCertificateLogReader
 
         if (nextAttemptAt is not null)
         {
-            detail = $"{detail} Nächster Versuch laut Log: {nextAttemptAt:dd.MM.yyyy HH:mm:ss} UTC.";
+            detail = $"{detail} Nächster Versuch laut Log: {nextAttemptAt:dd.MM.yyyy HH:mm:ss} UTC.".Trim();
         }
 
         return string.IsNullOrWhiteSpace(detail) ? fallback : detail;
@@ -369,7 +370,7 @@ internal static partial class CaddyCertificateLogReader
         var lastError = events
             .LastOrDefault(item => item.State is "failed" or "retry-scheduled")
             ?.Detail ?? string.Empty;
-        var active = latest.State is "started" or "challenging" or "propagating" &&
+        var active = (latest.State is "started" or "challenging" or "propagating") &&
                      latest.Timestamp >= DateTimeOffset.UtcNow.AddMinutes(-15);
         return new CaddyCertificateLogState(
             lastAttemptAt,
@@ -499,7 +500,7 @@ internal static partial class CaddyCertificateLogReader
     [GeneratedRegex(@"(?<![A-Za-z0-9_-])(?:\*\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?![A-Za-z0-9_-])", RegexOptions.CultureInvariant)]
     private static partial Regex DomainPattern();
 
-    [GeneratedRegex(@"(?i)((?:password|token|api[_-]?key|secret)\s*[=:]\s*)[^\s,;\""']+")]
+    [GeneratedRegex("(?i)((?:password|token|api[_-]?key|secret)\\s*[=:]\\s*)[^\\s,;\\\"']+")]
     private static partial Regex SecretPattern();
 
     [GeneratedRegex(@"^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h|d)$", RegexOptions.CultureInvariant)]
