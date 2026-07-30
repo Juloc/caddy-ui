@@ -16,15 +16,18 @@ public sealed class ProvidersModel : PageModel
     private readonly DomainProviderStore _store;
     private readonly DnsProviderRuntimeService _runtime;
     private readonly ISecretReferenceProtector _secretProtector;
+    private readonly CaddyCertificateSourceRefreshWorker _certificateSources;
 
     public ProvidersModel(
         DomainProviderStore store,
         DnsProviderRuntimeService runtime,
-        ISecretReferenceProtector secretProtector)
+        ISecretReferenceProtector secretProtector,
+        CaddyCertificateSourceRefreshWorker certificateSources)
     {
         _store = store;
         _runtime = runtime;
         _secretProtector = secretProtector;
+        _certificateSources = certificateSources;
     }
 
     public IReadOnlyList<DnsProviderRecord> Providers { get; private set; } = Array.Empty<DnsProviderRecord>();
@@ -94,6 +97,7 @@ public sealed class ProvidersModel : PageModel
                 JsonSerializer.Serialize(settings, JsonOptions),
                 JsonSerializer.Serialize(secrets, JsonOptions),
                 HttpContext.RequestAborted);
+            await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
             TempData["Message"] = "DNS-Provider wurde verschlüsselt gespeichert. Ordne jetzt eine Domain zu und führe einen Verbindungstest aus.";
             return RedirectToPage();
         }
@@ -111,6 +115,7 @@ public sealed class ProvidersModel : PageModel
         try
         {
             await _store.SetProviderEnabledAsync(providerId, enabled, HttpContext.RequestAborted);
+            await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
