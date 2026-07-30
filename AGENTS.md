@@ -8,16 +8,16 @@ Caddy UI is a compact self-hosted control plane for Caddy. Its primary jobs are 
 
 - The application runtime is .NET 10 with ASP.NET Core Razor Pages, EF Core and PostgreSQL 17.
 - Go is limited to the custom Caddy build, DNS modules and the Caddy UI request guard.
-- Do not add or restore a parallel Python runtime.
+- Keep one canonical application runtime and remove replaced implementations completely.
 - Keep the UI server-rendered. Use JavaScript only where progressive enhancement is required.
 - Never require Docker socket access.
 - Separate contracts, domain logic, application services, infrastructure and presentation.
-- Remove replaced or dead implementations completely. Do not leave compatibility copies, duplicate CSS systems or generic final-fix scripts.
+- Do not leave compatibility copies, duplicate CSS systems or generic final-fix scripts.
 - Preserve user data. Schema and configuration changes require backup, migration validation and rollback paths.
 - The legacy SQLite database is read-only migration input, not an active persistence backend.
 - Validate the complete Caddy configuration before activation. Apply changes atomically and restore the previous revision if reload fails.
-- Never render secrets back to the browser or persist resolved secret values in PostgreSQL, logs, reports, diffs or generated Caddy files.
-- Use English for code, documentation, UI text, tests, logs and commit messages.
+- Never render secrets back to the browser or persist plaintext secret values in PostgreSQL, logs, reports, diffs or generated Caddy files.
+- Use English for code, technical documentation, tests, logs and commit messages. Product UI text is German.
 - Format C# with `dotnet format` and Go with `gofmt`.
 - State-changing requests require authorization and CSRF protection.
 

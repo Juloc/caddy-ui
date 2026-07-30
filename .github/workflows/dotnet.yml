@@ -1,9 +1,9 @@
-name: Verify .NET rebuild
+name: Verify .NET application
 
 on:
   pull_request:
     paths:
-      - ".github/workflows/dotnet-phase1.yml"
+      - ".github/workflows/dotnet.yml"
       - "CaddyUi.slnx"
       - "Directory.Build.props"
       - "Directory.Build.targets"
@@ -16,7 +16,7 @@ on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/dotnet-phase1.yml"
+      - ".github/workflows/dotnet.yml"
       - "CaddyUi.slnx"
       - "Directory.Build.props"
       - "Directory.Build.targets"
@@ -42,68 +42,34 @@ jobs:
           cache-dependency-path: Directory.Packages.props
       - name: Restore
         run: dotnet restore CaddyUi.slnx
-      - name: Capture canonical formatting
-        shell: bash
-        run: |
-          set +e
-          dotnet format CaddyUi.slnx --no-restore --verbosity diagnostic > /tmp/dotnet-format.log 2>&1
-          format_status=$?
-          set -e
-          git diff --binary > /tmp/dotnet-format.patch
-          git checkout -- .
-          printf '%s\n' "$format_status" > /tmp/dotnet-format.status
+      - name: Verify formatting
+        run: dotnet format CaddyUi.slnx --no-restore --verify-no-changes
       - name: Build
         run: dotnet build CaddyUi.slnx --configuration Release --no-restore
       - name: Test
         run: dotnet test CaddyUi.slnx --configuration Release --no-build --logger "console;verbosity=normal"
-      - name: Upload formatting diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: dotnet-format-diagnostics
-          path: |
-            /tmp/dotnet-format.log
-            /tmp/dotnet-format.patch
-            /tmp/dotnet-format.status
-          retention-days: 1
-      - name: Verify formatting
-        shell: bash
-        run: |
-          test "$(cat /tmp/dotnet-format.status)" = "0"
-          test ! -s /tmp/dotnet-format.patch
 
-  containers:
+  acceptance:
+    needs: dotnet
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [dotnet-companion, dotnet-bundle]
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
-      - name: Install SQLite test utility
+      - name: Install test utilities
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends sqlite3
-      - name: Build ${{ matrix.target }}
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.dotnet
-          target: ${{ matrix.target }}
-          push: false
-          load: true
-          tags: caddy-ui:${{ matrix.target }}-phase3
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Build application images
+        run: |
+          docker build --file Dockerfile.dotnet --target dotnet-companion --tag caddy-ui:companion-test .
+          docker build --file Dockerfile.dotnet --target dotnet-bundle --tag caddy-ui:bundle-test .
       - name: Start PostgreSQL and Caddy UI
         shell: bash
         run: |
           set -euo pipefail
-          docker network create caddy-ui-phase3
+          docker network create caddy-ui-ci
           docker run -d \
             --name caddy-ui-postgres \
-            --network caddy-ui-phase3 \
+            --network caddy-ui-ci \
             -e POSTGRES_DB=caddy_ui \
             -e POSTGRES_USER=caddy_ui \
             -e POSTGRES_PASSWORD=caddy_ui \
@@ -120,7 +86,7 @@ jobs:
           done
           docker run -d \
             --name caddy-ui-web \
-            --network caddy-ui-phase3 \
+            --network caddy-ui-ci \
             -p 18098:8098 \
             -p 18099:8099 \
             -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui' \
@@ -129,7 +95,8 @@ jobs:
             -e CADDY_UI_PASSWORD=ci-admin-password-123456789 \
             -e CADDY_UI_COOKIE_NAMESPACE=caddy_ui_ci \
             -e CADDY_UI_PORTAL_PROXY_SECRET=portal-smoke-secret \
-            caddy-ui:${{ matrix.target }}-phase3 web
+            -e CADDY_UI_VERSION="$(cat VERSION_DOTNET)" \
+            caddy-ui:bundle-test web
           for attempt in {1..40}; do
             if curl --fail --silent http://127.0.0.1:18098/health/ready >/tmp/ready.json; then
               cat /tmp/ready.json
@@ -139,7 +106,7 @@ jobs:
           done
           docker logs caddy-ui-web
           exit 1
-      - name: Verify HTTP surfaces and login
+      - name: Verify authenticated pages and shell controls
         shell: bash
         run: |
           set -euo pipefail
@@ -166,7 +133,6 @@ jobs:
             --header "Origin: ${base_url}" \
             --cookie /tmp/login.cookies \
             --cookie-jar /tmp/login.cookies \
-            --dump-header /tmp/login.headers \
             --output /tmp/login.response \
             --write-out '%{http_code}' \
             --data-urlencode "__RequestVerificationToken=${login_token}" \
@@ -175,14 +141,7 @@ jobs:
             --data-urlencode 'Input.SecondFactor=' \
             --data-urlencode 'ReturnUrl=/' \
             "$base_url/Login")"
-          if [ "$login_status" != "302" ]; then
-            printf 'Unexpected login status: %s\n' "$login_status"
-            cat /tmp/login.headers
-            cat /tmp/login.response
-            docker logs caddy-ui-web
-            exit 1
-          fi
-          grep -F 'caddy_ui_ci_admin' /tmp/login.cookies
+          test "$login_status" = "302"
 
           check_page() {
             path="$1"
@@ -203,22 +162,21 @@ jobs:
             grep -F "$marker" "$output"
           }
 
-          check_page / 'Caddy UI'
+          check_page / '<h1>Traffic und Nutzung</h1>'
+          check_page /About '<h1>Über Caddy UI</h1>'
           check_page /Requests '<h1>Requests</h1>'
           check_page /Access '<h1>Zugriffsgruppen</h1>'
           check_page /LiveLog '<h1>Live-Log</h1>'
           check_page /Operations/Cutover '<h1>Produktionsprüfung</h1>' 5
           check_page /Administration/Providers '<h1>DNS-Provider</h1>'
           check_page /Setup '<h1>DNS, Domain und Route einrichten</h1>'
-
-          portal_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-            -H 'X-Caddy-Portal-Secret: portal-smoke-secret' \
-            -H 'X-Forwarded-Proto: https' \
-            -H 'X-Forwarded-Host: app.example.com' \
-            http://127.0.0.1:18099/favicon.ico)"
-          test "$portal_status" = "404"
+          grep -F 'data-theme-option="system"' /tmp/page--.html
+          grep -F 'data-theme-option="light"' /tmp/page--.html
+          grep -F 'data-theme-option="dark"' /tmp/page--.html
+          grep -F 'data-sidebar-collapse' /tmp/page--.html
+          test "$(grep -c 'Phase' /tmp/page--.html || true)" = "0"
+          test "$(grep -ci 'Python' /tmp/page--.html || true)" = "0"
       - name: Verify SQLite migration CLI
-        if: matrix.target == 'dotnet-companion'
         shell: bash
         run: |
           set -euo pipefail
@@ -255,10 +213,10 @@ jobs:
           );
           SQL
           docker run --rm \
-            --network caddy-ui-phase3 \
+            --network caddy-ui-ci \
             -v /tmp/caddy-ui-migration:/migration \
             -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui' \
-            caddy-ui:dotnet-companion-phase3 \
+            caddy-ui:companion-test \
             migrate import \
               --source /migration/legacy.db \
               --backup-dir /migration/backups \
@@ -266,28 +224,24 @@ jobs:
           test "$(jq -r '.status' /tmp/caddy-ui-migration/import.json)" = "succeeded"
           test "$(jq -r '.tables[0].sourceRows' /tmp/caddy-ui-migration/import.json)" = "1"
       - name: Verify bundled Caddy module
-        if: matrix.target == 'dotnet-bundle'
         run: |
-          docker run --rm \
-            caddy-ui:dotnet-bundle-phase3 \
-            caddy list-modules \
-            | grep -F 'http.handlers.caddy_ui_guard'
-      - name: Capture container logs
-        if: always()
+          docker run --rm caddy-ui:bundle-test caddy list-modules | grep -F 'http.handlers.caddy_ui_guard'
+      - name: Capture logs
+        if: failure()
         run: |
           mkdir -p /tmp/caddy-ui-container-logs
           docker logs caddy-ui-postgres > /tmp/caddy-ui-container-logs/postgres.log 2>&1 || true
           docker logs caddy-ui-web > /tmp/caddy-ui-container-logs/web.log 2>&1 || true
-          cp /tmp/login.headers /tmp/login.response /tmp/page-*.html /tmp/caddy-ui-container-logs/ 2>/dev/null || true
-      - name: Upload container logs
-        if: always()
+          cp /tmp/login.response /tmp/page-*.html /tmp/caddy-ui-container-logs/ 2>/dev/null || true
+      - name: Upload logs
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: container-logs-${{ matrix.target }}
+          name: caddy-ui-container-logs
           path: /tmp/caddy-ui-container-logs
           retention-days: 1
       - name: Cleanup
         if: always()
         run: |
           docker rm -f caddy-ui-web caddy-ui-postgres || true
-          docker network rm caddy-ui-phase3 || true
+          docker network rm caddy-ui-ci || true

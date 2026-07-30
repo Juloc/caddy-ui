@@ -9,13 +9,12 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Caddy UI 2.0 · Read-only</p>
-        <h1>Traffic und Nutzung getrennt auswerten</h1>
+        <p class="eyebrow">Übersicht</p>
+        <h1>Traffic und Nutzung</h1>
         <p class="page-description">
             Pageviews beschreiben erfolgreiche Dokumentnavigationen. Requests zeigen die tatsächliche Serverlast einschließlich JavaScript, CSS, Bildern, APIs, Bots und Fehlern.
         </p>
     </div>
-    <span class="status-badge status-badge--ok">Phase 6</span>
 </section>
 
 <partial name="Shared/_AnalyticsFilters" model="Model" />
@@ -33,43 +32,32 @@
     <article class="metric-card"><span class="metric-label">Bot-Anteil</span><strong class="metric-value">@Model.Dashboard.BotSharePercent.ToString("N1") %</strong><span class="metric-detail">Requestanteil, nicht Besucher</span></article>
 </section>
 
-<section class="workspace-grid workspace-grid--analytics">
-    <article class="panel panel--wide">
-        <header class="panel-header">
-            <div><p class="eyebrow">Zeitreihe</p><h2>Requests und Pageviews</h2></div>
-            <div class="chart-legend"><span><i class="legend-request"></i>Requests</span><span><i class="legend-pageview"></i>Pageviews</span></div>
-        </header>
-        <div class="panel-body">
-            @if (series.Count == 0)
-            {
-                <p class="empty-state">Für den ausgewählten Zeitraum liegen keine Daten vor.</p>
-            }
-            else
-            {
-                <svg class="traffic-chart" viewBox="0 0 720 220" role="img" aria-label="Requests und Pageviews im Zeitverlauf">
-                    <line x1="10" y1="200" x2="710" y2="200" class="chart-axis" />
-                    @for (var index = 0; index < series.Count; index++)
-                    {
-                        var point = series[index];
-                        var requestHeight = (int)Math.Round(point.Requests * 180d / maximum);
-                        var pageViewHeight = (int)Math.Round(point.PageViews * 180d / maximum);
-                        var x = 10 + (index * barWidth);
-                        <rect x="@x" y="@(200 - requestHeight)" width="@Math.Max(1, barWidth - 2)" height="@requestHeight" class="chart-request" />
-                        <rect x="@x" y="@(200 - pageViewHeight)" width="@Math.Max(1, barWidth - 2)" height="@pageViewHeight" class="chart-pageview" />
-                    }
-                </svg>
-            }
-        </div>
-    </article>
-
-    <aside class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Laufzeit</p><h2>@Model.StatusInfo.Product</h2></div></header>
-        <div class="panel-body definition-list">
-            <div><span>Version</span><strong>@Model.StatusInfo.Version</strong></div>
-            <div><span>Stack</span><strong>@Model.StatusInfo.Runtime</strong></div>
-            <div><span>Modus</span><strong>Parallelbetrieb</strong></div>
-        </div>
-    </aside>
+<section class="panel panel--wide">
+    <header class="panel-header">
+        <div><p class="eyebrow">Zeitreihe</p><h2>Requests und Pageviews</h2></div>
+        <div class="chart-legend"><span><i class="legend-request"></i>Requests</span><span><i class="legend-pageview"></i>Pageviews</span></div>
+    </header>
+    <div class="panel-body">
+        @if (series.Count == 0)
+        {
+            <p class="empty-state">Für den ausgewählten Zeitraum liegen keine Daten vor.</p>
+        }
+        else
+        {
+            <svg class="traffic-chart" viewBox="0 0 720 220" role="img" aria-label="Requests und Pageviews im Zeitverlauf">
+                <line x1="10" y1="200" x2="710" y2="200" class="chart-axis" />
+                @for (var index = 0; index < series.Count; index++)
+                {
+                    var point = series[index];
+                    var requestHeight = (int)Math.Round(point.Requests * 180d / maximum);
+                    var pageViewHeight = (int)Math.Round(point.PageViews * 180d / maximum);
+                    var x = 10 + (index * barWidth);
+                    <rect x="@x" y="@(200 - requestHeight)" width="@Math.Max(1, barWidth - 2)" height="@requestHeight" class="chart-request" />
+                    <rect x="@x" y="@(200 - pageViewHeight)" width="@Math.Max(1, barWidth - 2)" height="@pageViewHeight" class="chart-pageview" />
+                }
+            </svg>
+        }
+    </div>
 </section>
 
 <section class="analytics-columns">
