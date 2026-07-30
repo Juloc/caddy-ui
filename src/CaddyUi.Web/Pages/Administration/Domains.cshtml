@@ -1,5 +1,4 @@
 @page
-@using CaddyUi.Domain.Certificates
 @model CaddyUi.Web.Pages.Administration.DomainsModel
 @{
     ViewData["Title"] = "Domains";
@@ -7,110 +6,160 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Routing-Struktur</p>
+        <p class="eyebrow">DNS und Zertifikate</p>
         <h1>Domains</h1>
-        <p class="page-description">Routen werden einer Domain zugeordnet. Mehrere Domains sind unabhängig konfigurierbar. Für neue Domains und Unterrouten ist das Wildcard-Zertifikat der Standard.</p>
+        <p class="page-description">Wildcard und Basisdomain werden getrennt geplant. Der Status unterscheidet Entwurf, aktiven Auftrag und tatsächlich vorhandene Zertifikate.</p>
     </div>
-    <span class="status-badge status-badge--ok">Wildcard standardmäßig</span>
+    <a class="button button--primary" asp-page="/Setup/Index">Geführte Einrichtung</a>
 </section>
 
+@if (TempData["Message"] is string message)
+{
+    <div class="notice notice--success">@message</div>
+}
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
-<section class="workspace-grid">
-    <article class="panel panel--wide">
-        <header class="panel-header">
-            <div>
-                <p class="eyebrow">Verwaltet</p>
-                <h2>@Model.Domains.Count Domains</h2>
-            </div>
+<section class="operations-grid operations-grid--sidebar">
+    <article class="workbench">
+        <header class="workbench-header">
+            <div><p class="eyebrow">Verwaltet</p><h2>@Model.Domains.Count Domains</h2></div>
+            <a class="button button--compact button--quiet" asp-page="/Routing/Preview">Caddy-Vorschau</a>
         </header>
-        <div class="panel-body table-wrap">
-            <table class="data-table">
+        <div class="workbench-body table-wrap">
+            <table class="data-table domain-status-table">
                 <thead>
-                    <tr>
-                        <th>Domain</th>
-                        <th>DNS-Provider</th>
-                        <th>Zertifikat</th>
-                        <th>Routen</th>
-                        <th></th>
-                    </tr>
+                    <tr><th>Domain</th><th>DNS-Provider</th><th>Zertifikate</th><th>Routen</th><th></th></tr>
                 </thead>
                 <tbody>
-                    @foreach (var domain in Model.Domains)
-                    {
-                        <tr>
-                            <td>
-                                <strong>@domain.DisplayName</strong>
-                                <small>@domain.Name</small>
-                                @if (domain.IsDefault)
+                @foreach (var domain in Model.Domains)
+                {
+                    Model.CertificateStatuses.TryGetValue(domain.Id, out var certificateStatus);
+                    <tr>
+                        <td>
+                            <strong>@domain.DisplayName</strong>
+                            <small>@domain.Name</small>
+                            @if (domain.IsDefault)
+                            {
+                                <span class="status-badge status-badge--ok">Standard</span>
+                            }
+                        </td>
+                        <td>
+                            <strong>@(domain.DnsProviderLabel ?? "Nicht zugeordnet")</strong>
+                            @if (domain.DnsProviderId is null)
+                            {
+                                <small>Für Wildcard später erforderlich.</small>
+                            }
+                        </td>
+                        <td>
+                            <div class="certificate-status-list">
+                                @if (certificateStatus is null)
                                 {
-                                    <span class="status-badge status-badge--ok">Standard</span>
+                                    <span class="status-badge status-badge--neutral">Status nicht verfügbar</span>
                                 }
-                            </td>
-                            <td>@(domain.DnsProviderLabel ?? "Nicht zugeordnet")</td>
-                            <td><code>@domain.DefaultCertificateMode</code></td>
-                            <td>@domain.RouteCount</td>
-                            <td>
-                                @if (!domain.IsDefault)
+                                else
                                 {
-                                    <form method="post" asp-page-handler="Default">
-                                        <input type="hidden" name="domainId" value="@domain.Id" />
-                                        <button class="button button--quiet" type="submit">Als Standard</button>
-                                    </form>
+                                    @foreach (var certificate in certificateStatus.Certificates)
+                                    {
+                                        <div class="certificate-status-item">
+                                            <div>
+                                                <code>@certificate.Name</code>
+                                                <small>@certificate.Detail</small>
+                                            </div>
+                                            <span class="status-badge @DomainsModel.StatusClass(certificate.State)">@certificate.Label</span>
+                                        </div>
+                                    }
                                 }
-                            </td>
-                        </tr>
-                    }
-                    @if (Model.Domains.Count == 0)
-                    {
-                        <tr><td colspan="5">Noch keine Domain angelegt.</td></tr>
-                    }
+                            </div>
+                        </td>
+                        <td><strong>@domain.RouteCount</strong><small>verwaltete Route(n)</small></td>
+                        <td class="table-actions">
+                            @if (!domain.IsDefault)
+                            {
+                                <form method="post" asp-page-handler="Default">
+                                    <input type="hidden" name="domainId" value="@domain.Id" />
+                                    <button class="button button--compact button--quiet" type="submit">Als Standard</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Model.Domains.Count == 0)
+                {
+                    <tr><td colspan="5" class="empty-state">Noch keine Domain angelegt.</td></tr>
+                }
                 </tbody>
             </table>
         </div>
     </article>
 
-    <aside class="panel">
-        <header class="panel-header">
-            <div>
-                <p class="eyebrow">Neu</p>
-                <h2>Domain hinzufügen</h2>
-            </div>
+    <aside class="workbench">
+        <header class="workbench-header">
+            <div><p class="eyebrow">Neu</p><h2>Domain hinzufügen</h2></div>
         </header>
-        <div class="panel-body">
-            <form method="post" asp-page-handler="Create" class="form-stack">
-                <label>
-                    <span>Domain</span>
-                    <input asp-for="Input.Name" placeholder="example.com" />
+        <div class="workbench-body">
+            <form method="post" asp-page-handler="Create" class="form-stack" data-domain-form>
+                <label class="field">
+                    <span class="field-label">Domain</span>
+                    <input asp-for="Input.Name" placeholder="example.com" autocomplete="off" />
+                    <span asp-validation-for="Input.Name" class="field-error"></span>
                 </label>
-                <label>
-                    <span>Anzeigename</span>
-                    <input asp-for="Input.DisplayName" placeholder="Example" />
+                <label class="field">
+                    <span class="field-label">Anzeigename</span>
+                    <input asp-for="Input.DisplayName" placeholder="Example" autocomplete="off" />
+                    <small>Optional. Standard ist der Domainname.</small>
                 </label>
-                <label>
-                    <span>DNS-Provider</span>
+                <label class="field">
+                    <span class="field-label">DNS-Provider</span>
                     <select asp-for="Input.DnsProviderId">
-                        <option value="">Kein Provider</option>
+                        <option value="">Später zuordnen</option>
                         @foreach (var provider in Model.Providers)
                         {
-                            <option value="@provider.Id">@provider.Label (@provider.ProviderType)</option>
+                            <option value="@provider.Id">@provider.Label · @provider.ProviderType</option>
                         }
                     </select>
+                    <small>Für Wildcard erforderlich. Die Domain kann trotzdem sicher als blockierter Entwurf gespeichert werden.</small>
                 </label>
-                <label>
-                    <span>Standard-Zertifikat</span>
-                    <select asp-for="Input.DefaultCertificateMode">
-                        <option value="@CertificateMode.Wildcard">Wildcard (Standard)</option>
-                        <option value="@CertificateMode.Individual">Einzelzertifikat</option>
-                    </select>
-                    <small><code>*.example.com</code> deckt genau eine Subdomain-Ebene ab. Tiefere Namen benötigen eine weitere Domain oder ein explizites Zertifikat.</small>
+                <label class="check certificate-choice">
+                    <input asp-for="Input.RequestWildcardCertificate" data-certificate-choice />
+                    <span><strong>Wildcard-Zertifikat</strong><small><code>*.example.com</code> für direkte Subdomains.</small></span>
                 </label>
+                <label class="check certificate-choice">
+                    <input asp-for="Input.RequestBaseCertificate" data-certificate-choice />
+                    <span><strong>Basisdomain-Zertifikat</strong><small><code>example.com</code> ist nicht im Wildcard-Zertifikat enthalten.</small></span>
+                </label>
+                <div class="notice notice--warning" data-certificate-warning hidden>Mindestens eine Zertifikatsart auswählen.</div>
                 <label class="check">
                     <input asp-for="Input.MakeDefault" />
-                    <span>Als Standarddomain verwenden</span>
+                    <span><strong>Als Standarddomain verwenden</strong><small>Neue Routen wählen diese Domain zuerst.</small></span>
                 </label>
-                <button class="button button--primary" type="submit">Domain anlegen</button>
+                <div class="safe-apply-note">
+                    <strong>Nur Entwurf</strong>
+                    <span>Das Anlegen verändert Caddy nicht. Beschaffung startet erst nach Vorschau, Validierung und Apply.</span>
+                </div>
+                <button class="button button--primary" type="submit">Domain sicher anlegen</button>
             </form>
         </div>
     </aside>
 </section>
+
+<section class="workbench operations-section">
+    <header class="workbench-header"><div><p class="eyebrow">Statusmodell</p><h2>Was die Anzeigen bedeuten</h2></div></header>
+    <div class="workbench-body certificate-legend">
+        <span><i class="status-dot status-dot--neutral"></i><strong>Bereit für Apply</strong>Nur im Entwurf.</span>
+        <span><i class="status-dot status-dot--warning"></i><strong>Angefordert</strong>Im aktiven Caddy-Stand, Datei noch nicht nachweisbar.</span>
+        <span><i class="status-dot status-dot--ok"></i><strong>Vorhanden</strong>Zertifikat im Caddy-Speicher gefunden und gültig.</span>
+        <span><i class="status-dot status-dot--danger"></i><strong>Blockiert</strong>Provider, Modul oder Test verhindert die Beschaffung.</span>
+    </div>
+</section>
+
+<script>
+(() => {
+    const form = document.querySelector('[data-domain-form]');
+    if (!form) return;
+    const choices = [...form.querySelectorAll('[data-certificate-choice]')];
+    const warning = form.querySelector('[data-certificate-warning]');
+    const update = () => warning.hidden = choices.some(choice => choice.checked);
+    choices.forEach(choice => choice.addEventListener('change', update));
+    update();
+})();
+</script>
