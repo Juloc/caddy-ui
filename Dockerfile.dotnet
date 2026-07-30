@@ -55,8 +55,12 @@ COPY --from=dotnet-build /out/web/ /app/
 COPY --from=dotnet-build /out/migration/ /app/migration/
 COPY scripts/dotnet-entrypoint.sh /usr/local/bin/caddy-ui
 COPY scripts/caddy-remote.sh /usr/local/bin/caddy-remote
+COPY scripts/prepare-production-config.sh /usr/local/bin/prepare-production-config
 
-RUN chmod 0755 /usr/local/bin/caddy-ui /usr/local/bin/caddy-remote \
+RUN chmod 0755 \
+        /usr/local/bin/caddy-ui \
+        /usr/local/bin/caddy-remote \
+        /usr/local/bin/prepare-production-config \
     && test -f /app/Microsoft.EntityFrameworkCore.Relational.dll
 
 EXPOSE 8098 8099
