@@ -133,7 +133,7 @@ public sealed class OperationsStoreTests : IAsyncLifetime
         var reference = resolver.ProtectOrReference("netcup-private-value");
         var value = await resolver.ResolveAsync(reference);
 
-        Assert.StartsWith("protected://v1/", reference, StringComparison.Ordinal);
+        Assert.StartsWith("secret://protected/v1/", reference, StringComparison.Ordinal);
         Assert.DoesNotContain("netcup-private-value", reference, StringComparison.Ordinal);
         Assert.Equal("netcup-private-value", value);
     }
