@@ -59,6 +59,7 @@ public sealed class LoginPageTests :
     [InlineData("/Routing/Transfer?handler=Download")]
     [InlineData("/Setup")]
     [InlineData("/Access")]
+    [InlineData("/Administration/Acme")]
     [InlineData("/Administration/Domains")]
     [InlineData("/Administration/Providers")]
     [InlineData("/Operations/Dns")]

@@ -1,0 +1,72 @@
+@page "/Administration/Acme"
+@model CaddyUi.Web.Pages.Administration.AcmeModel
+@{
+    ViewData["Title"] = "ACME-Konto";
+    var stateLabel = Model.State.UsesEnvironmentVariable
+        ? "Docker-Umgebung"
+        : Model.State.Email.Length > 0
+            ? "Über UI gesetzt"
+            : "Nicht gesetzt";
+    var stateClass = Model.State.IsConfigured
+        ? "status-badge--ok"
+        : "status-badge--neutral";
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Zertifikate</p>
+        <h1>ACME-Konto</h1>
+        <p class="page-description">E-Mail-Adresse für Zertifikatsaussteller konfigurieren. Ein UI-Wert überschreibt ACME_EMAIL; ein leeres Feld nutzt die Umgebungsvariable, falls sie verfügbar ist.</p>
+    </div>
+    <span class="status-badge @stateClass">@stateLabel</span>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--success"><strong>Konfiguration aktualisiert</strong><span>@Model.StatusMessage</span></div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.LoadError))
+{
+    <div class="notice notice--warning"><strong>Caddyfile konnte nicht gelesen werden</strong><span>@Model.LoadError</span></div>
+}
+<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+
+<form method="post">
+    <section class="workspace-section">
+        <header class="section-header">
+            <div>
+                <h2>ACME-E-Mail</h2>
+                <p>Eine eingetragene Adresse wird dauerhaft über die UI verwaltet. Bleibt das Feld leer, wird <code>ACME_EMAIL</code> aus der Umgebung verwendet; ist sie nicht gesetzt, wird keine globale E-Mail-Direktive verwendet.</p>
+            </div>
+        </header>
+        <div class="form-grid form-grid--two">
+            <label class="field">
+                <span class="field-label">E-Mail-Adresse</span>
+                <input asp-for="Input.Email" type="email" maxlength="254" placeholder="admin@example.com" autocomplete="email" spellcheck="false" />
+                <span asp-validation-for="Input.Email" class="field-error"></span>
+                <small>UI-Wert &gt; <code>ACME_EMAIL</code> &gt; keine E-Mail.</small>
+            </label>
+        </div>
+
+        @if (Model.State.UsesEnvironmentVariable)
+        {
+            <div class="notice notice--warning">
+                <strong>Aktuell über ACME_EMAIL gesetzt</strong>
+                <span>Eine eingetragene Adresse überschreibt die Umgebungsvariable. Ein leeres Feld behält die Umgebungsvariable als Fallback bei.</span>
+            </div>
+        }
+
+        <div class="safe-apply-note">
+            <strong>Sicherer Apply</strong>
+            <span>Die vollständige Konfiguration wird zuerst als Kandidat validiert, danach atomar ersetzt und neu geladen. Bei einem Fehler wird das vorherige Caddyfile wiederhergestellt.</span>
+        </div>
+    </section>
+
+    <footer class="editor-actionbar">
+        <div><strong>Klare Priorität</strong><span>Ein UI-Wert hat Vorrang. Ohne UI-Wert wird ACME_EMAIL verwendet, sofern die Variable verfügbar ist.</span></div>
+        <div class="page-actions">
+            <a class="button button--quiet" asp-page="/Administration/Domains">Abbrechen</a>
+            <button class="button button--primary" type="submit">Speichern und neu laden</button>
+        </div>
+    </footer>
+</form>
