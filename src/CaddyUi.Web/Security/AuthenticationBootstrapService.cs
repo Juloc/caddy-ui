@@ -33,14 +33,42 @@ public sealed class AuthenticationBootstrapService : BackgroundService
             return;
         }
 
-        if (await _store.CountUsersAsync(stoppingToken) > 0)
+        var username = (_configuration["CADDY_UI_USERNAME"] ??
+            _configuration["Authentication:BootstrapUsername"] ??
+            "admin").Trim();
+        var ensurePassword = ReadBoolean(
+            _configuration["CADDY_UI_ENSURE_BOOTSTRAP_PASSWORD"] ??
+            _configuration["Authentication:EnsureBootstrapPassword"]);
+
+        var existing = await _store.FindUserByUsernameAsync(username, stoppingToken);
+        if (existing is not null)
         {
+            if (ensurePassword)
+            {
+                var verification = _passwords.Verify(password, existing.PasswordHash);
+                if (!verification.Succeeded)
+                {
+                    await _store.UpdatePasswordHashAsync(
+                        existing.Id,
+                        _passwords.HashPassword(password),
+                        stoppingToken);
+                    _logger.LogWarning(
+                        "Reconciled the configured bootstrap password for existing administrator {Username}. Disable Authentication:EnsureBootstrapPassword after the isolated shadow test.",
+                        username);
+                }
+            }
+
             return;
         }
 
-        var username = _configuration["CADDY_UI_USERNAME"] ??
-            _configuration["Authentication:BootstrapUsername"] ??
-            "admin";
+        if (await _store.CountUsersAsync(stoppingToken) > 0)
+        {
+            _logger.LogWarning(
+                "Bootstrap user {Username} was not created because PostgreSQL already contains other users.",
+                username);
+            return;
+        }
+
         await _store.CreateUserAsync(
             username,
             username,
@@ -48,7 +76,12 @@ public sealed class AuthenticationBootstrapService : BackgroundService
             "admin",
             stoppingToken);
         _logger.LogWarning(
-            "Created the initial administrator {Username} from bootstrap configuration. Remove CADDY_UI_PASSWORD after the first successful login.",
+            "Created the initial administrator {Username} from bootstrap configuration. Remove the bootstrap password after the first successful login.",
             username);
+    }
+
+    private static bool ReadBoolean(string? value)
+    {
+        return bool.TryParse(value, out var parsed) && parsed;
     }
 }
