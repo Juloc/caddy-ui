@@ -115,6 +115,7 @@ services:
       - "8099"
     environment:
       <<: *database-environment
+      ACME_EMAIL: ${ACME_EMAIL:-}
       Authentication__BootstrapUsername: ${CADDY_UI_USERNAME:-admin}
       Authentication__BootstrapPassword: ${CADDY_UI_PASSWORD:-}
       Authentication__EnsureBootstrapPassword: "false"
