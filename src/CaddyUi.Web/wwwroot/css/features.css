@@ -69,8 +69,14 @@
 .feature-route-editor { display: grid; gap: 16px; }
 .feature-route-editor .workspace-section + .workspace-section { margin-top: 0; }
 .code-editor { min-height: 260px; tab-size: 4; white-space: pre; }
+.feature-config-preview { min-width: 0; overflow: hidden; }
 .feature-config-preview .section-header { align-items: flex-start; }
+.feature-config-preview .section-header > div:first-child { min-width: 0; }
+.feature-config-preview .section-header code { overflow-wrap: anywhere; white-space: normal; }
+.feature-config-preview .page-actions { min-width: 0; max-width: 100%; }
+.feature-config-preview .page-actions form { margin: 0; }
 .diff-view {
+    width: 100%;
     max-height: 620px;
     overflow: auto;
     border-top: 1px solid var(--ui-border);
@@ -106,6 +112,17 @@
     .analytics-filters, .metric-grid--dense, .analytics-columns--two { grid-template-columns: 1fr; }
     .chart-legend { display: none; }
     .auth-card { padding: 20px; }
-    .diff-line { grid-template-columns: 36px 36px 20px minmax(max-content, 1fr); }
+    .feature-config-preview .section-header { align-items: stretch; flex-direction: column; }
+    .feature-config-preview .page-actions {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        justify-content: stretch;
+    }
+    .feature-config-preview .page-actions form { width: 100%; grid-column: 1 / -1; }
+    .feature-config-preview .page-actions .button { width: 100%; min-height: 42px; line-height: 1.25; white-space: normal; }
+    .diff-line { width: 100%; min-width: 100%; grid-template-columns: 32px 32px 18px minmax(0, 1fr); }
+    .diff-line > span, .diff-line > code { padding-inline: 5px; }
+    .diff-line code { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
     .transfer-preview { min-height: 320px; }
 }
