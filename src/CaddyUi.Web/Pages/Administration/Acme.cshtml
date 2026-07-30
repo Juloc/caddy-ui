@@ -16,7 +16,7 @@
     <div>
         <p class="eyebrow">Zertifikate</p>
         <h1>ACME-Konto</h1>
-        <p class="page-description">E-Mail-Adresse für Zertifikatsaussteller konfigurieren. Die Einstellung wird dauerhaft im globalen Caddyfile gespeichert.</p>
+        <p class="page-description">E-Mail-Adresse für Zertifikatsaussteller konfigurieren. Ein UI-Wert überschreibt ACME_EMAIL; ein leeres Feld nutzt die Umgebungsvariable, falls sie verfügbar ist.</p>
     </div>
     <span class="status-badge @stateClass">@stateLabel</span>
 </section>
@@ -36,7 +36,7 @@
         <header class="section-header">
             <div>
                 <h2>ACME-E-Mail</h2>
-                <p>Die Adresse wird für wichtige Hinweise des Zertifikatsausstellers verwendet. Ein leeres Feld entfernt die globale E-Mail-Direktive.</p>
+                <p>Eine eingetragene Adresse wird dauerhaft über die UI verwaltet. Bleibt das Feld leer, wird <code>ACME_EMAIL</code> aus der Umgebung verwendet; ist sie nicht gesetzt, wird keine globale E-Mail-Direktive verwendet.</p>
             </div>
         </header>
         <div class="form-grid form-grid--two">
@@ -44,7 +44,7 @@
                 <span class="field-label">E-Mail-Adresse</span>
                 <input asp-for="Input.Email" type="email" maxlength="254" placeholder="admin@example.com" autocomplete="email" spellcheck="false" />
                 <span asp-validation-for="Input.Email" class="field-error"></span>
-                <small>Wird als globale <code>email</code>-Direktive im Caddyfile gespeichert.</small>
+                <small>UI-Wert &gt; <code>ACME_EMAIL</code> &gt; keine E-Mail.</small>
             </label>
         </div>
 
@@ -52,7 +52,7 @@
         {
             <div class="notice notice--warning">
                 <strong>Aktuell über ACME_EMAIL gesetzt</strong>
-                <span>Beim Speichern ersetzt die UI die Umgebungsreferenz durch den eingegebenen Wert. Danach ist keine Änderung am Docker-Stack nötig.</span>
+                <span>Eine eingetragene Adresse überschreibt die Umgebungsvariable. Ein leeres Feld behält die Umgebungsvariable als Fallback bei.</span>
             </div>
         }
 
@@ -63,7 +63,7 @@
     </section>
 
     <footer class="editor-actionbar">
-        <div><strong>Dauerhafte Einstellung</strong><span>Die Konfiguration liegt im gemeinsamen Caddy-Volume und bleibt nach Container-Neustarts erhalten.</span></div>
+        <div><strong>Klare Priorität</strong><span>Ein UI-Wert hat Vorrang. Ohne UI-Wert wird ACME_EMAIL verwendet, sofern die Variable verfügbar ist.</span></div>
         <div class="page-actions">
             <a class="button button--quiet" asp-page="/Administration/Domains">Abbrechen</a>
             <button class="button button--primary" type="submit">Speichern und neu laden</button>
