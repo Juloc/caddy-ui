@@ -158,7 +158,7 @@ public sealed class CertificateStatusService
         lifecycleLogs.TryGetValue(name, out var logState);
         var applied = appliedNames.Contains(name);
         var providerProblem = kind == "wildcard" ? ProviderProblem(provider) : null;
-        var renewalWindowStartsAt = artifact is null ? null : RenewalWindowStartsAt(artifact);
+        DateTimeOffset? renewalWindowStartsAt = artifact is null ? null : RenewalWindowStartsAt(artifact);
         var lifecycle = BuildLifecycle(
             kind,
             name,
@@ -608,7 +608,7 @@ public sealed class CertificateStatusService
         DateTimeOffset? renewalWindowStartsAt,
         CertificateLifecycleStatus lifecycle)
     {
-        var days = artifact is null ? null : DaysRemaining(artifact, DateTimeOffset.UtcNow);
+        int? days = artifact is null ? null : DaysRemaining(artifact, DateTimeOffset.UtcNow);
         return new CertificateStatusItem(
             kind,
             name,
