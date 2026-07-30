@@ -121,7 +121,7 @@ jobs:
             -p 18099:8099 \
             -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui' \
             -e Database__ApplyMigrationsOnStartup=true \
-            -e CADDY_UI_USERNAME=admin \
+            -e CADDY_UI_USERNAME=ci-admin \
             -e CADDY_UI_PASSWORD=ci-admin-password-123456789 \
             -e CADDY_UI_COOKIE_NAMESPACE=caddy_ui_ci \
             -e CADDY_UI_PORTAL_PROXY_SECRET=portal-smoke-secret \
@@ -142,7 +142,7 @@ jobs:
           curl --fail --silent "$base_url/health/live"
           for attempt in {1..30}; do
             user_count="$(docker exec caddy-ui-postgres psql -U caddy_ui -d caddy_ui -Atc \
-              "SELECT COUNT(*) FROM caddy_ui.users WHERE lower(username) = 'admin';" 2>/dev/null || true)"
+              "SELECT COUNT(*) FROM caddy_ui.users WHERE lower(username) = 'ci-admin';" 2>/dev/null || true)"
             if [ "$user_count" = "1" ]; then
               break
             fi
@@ -184,7 +184,7 @@ jobs:
             --output /tmp/login.response \
             --write-out '%{http_code}' \
             --data-urlencode "__RequestVerificationToken=${login_token}" \
-            --data-urlencode 'Input.Username=admin' \
+            --data-urlencode 'Input.Username=ci-admin' \
             --data-urlencode 'Input.Password=ci-admin-password-123456789' \
             --data-urlencode 'Input.SecondFactor=' \
             --data-urlencode 'ReturnUrl=/' \
