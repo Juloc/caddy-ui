@@ -7,6 +7,7 @@ managed_fragment="${CADDY_UI_MANAGED_ROUTES_PATH:-${routes_dir}/site-managed-rou
 blocklist_fragment="${CADDY_UI_BLOCKLIST_PATH:-${routes_dir}/site-security-blocks.caddy}"
 legacy_dir="${CADDY_UI_LEGACY_ROUTES_DIR:-${routes_dir}/legacy-dotnet-cutover}"
 acme_email="${ACME_EMAIL:-}"
+admin_origins="http://caddy:2019 http://localhost:2019 http://127.0.0.1:2019"
 
 mkdir -p "$routes_dir" "$legacy_dir"
 
@@ -18,7 +19,9 @@ EOF
         printf '%s\n' '    email {$ACME_EMAIL}' >>"$root_config"
     fi
     cat >>"$root_config" <<'EOF'
-    admin 0.0.0.0:2019
+    admin 0.0.0.0:2019 {
+        origins http://caddy:2019 http://localhost:2019 http://127.0.0.1:2019
+    }
     log default {
         output file /var/log/caddy/caddy.log {
             roll_size 10mb
@@ -50,6 +53,25 @@ fi
 if [ ! -f "$blocklist_fragment" ]; then
     printf '%s\n' '# Managed IP block feed: address|blocked-until|reason' >"$blocklist_fragment"
 fi
+
+admin_temporary="${root_config}.caddy-ui-admin.tmp"
+awk -v origins="$admin_origins" '
+{
+    trimmed = $0
+    sub(/^[[:space:]]+/, "", trimmed)
+    sub(/[[:space:]]+$/, "", trimmed)
+
+    if (trimmed == "admin 0.0.0.0:2019" || trimmed == "admin :2019") {
+        print "    admin 0.0.0.0:2019 {"
+        print "        origins " origins
+        print "    }"
+        next
+    }
+
+    print $0
+}
+' "$root_config" >"$admin_temporary"
+mv "$admin_temporary" "$root_config"
 
 email_required=0
 if [ -n "$acme_email" ]; then
