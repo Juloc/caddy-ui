@@ -6,13 +6,18 @@ routes_dir="${CADDY_UI_ROUTES_DIR:-/etc/caddy/routes}"
 managed_fragment="${CADDY_UI_MANAGED_ROUTES_PATH:-${routes_dir}/site-managed-routes.caddy}"
 blocklist_fragment="${CADDY_UI_BLOCKLIST_PATH:-${routes_dir}/site-security-blocks.caddy}"
 legacy_dir="${CADDY_UI_LEGACY_ROUTES_DIR:-${routes_dir}/legacy-dotnet-cutover}"
+acme_email="${ACME_EMAIL:-}"
 
 mkdir -p "$routes_dir" "$legacy_dir"
 
 if [ ! -f "$root_config" ]; then
     cat >"$root_config" <<'EOF'
 {
-    email {$ACME_EMAIL}
+EOF
+    if [ -n "$acme_email" ]; then
+        printf '%s\n' '    email {$ACME_EMAIL}' >>"$root_config"
+    fi
+    cat >>"$root_config" <<'EOF'
     admin 0.0.0.0:2019
     log default {
         output file /var/log/caddy/caddy.log {
@@ -46,13 +51,22 @@ if [ ! -f "$blocklist_fragment" ]; then
     printf '%s\n' '# Managed IP block feed: address|blocked-until|reason' >"$blocklist_fragment"
 fi
 
+remove_empty_email=0
+if [ -z "$acme_email" ]; then
+    remove_empty_email=1
+fi
+
 temporary="${root_config}.caddy-ui-2.tmp"
-awk -v managed="$managed_fragment" '
+awk -v managed="$managed_fragment" -v remove_empty_email="$remove_empty_email" '
 BEGIN { inserted = 0 }
 {
     trimmed = $0
     sub(/^[[:space:]]+/, "", trimmed)
     sub(/[[:space:]]+$/, "", trimmed)
+    if (remove_empty_email == "1" &&
+        (trimmed == "email {$ACME_EMAIL}" || trimmed == "email")) {
+        next
+    }
     if (trimmed == "import /etc/caddy/routes/site-*.caddy" ||
         trimmed == "import /etc/caddy/routes/*.caddy" ||
         trimmed == "import " managed) {
