@@ -42,6 +42,14 @@ public static class DependencyInjection
         services.AddDbContext<CaddyUiDbContext>(options => Configure(options, connectionString));
         services.AddSingleton<IDbContextFactory<CaddyUiDbContext>>(
             new RuntimeDbContextFactory(connectionString));
+
+        var dataProtection = services.AddDataProtection()
+            .SetApplicationName("CaddyUi");
+        if (configuration.GetValue("DataProtection:PersistKeysToPostgreSql", true))
+        {
+            dataProtection.PersistKeysToDbContext<CaddyUiDbContext>();
+        }
+
         services.AddSingleton<AuthenticationStore>();
         services.AddSingleton<LoginProtectionService>();
         services.AddSingleton<DomainProviderStore>();
@@ -57,7 +65,11 @@ public static class DependencyInjection
 
         services.AddSingleton(operationsOptions);
         services.AddSingleton<OperationsStore>();
-        services.AddSingleton<ISecretReferenceResolver, SecretReferenceResolver>();
+        services.AddSingleton<SecretReferenceResolver>();
+        services.AddSingleton<ISecretReferenceResolver>(serviceProvider =>
+            serviceProvider.GetRequiredService<SecretReferenceResolver>());
+        services.AddSingleton<ISecretReferenceProtector>(serviceProvider =>
+            serviceProvider.GetRequiredService<SecretReferenceResolver>());
         services.AddSingleton<IDnsProviderAdapter, NetcupDnsProviderAdapter>();
         services.AddSingleton<IDnsProviderAdapter, CommonRestDnsProviderAdapter>();
         services.AddSingleton<DnsProviderRuntimeService>();
@@ -70,12 +82,12 @@ public static class DependencyInjection
         services.AddHttpClient("dns-providers", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(operationsOptions.ProviderTimeoutSeconds);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-DNS/2.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-DNS/2.1");
         });
         services.AddHttpClient("notifications", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(15);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-Notifications/2.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-Notifications/2.1");
         });
         services.AddHttpClient("health-probes", client =>
         {
@@ -84,7 +96,7 @@ public static class DependencyInjection
         services.AddHttpClient("public-ip", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(10);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-DDNS/2.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI-DDNS/2.1");
         });
         services.AddHostedService<CaddyCertificateSourceRefreshWorker>();
         services.AddHostedService<SystemJobWorker>();
@@ -111,20 +123,13 @@ public static class DependencyInjection
         {
             client.BaseAddress = ipSecurityOptions.RipeStatBaseAddress;
             client.Timeout = TimeSpan.FromSeconds(ipSecurityOptions.ProviderTimeoutSeconds);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI/2.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Caddy-UI/2.1");
         });
         services.AddHostedService<IpIntelligenceRefreshWorker>();
         services.AddHostedService<ClientRiskAssessmentWorker>();
 
         services.AddSingleton(cutoverOptions);
         services.AddSingleton<CutoverReadinessService>();
-
-        var dataProtection = services.AddDataProtection()
-            .SetApplicationName("CaddyUi");
-        if (configuration.GetValue("DataProtection:PersistKeysToPostgreSql", true))
-        {
-            dataProtection.PersistKeysToDbContext<CaddyUiDbContext>();
-        }
 
         return services;
     }
