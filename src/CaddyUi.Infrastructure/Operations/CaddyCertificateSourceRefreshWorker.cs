@@ -29,12 +29,19 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
         _logger = logger;
     }
 
+    public override async Task StartAsync(CancellationToken cancellationToken)
+    {
+        await RefreshAsync(cancellationToken);
+        await base.StartAsync(cancellationToken);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                 await RefreshAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -45,8 +52,6 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
             {
                 _logger.LogError(exception, "Could not refresh managed-domain certificate sources.");
             }
-
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
         }
     }
 
@@ -128,11 +133,11 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
             }
 
             var value = await _secretResolver.ResolveAsync(reference, cancellationToken);
-            var path = Path.Combine(
-                _options.ProviderSecretDirectory,
-                $"{providerId:N}-{SafeFileName(pair.Key)}");
+            var runtimeName = $"CADDY_UI_PROVIDER_{providerId:N}_{SafeEnvironmentName(pair.Key)}"
+                .ToUpperInvariant();
+            var path = Path.Combine(_options.ProviderSecretDirectory, runtimeName);
             await WriteSecretAtomicallyAsync(path, value, cancellationToken);
-            result[pair.Key] = "secret://file/" + path;
+            result[pair.Key] = "secret://env/" + runtimeName;
         }
 
         return result;
@@ -185,12 +190,12 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
         }
     }
 
-    private static string SafeFileName(string value)
+    private static string SafeEnvironmentName(string value)
     {
         var safe = new string(value
-            .Select(character => char.IsLetterOrDigit(character) || character is '-' or '_' ? character : '_')
+            .Select(character => char.IsLetterOrDigit(character) || character == '_' ? character : '_')
             .ToArray());
-        return safe.Length == 0 ? "secret" : safe;
+        return safe.Length == 0 ? "SECRET" : safe;
     }
 
     private static (bool Wildcard, bool BaseDomain) ReadCertificatePlan(string mode, string json)
