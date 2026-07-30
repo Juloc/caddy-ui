@@ -59,7 +59,7 @@ public sealed class IndexModel : PageModel
         try
         {
             var providerSettings = ValuesForProvider(Input.ProviderSettings, Input.ProviderType);
-            var providerSecrets = ProtectValuesForProvider(Input.ProviderSecrets, Input.ProviderType);
+            var providerSecrets = ProtectValuesForProvider(Input.ProviderSecretReferences, Input.ProviderType);
             var result = await _setupService.ProvisionAsync(
                 new GuidedSetupRequest(
                     Input.ProviderMode,
@@ -97,7 +97,7 @@ public sealed class IndexModel : PageModel
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
-            Input.ProviderSecrets.Clear();
+            Input.ProviderSecretReferences.Clear();
             ModelState.AddModelError(string.Empty, exception.Message);
             return Page();
         }
@@ -168,7 +168,7 @@ public sealed class IndexModel : PageModel
         public Dictionary<string, string> ProviderSettings { get; set; } =
             new(StringComparer.OrdinalIgnoreCase);
 
-        public Dictionary<string, string> ProviderSecrets { get; set; } =
+        public Dictionary<string, string> ProviderSecretReferences { get; set; } =
             new(StringComparer.OrdinalIgnoreCase);
 
         [Required]
