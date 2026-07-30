@@ -8,6 +8,7 @@ using CaddyUi.Infrastructure.Operations;
 using CaddyUi.Infrastructure.Persistence;
 using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Infrastructure.Security;
+using CaddyUi.Infrastructure.Setup;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -48,6 +49,7 @@ public static class DependencyInjection
         services.AddSingleton<RouteTransferService>();
         services.AddSingleton<AccessGroupStateStore>();
         services.AddSingleton(routingOptions);
+        services.AddSingleton<GuidedSetupService>();
         services.AddSingleton<ICaddyCommandRunner, ProcessCaddyCommandRunner>();
         services.AddSingleton<CaddyApplyService>();
 
