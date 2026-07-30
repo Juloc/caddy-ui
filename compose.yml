@@ -1,84 +1,198 @@
+name: caddy
+
+x-caddy-ui-image: &caddy-ui-image
+  image: ghcr.io/juloc/caddy-ui:${CADDY_UI_VERSION:-2.1.0}
+  pull_policy: always
+
+x-database-environment: &database-environment
+  ConnectionStrings__CaddyUi: Host=postgres;Port=5432;Database=${CADDY_UI_DB_NAME:-caddy_ui};Username=${CADDY_UI_DB_USER:-caddy_ui};Password=${CADDY_UI_DB_PASSWORD}
+  Database__ApplyMigrationsOnStartup: "false"
+  DataProtection__PersistKeysToPostgreSql: "true"
+
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: caddy-ui-postgres
+    environment:
+      POSTGRES_DB: ${CADDY_UI_DB_NAME:-caddy_ui}
+      POSTGRES_USER: ${CADDY_UI_DB_USER:-caddy_ui}
+      POSTGRES_PASSWORD: ${CADDY_UI_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [backend]
+
+  migrate:
+    <<: *caddy-ui-image
+    container_name: caddy-ui-migrate
+    command: ["migrate", "schema"]
+    environment: *database-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [backend]
+
+  legacy-import:
+    <<: *caddy-ui-image
+    container_name: caddy-ui-legacy-import
+    command:
+      - sh
+      - -c
+      - |
+        if [ -f /legacy/caddy-ui.db ]; then
+          exec dotnet /app/migration/CaddyUi.Migration.dll import \
+            --source /legacy/caddy-ui.db \
+            --backup-dir /state/legacy-backups \
+            --report /state/legacy-import.json
+        fi
+        echo "No legacy SQLite database found; starting with PostgreSQL state."
+    environment: *database-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ui-data:/legacy:ro
+      - ui-state:/state
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [backend]
+
+  config-init:
+    <<: *caddy-ui-image
+    container_name: caddy-ui-config-init
+    command: ["sh", "-c", "exec /usr/local/bin/prepare-production-config"]
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      CADDY_UI_CADDY_ROOT_CONFIG: /etc/caddy/Caddyfile
+      CADDY_UI_ROUTES_DIR: /etc/caddy/routes
+      CADDY_UI_MANAGED_ROUTES_PATH: /etc/caddy/routes/site-managed-routes.caddy
+      CADDY_UI_BLOCKLIST_PATH: /etc/caddy/routes/site-security-blocks.caddy
+    volumes:
+      - etc:/etc/caddy
+      - logs:/var/log/caddy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+    networks: [proxy]
+
   caddy:
-    image: ghcr.io/juloc/caddy-ui:latest
+    <<: *caddy-ui-image
     container_name: caddy
-    command: caddy
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     environment:
       ACME_EMAIL: ${ACME_EMAIL}
-      DOMAIN: ${DOMAIN}
+      DOMAIN: ${DOMAIN:-}
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
       NETCUP_API_KEY: ${NETCUP_API_KEY}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
-      CADDYFILE_PATH: /etc/caddy/Caddyfile
-      CADDY_ROUTES_DIR: /etc/caddy/routes
     volumes:
       - etc:/etc/caddy
       - data:/data
       - config:/config
       - logs:/var/log/caddy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2019/config/', timeout=3)"]
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:2019/config/"]
       interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 15s
     restart: unless-stopped
-    networks:
-      - proxy
+    networks: [proxy]
 
   caddy-ui:
-    image: ghcr.io/juloc/caddy-ui:latest
+    <<: *caddy-ui-image
     container_name: caddy-ui
-    command: web
+    command: ["web"]
     depends_on:
       caddy:
         condition: service_healthy
+      legacy-import:
+        condition: service_completed_successfully
     ports:
-      - "8098:8098"
+      - "${CADDY_UI_BIND_ADDRESS:-0.0.0.0}:8098:8098"
     expose:
       - "8099"
     environment:
-      DOMAIN: ${DOMAIN}
+      <<: *database-environment
+      Authentication__BootstrapUsername: ${CADDY_UI_USERNAME:-admin}
+      Authentication__BootstrapPassword: ${CADDY_UI_PASSWORD:-}
+      Authentication__EnsureBootstrapPassword: "false"
+      Security__CookieNamespace: caddy_ui
+      Security__PublicOrigin: ${CADDY_UI_PUBLIC_ORIGIN:-https://caddy.juloc.de}
+      Security__RequireTotp: ${CADDY_UI_REQUIRE_TOTP:-false}
+      Security__AdminProxySecret: ${CADDY_UI_ADMIN_PROXY_SECRET}
+      Security__PortalProxySecret: ${CADDY_UI_PORTAL_PROXY_SECRET}
+      Analytics__Enabled: "true"
+      Analytics__LogPaths__0: /var/log/caddy/access.log
+      Routing__WriteMode: active
+      Routing__ManagedFragmentPath: /etc/caddy/routes/site-managed-routes.caddy
+      Routing__ShadowFragmentPath: /state/shadow/site-managed-routes.caddy
+      Routing__RootConfigPath: /etc/caddy/Caddyfile
+      Routing__CaddyBinaryPath: /usr/local/bin/caddy-remote
+      Routing__PortalUpstream: caddy-ui:8099
+      Routing__AllowCustomRoutes: ${CADDY_UI_ALLOW_CUSTOM_ROUTES:-false}
+      Operations__WorkerEnabled: "true"
+      Operations__DnsWriteMode: active
+      Operations__BackupDirectory: /state/backups
+      Operations__DiagnosticsDirectory: /state/diagnostics
+      Operations__InstalledCaddyDnsModules: netcup
+      IpSecurity__IntelligenceEnabled: "true"
+      IpSecurity__RiskAssessmentEnabled: "true"
+      IpSecurity__BlockWriteMode: active
+      IpSecurity__BlocklistPath: /etc/caddy/routes/site-security-blocks.caddy
+      Cutover__Enabled: "false"
+      Cutover__LegacySqlitePath: /legacy/caddy-ui.db
+      Cutover__ManifestDirectory: /state/cutover
+      CADDY_ADMIN_URL: http://caddy:2019
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER}
       NETCUP_API_KEY: ${NETCUP_API_KEY}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD}
-      CADDY_UI_USERNAME: ${CADDY_UI_USERNAME:-admin}
-      CADDY_UI_PASSWORD: ${CADDY_UI_PASSWORD}
-      CADDY_UI_PUBLIC_ORIGIN: ${CADDY_UI_PUBLIC_ORIGIN:-}
-      CADDY_UI_SECURE_COOKIES: ${CADDY_UI_SECURE_COOKIES:-false}
-      CADDY_UI_REQUIRE_TOTP: "false"
-      CADDY_UI_SESSION_TTL: ${CADDY_UI_SESSION_TTL:-86400}
-      CADDY_UI_PORTAL_SESSION_TTL: ${CADDY_UI_PORTAL_SESSION_TTL:-43200}
-      CADDY_UI_PASSWORD_HASH_WORKERS: ${CADDY_UI_PASSWORD_HASH_WORKERS:-2}
-      UI_PORTAL_PORT: 8099
-      CADDY_ADMIN_URL: http://caddy:2019
-      CADDYFILE_PATH: /etc/caddy/Caddyfile
-      CADDY_ROUTES_DIR: /etc/caddy/routes
-      CADDY_DATA_PATH: /data
-      CADDY_LOG_PATH: /var/log/caddy/access.log
-      CADDY_SYSTEM_LOG_PATH: /var/log/caddy/caddy.log
-      CADDY_UI_CONFIG_PATH: /etc/caddy/caddy-ui.json
-      CADDY_UI_DATA_DIR: /var/lib/caddy-ui
     volumes:
       - etc:/etc/caddy
       - data:/data:ro
       - logs:/var/log/caddy:ro
-      - ui-data:/var/lib/caddy-ui
+      - ui-data:/legacy:ro
+      - ui-state:/state
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
+    cap_drop: [ALL]
+    pids_limit: 256
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8098/api/health', timeout=3)"]
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8098/health/ready"]
       interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
-    networks:
-      - proxy
+    networks: [proxy, backend]
 
 volumes:
   etc:
@@ -86,7 +200,11 @@ volumes:
   config:
   logs:
   ui-data:
+  ui-state:
+  postgres-data:
 
 networks:
   proxy:
     external: true
+  backend:
+    internal: true
