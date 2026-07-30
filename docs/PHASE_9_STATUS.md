@@ -11,7 +11,8 @@ Produktionsstack: .NET 10 / Razor Pages / PostgreSQL 17
 - idempotenter Import der vorhandenen read-only SQLite-Datei
 - persistente PostgreSQL-, Betriebs- und Legacy-Volumes
 - reversibler Übergang der vorhandenen `site-*.caddy`-Routen
-- exakte Root-Caddyfile-Imports für verwaltete Routen und IP-Blockliste
+- exakter Root-Caddyfile-Import für verwaltete Routen
+- separater IP-Blockfeed außerhalb der Caddyfile-Syntax
 - Remote-Reload gegen den separaten Caddy-Container
 - aktive Routing-, DNS-, DDNS-, Worker- und Blocklist-Modi
 - Netcup-Wildcard-Renderer und integriertes Guard-Modul
@@ -24,6 +25,7 @@ Produktionsstack: .NET 10 / Razor Pages / PostgreSQL 17
 - Die alte SQLite-Datei bleibt read-only erhalten.
 - Bestehende Route-Dateien werden nicht gelöscht, sondern nach `legacy-dotnet-cutover` verschoben.
 - Vor dem ersten .NET-Apply importiert die neue verwaltete Datei die alten Routen unverändert.
+- Der IP-Blockfeed wird nicht als Caddyfile importiert.
 - Caddy startet nur nach erfolgreicher Validierung der vollständigen Konfiguration.
 - PostgreSQL, SQLite, alte Routen und neue Betriebsdaten verwenden getrennte Volumes.
 - Der UI-Container besitzt keinen Docker-Socket und keine Linux-Capabilities.
@@ -41,6 +43,7 @@ Die Pull-Request-Prüfungen müssen vor Integration bestehen:
 - SQLite-Import
 - Compose-Rendering
 - Legacy-Routen-Bridge und Caddy-Validierung
+- Trennung von Caddyfile und IP-Blockfeed
 
 ## Externe Betriebsprüfung
 
