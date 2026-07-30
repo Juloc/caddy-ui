@@ -8,9 +8,12 @@
     <div>
         <p class="eyebrow">DNS und Zertifikate</p>
         <h1>Domains</h1>
-        <p class="page-description">Wildcard und Basisdomain werden getrennt geplant. Der Status unterscheidet Entwurf, aktiven Auftrag und tatsächlich vorhandene Zertifikate.</p>
+        <p class="page-description">Wildcard und Basisdomain werden getrennt geplant. Status, Erneuerungsversuche, Wiederholungen und DNS-Propagation werden aus Caddy-Speicher, aktivem Stand und Caddy-Logs zusammengeführt.</p>
     </div>
-    <a class="button button--primary" asp-page="/Setup/Index">Geführte Einrichtung</a>
+    <div class="page-actions">
+        <a class="button button--quiet" asp-page="/Administration/Domains">Status aktualisieren</a>
+        <a class="button button--primary" asp-page="/Setup/Index">Geführte Einrichtung</a>
+    </div>
 </section>
 
 @if (TempData["Message"] is string message)
@@ -25,7 +28,7 @@
             <div><p class="eyebrow">Verwaltet</p><h2>@Model.Domains.Count Domains</h2></div>
             <a class="button button--compact button--quiet" asp-page="/Routing/Preview">Caddy-Vorschau</a>
         </header>
-        <div class="workbench-body table-wrap">
+        <div class="workbench-body table-wrap domain-table-wrap">
             <table class="data-table domain-status-table">
                 <thead>
                     <tr><th>Domain</th><th>DNS-Provider</th><th>Zertifikate</th><th>Routen</th><th></th></tr>
@@ -35,7 +38,7 @@
                 {
                     Model.CertificateStatuses.TryGetValue(domain.Id, out var certificateStatus);
                     <tr>
-                        <td>
+                        <td data-label="Domain">
                             <strong>@domain.DisplayName</strong>
                             <small>@domain.Name</small>
                             @if (domain.IsDefault)
@@ -43,14 +46,14 @@
                                 <span class="status-badge status-badge--ok">Standard</span>
                             }
                         </td>
-                        <td>
+                        <td data-label="DNS-Provider">
                             <strong>@(domain.DnsProviderLabel ?? "Nicht zugeordnet")</strong>
                             @if (domain.DnsProviderId is null)
                             {
-                                <small>Für Wildcard später erforderlich.</small>
+                                <small>Für Wildcard erforderlich.</small>
                             }
                         </td>
-                        <td>
+                        <td data-label="Zertifikate">
                             <div class="certificate-status-list">
                                 @if (certificateStatus is null)
                                 {
@@ -60,19 +63,103 @@
                                 {
                                     @foreach (var certificate in certificateStatus.Certificates)
                                     {
-                                        <div class="certificate-status-item">
-                                            <div>
-                                                <code>@certificate.Name</code>
-                                                <small>@certificate.Detail</small>
+                                        var lifecycle = certificate.Lifecycle;
+                                        <article class="certificate-status-item">
+                                            <div class="certificate-status-heading">
+                                                <div>
+                                                    <code>@certificate.Name</code>
+                                                    <small>@certificate.Detail</small>
+                                                </div>
+                                                <span class="status-badge @DomainsModel.StatusClass(certificate.State)">@certificate.Label</span>
                                             </div>
-                                            <span class="status-badge @DomainsModel.StatusClass(certificate.State)">@certificate.Label</span>
-                                        </div>
+
+                                            <details class="certificate-lifecycle">
+                                                <summary>
+                                                    <span>@lifecycle.Label</span>
+                                                    <span>Lifecycle anzeigen</span>
+                                                </summary>
+                                                <div class="certificate-lifecycle-body">
+                                                    <dl class="certificate-lifecycle-grid">
+                                                        <div><dt>Aktiver Caddy-Stand</dt><dd>@(lifecycle.Applied ? "Ja" : "Nein")</dd></div>
+                                                        <div><dt>Erfasst</dt><dd>@DomainsModel.FormatUtc(lifecycle.ObservedAt)</dd></div>
+                                                        <div><dt>Gültig ab</dt><dd>@DomainsModel.FormatUtc(certificate.NotBefore)</dd></div>
+                                                        <div><dt>Gültig bis</dt><dd>@DomainsModel.FormatUtc(certificate.ExpiresAt)</dd></div>
+                                                        <div><dt>Erneuerungsfenster</dt><dd>@DomainsModel.FormatUtc(certificate.RenewalWindowStartsAt)</dd></div>
+                                                        <div><dt>Letzter Versuch</dt><dd>@DomainsModel.FormatUtc(lifecycle.LastAttemptAt)</dd></div>
+                                                        <div><dt>Letzter Erfolg</dt><dd>@DomainsModel.FormatUtc(lifecycle.LastSuccessAt)</dd></div>
+                                                        <div><dt>Nächster Versuch</dt><dd>@DomainsModel.FormatUtc(lifecycle.NextAttemptAt)</dd></div>
+                                                        <div><dt>Versuche im verfügbaren Log</dt><dd>@lifecycle.AttemptCount</dd></div>
+                                                        <div><dt>Fehler in Folge</dt><dd>@lifecycle.ConsecutiveFailures</dd></div>
+                                                        @if (!string.IsNullOrWhiteSpace(lifecycle.ProviderType))
+                                                        {
+                                                            <div><dt>DNS-Provider</dt><dd>@lifecycle.ProviderType</dd></div>
+                                                            <div><dt>Provider-Test</dt><dd>@DomainsModel.ProviderTestLabel(lifecycle.ProviderTestStatus)</dd></div>
+                                                            <div><dt>Zuletzt getestet</dt><dd>@DomainsModel.FormatUtc(lifecycle.ProviderLastTestedAt)</dd></div>
+                                                        }
+                                                        @if (!string.IsNullOrWhiteSpace(lifecycle.DnsChallengeName))
+                                                        {
+                                                            <div><dt>DNS-01 TXT-Name</dt><dd><code>@lifecycle.DnsChallengeName</code></dd></div>
+                                                            <div><dt>DNS-TTL</dt><dd>@DomainsModel.FormatDuration(lifecycle.DnsTtlSeconds)</dd></div>
+                                                            <div><dt>Propagation-Timeout</dt><dd>@DomainsModel.FormatDuration(lifecycle.PropagationTimeoutSeconds)</dd></div>
+                                                        }
+                                                    </dl>
+
+                                                    @if (!string.IsNullOrWhiteSpace(lifecycle.LastError))
+                                                    {
+                                                        <div class="certificate-lifecycle-error">
+                                                            <strong>Letzter erkannter Fehler</strong>
+                                                            <p>@lifecycle.LastError</p>
+                                                        </div>
+                                                    }
+
+                                                    @if (lifecycle.RecentAttempts.Count > 0)
+                                                    {
+                                                        <section class="certificate-attempts">
+                                                            <h3>Letzte Lifecycle-Ereignisse</h3>
+                                                            <ol>
+                                                                @foreach (var attempt in lifecycle.RecentAttempts)
+                                                                {
+                                                                    <li>
+                                                                        <time datetime="@attempt.Timestamp.ToString("O")">@DomainsModel.FormatUtc(attempt.Timestamp)</time>
+                                                                        <div>
+                                                                            <strong>@attempt.Label@(attempt.Attempt is null ? string.Empty : $" · Versuch {attempt.Attempt}")</strong>
+                                                                            <small>@attempt.Detail</small>
+                                                                            @if (attempt.NextAttemptAt is not null)
+                                                                            {
+                                                                                <small>Nächster Versuch: @DomainsModel.FormatUtc(attempt.NextAttemptAt)</small>
+                                                                            }
+                                                                        </div>
+                                                                    </li>
+                                                                }
+                                                            </ol>
+                                                        </section>
+                                                    }
+                                                    else
+                                                    {
+                                                        <p class="certificate-no-events">Keine passenden Zertifikatsereignisse in den verfügbaren Caddy-Logdateien erkannt.</p>
+                                                    }
+
+                                                    @if (lifecycle.Tips.Count > 0)
+                                                    {
+                                                        <section class="certificate-tips">
+                                                            <h3>Prüfschritte und Hinweise</h3>
+                                                            <ul>
+                                                                @foreach (var tip in lifecycle.Tips)
+                                                                {
+                                                                    <li>@tip</li>
+                                                                }
+                                                            </ul>
+                                                        </section>
+                                                    }
+                                                </div>
+                                            </details>
+                                        </article>
                                     }
                                 }
                             </div>
                         </td>
-                        <td><strong>@domain.RouteCount</strong><small>verwaltete Route(n)</small></td>
-                        <td class="table-actions">
+                        <td data-label="Routen"><strong>@domain.RouteCount</strong><small>verwaltete Route(n)</small></td>
+                        <td data-label="Aktionen" class="table-actions">
                             @if (!domain.IsDefault)
                             {
                                 <form method="post" asp-page-handler="Default">
@@ -146,9 +233,9 @@
     <header class="workbench-header"><div><p class="eyebrow">Statusmodell</p><h2>Was die Anzeigen bedeuten</h2></div></header>
     <div class="workbench-body certificate-legend">
         <span><i class="status-dot status-dot--neutral"></i><strong>Bereit für Apply</strong>Nur im Entwurf.</span>
-        <span><i class="status-dot status-dot--warning"></i><strong>Angefordert</strong>Im aktiven Caddy-Stand, Datei noch nicht nachweisbar.</span>
+        <span><i class="status-dot status-dot--warning"></i><strong>Läuft oder geplant</strong>Caddy arbeitet oder hat einen neuen Versuch angekündigt.</span>
         <span><i class="status-dot status-dot--ok"></i><strong>Vorhanden</strong>Zertifikat im Caddy-Speicher gefunden und gültig.</span>
-        <span><i class="status-dot status-dot--danger"></i><strong>Blockiert</strong>Provider, Modul oder Test verhindert die Beschaffung.</span>
+        <span><i class="status-dot status-dot--danger"></i><strong>Fehler oder blockiert</strong>Letzter Versuch, Provider oder Konfiguration verhindert den Erfolg.</span>
     </div>
 </section>
 
