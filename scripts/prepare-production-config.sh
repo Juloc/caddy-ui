@@ -43,12 +43,12 @@ if [ ! -f "$managed_fragment" ]; then
 fi
 
 if [ ! -f "$blocklist_fragment" ]; then
-    printf '%s\n' '# No managed IP blocks.' >"$blocklist_fragment"
+    printf '%s\n' '# Managed IP block feed: address|blocked-until|reason' >"$blocklist_fragment"
 fi
 
 temporary="${root_config}.caddy-ui-2.tmp"
-awk -v managed="$managed_fragment" -v blocklist="$blocklist_fragment" '
-BEGIN { managed_inserted = 0; blocklist_inserted = 0 }
+awk -v managed="$managed_fragment" '
+BEGIN { inserted = 0 }
 {
     trimmed = $0
     sub(/^[[:space:]]+/, "", trimmed)
@@ -56,30 +56,18 @@ BEGIN { managed_inserted = 0; blocklist_inserted = 0 }
     if (trimmed == "import /etc/caddy/routes/site-*.caddy" ||
         trimmed == "import /etc/caddy/routes/*.caddy" ||
         trimmed == "import " managed) {
-        if (!managed_inserted) {
+        if (!inserted) {
             print "import " managed
-            managed_inserted = 1
-        }
-        next
-    }
-    if (trimmed == "import " blocklist) {
-        if (!blocklist_inserted) {
-            print "import " blocklist
-            blocklist_inserted = 1
+            inserted = 1
         }
         next
     }
     print $0
 }
 END {
-    if (!managed_inserted || !blocklist_inserted) {
+    if (!inserted) {
         print ""
-    }
-    if (!managed_inserted) {
         print "import " managed
-    }
-    if (!blocklist_inserted) {
-        print "import " blocklist
     }
 }
 ' "$root_config" >"$temporary"
