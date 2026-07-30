@@ -52,8 +52,17 @@ services:
       - -c
       - |
         if [ -f /legacy/caddy-ui.db ]; then
+          rm -rf /state/legacy-source
+          mkdir -p /state/legacy-source /state/legacy-backups
+          cp /legacy/caddy-ui.db /state/legacy-source/caddy-ui.db
+          if [ -f /legacy/caddy-ui.db-wal ]; then
+            cp /legacy/caddy-ui.db-wal /state/legacy-source/caddy-ui.db-wal
+          fi
+          if [ -f /legacy/caddy-ui.db-shm ]; then
+            cp /legacy/caddy-ui.db-shm /state/legacy-source/caddy-ui.db-shm
+          fi
           exec dotnet /app/migration/CaddyUi.Migration.dll import \
-            --source /legacy/caddy-ui.db \
+            --source /state/legacy-source/caddy-ui.db \
             --backup-dir /state/legacy-backups \
             --report /state/legacy-import.json
         fi
@@ -79,7 +88,7 @@ services:
     container_name: caddy-ui-config-init
     command: ["sh", "-c", "exec /usr/local/bin/prepare-production-config"]
     environment:
-      ACME_EMAIL: ${ACME_EMAIL}
+      ACME_EMAIL: ${ACME_EMAIL:-}
       CADDY_UI_CADDY_ROOT_CONFIG: /etc/caddy/Caddyfile
       CADDY_UI_ROUTES_DIR: /etc/caddy/routes
       CADDY_UI_MANAGED_ROUTES_PATH: /etc/caddy/routes/site-managed-routes.caddy
@@ -177,7 +186,7 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      ACME_EMAIL: ${ACME_EMAIL}
+      ACME_EMAIL: ${ACME_EMAIL:-}
       DOMAIN: ${DOMAIN:-}
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER:-}
       NETCUP_API_KEY: ${NETCUP_API_KEY:-}
