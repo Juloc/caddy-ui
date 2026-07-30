@@ -18,17 +18,20 @@ public sealed class IndexModel : PageModel
     private readonly DomainProviderStore _domainProviderStore;
     private readonly RoutingOptions _routingOptions;
     private readonly ISecretReferenceProtector _secretProtector;
+    private readonly CaddyCertificateSourceRefreshWorker _certificateSources;
 
     public IndexModel(
         GuidedSetupService setupService,
         DomainProviderStore domainProviderStore,
         RoutingOptions routingOptions,
-        ISecretReferenceProtector secretProtector)
+        ISecretReferenceProtector secretProtector,
+        CaddyCertificateSourceRefreshWorker certificateSources)
     {
         _setupService = setupService;
         _domainProviderStore = domainProviderStore;
         _routingOptions = routingOptions;
         _secretProtector = secretProtector;
+        _certificateSources = certificateSources;
     }
 
     [BindProperty]
@@ -89,6 +92,7 @@ public sealed class IndexModel : PageModel
                     Input.CustomSnippet),
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
+            await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
 
             TempData["SetupMessage"] = result.RouteId is null
                 ? $"Domain {result.DomainName} wurde als Entwurf angelegt. Die laufende Caddy-Konfiguration wurde nicht verändert."
