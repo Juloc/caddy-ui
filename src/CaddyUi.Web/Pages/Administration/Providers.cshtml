@@ -9,11 +9,11 @@
     <div>
         <p class="eyebrow">DNS und Zertifikate</p>
         <h1>DNS-Provider</h1>
-        <p class="page-description">Provider auswählen, passende Felder ausfüllen und anschließend mit einer zugeordneten Domain testen. Secret-Werte werden nicht gespeichert.</p>
+        <p class="page-description">Provider auswählen und nur die dafür benötigten Angaben eintragen. Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt.</p>
     </div>
     <div class="page-actions">
         <span class="status-badge status-badge--neutral">@DnsProviderCatalog.All.Count Provider-Typen</span>
-        <a class="button button--primary" asp-page="/Setup/Index">Geführte Einrichtung</a>
+        <a class="button button--primary" asp-page="/Setup/Index">Domain mit Provider einrichten</a>
     </div>
 </section>
 
@@ -25,6 +25,10 @@
 {
     <div class="notice notice--warning">@error</div>
 }
+@if (!string.IsNullOrWhiteSpace(Model.LoadError))
+{
+    <div class="notice notice--warning"><strong>Laden fehlgeschlagen</strong><span>@Model.LoadError</span></div>
+}
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
 <section class="operations-grid operations-grid--sidebar">
@@ -34,7 +38,7 @@
         </header>
         <div class="workbench-body table-wrap">
             <table class="data-table">
-                <thead><tr><th>Name</th><th>Typ</th><th>Direkt-API</th><th>Wildcard</th><th>Verbindung</th><th class="table-actions">Aktionen</th></tr></thead>
+                <thead><tr><th>Name</th><th>Typ</th><th>DNS-API</th><th>Wildcard</th><th>Verbindung</th><th class="table-actions">Aktionen</th></tr></thead>
                 <tbody>
                 @foreach (var provider in Model.Providers)
                 {
@@ -42,8 +46,8 @@
                     <tr>
                         <td><strong>@provider.Label</strong><small>@(provider.Enabled ? "aktiv" : "deaktiviert") · @domains.Length Domain(s)</small></td>
                         <td><code>@provider.ProviderType</code></td>
-                        <td><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? "verfügbar" : "nur Verwaltung")</span></td>
-                        <td><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--warning")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? "Caddy-Modul vorhanden" : "Caddy-Modul fehlt")</span></td>
+                        <td><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? "verfügbar" : "nur Zertifikate")</span></td>
+                        <td><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--warning")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? "Modul vorhanden" : "Modul fehlt")</span></td>
                         <td>
                             <span class="status-badge @(provider.LastTestStatus == "ok" ? "status-badge--ok" : provider.LastTestStatus == "failed" ? "status-badge--danger" : "status-badge--neutral")">@(provider.LastTestStatus == "ok" ? "getestet" : provider.LastTestStatus == "failed" ? "Test fehlgeschlagen" : "nicht getestet")</span>
                             @if (!string.IsNullOrWhiteSpace(provider.LastTestError))
@@ -96,11 +100,12 @@
                             <option value="@definition.Type">@definition.DisplayName</option>
                         }
                     </select>
+                    <small>Nach der Auswahl erscheinen nur die benötigten Felder.</small>
                 </label>
                 <label class="field">
                     <span class="field-label">Anzeigename</span>
-                    <input asp-for="Input.Label" placeholder="DNS Produktion" autocomplete="off" />
-                    <small>Interner Name, zum Beispiel „Netcup Produktion“.</small>
+                    <input asp-for="Input.Label" placeholder="Netcup Produktion" autocomplete="off" />
+                    <small>Nur ein interner Name zur Wiedererkennung.</small>
                 </label>
 
                 @foreach (var definition in DnsProviderCatalog.All)
@@ -116,7 +121,7 @@
                                 <label class="field">
                                     <span class="field-label">@field.Label @(field.Required ? "*" : "")</span>
                                     <input name="Input.Settings[@fieldName]" value="@Model.Input.Settings.GetValueOrDefault(fieldName, field.DefaultValue ?? string.Empty)" autocomplete="off" />
-                                    <small>@(field.HelpText ?? (field.DefaultValue is null ? "Nicht geheime Provider-Einstellung." : $"Standardwert: {field.DefaultValue}"))</small>
+                                    <small>@field.HelpText</small>
                                 </label>
                             }
                             @foreach (var field in definition.Secrets)
@@ -124,8 +129,8 @@
                                 var fieldName = ProvidersModel.FieldName(definition.Type, field.Key);
                                 <label class="field">
                                     <span class="field-label">@field.Label *</span>
-                                    <input name="Input.SecretReferences[@fieldName]" value="@Model.Input.SecretReferences.GetValueOrDefault(fieldName, string.Empty)" placeholder="UMGEBUNGSVARIABLE" autocomplete="off" spellcheck="false" />
-                                    <small>@field.HelpText</small>
+                                    <input type="password" name="Input.Secrets[@fieldName]" placeholder="Zugangsdaten eingeben" autocomplete="new-password" spellcheck="false" />
+                                    <small>Wird mit ASP.NET Data Protection verschlüsselt gespeichert. Experten können stattdessen <code>secret://env/NAME</code> oder <code>secret://file/PFAD</code> eintragen.</small>
                                 </label>
                             }
                         </div>
@@ -133,20 +138,20 @@
                 }
 
                 <div class="safe-apply-note">
-                    <strong>Keine Zugangsdaten im Klartext</strong>
-                    <span>Trage nur Namen von Umgebungsvariablen oder <code>secret://</code>-Referenzen ein.</span>
+                    <strong>Verschlüsselte Speicherung</strong>
+                    <span>Secret-Werte werden nicht in Logs, Tabellen, Diagnosepaketen oder späteren Formularen angezeigt.</span>
                 </div>
-                <button class="button button--primary" type="submit">Provider sicher anlegen</button>
+                <button class="button button--primary" type="submit">Provider speichern</button>
             </form>
         </div>
     </aside>
 </section>
 
 <section class="workbench operations-section">
-    <header class="workbench-header"><div><p class="eyebrow">Katalog</p><h2>Unterstützte Verträge</h2></div></header>
+    <header class="workbench-header"><div><p class="eyebrow">Unterstützung</p><h2>Provider-Funktionen</h2></div></header>
     <div class="workbench-body table-wrap">
         <table class="data-table">
-            <thead><tr><th>Provider</th><th>Funktionen</th><th>Benötigte Angaben</th><th>Secrets</th></tr></thead>
+            <thead><tr><th>Provider</th><th>Funktionen</th><th>Benötigte Angaben</th><th>Zugangsdaten</th></tr></thead>
             <tbody>
             @foreach (var definition in DnsProviderCatalog.All)
             {
@@ -170,6 +175,9 @@
     const update = () => {
         form.querySelectorAll('[data-provider-fields]').forEach(panel => {
             panel.hidden = panel.dataset.providerFields !== selector.value;
+            panel.querySelectorAll('input, select, textarea').forEach(control => {
+                control.disabled = panel.hidden;
+            });
         });
     };
     selector.addEventListener('change', update);
