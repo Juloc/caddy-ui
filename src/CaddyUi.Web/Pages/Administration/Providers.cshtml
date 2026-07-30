@@ -36,50 +36,52 @@
         <header class="workbench-header">
             <div><p class="eyebrow">Konfiguriert</p><h2>@Model.Providers.Count Provider</h2></div>
         </header>
-        <div class="workbench-body table-wrap">
-            <table class="data-table">
-                <thead><tr><th>Name</th><th>Typ</th><th>DNS-API</th><th>Wildcard</th><th>Verbindung</th><th class="table-actions">Aktionen</th></tr></thead>
+        <div class="workbench-body table-wrap provider-table-wrap">
+            <table class="data-table provider-table">
+                <thead><tr><th>Name</th><th>Typ</th><th>DNS-API</th><th>Wildcard</th><th>Verbindung</th><th class="provider-actions-heading">Aktionen</th></tr></thead>
                 <tbody>
                 @foreach (var provider in Model.Providers)
                 {
                     var domains = Model.Domains.Where(domain => domain.DnsProviderId == provider.Id && domain.Enabled).ToArray();
                     <tr>
-                        <td><strong>@provider.Label</strong><small>@(provider.Enabled ? "aktiv" : "deaktiviert") · @domains.Length Domain(s)</small></td>
-                        <td><code>@provider.ProviderType</code></td>
-                        <td><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? "verfügbar" : "nur Zertifikate")</span></td>
-                        <td><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--warning")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? "Modul vorhanden" : "Modul fehlt")</span></td>
-                        <td>
+                        <td data-label="Name"><strong>@provider.Label</strong><small>@(provider.Enabled ? "aktiv" : "deaktiviert") · @domains.Length Domain(s)</small></td>
+                        <td data-label="Typ"><code>@provider.ProviderType</code></td>
+                        <td data-label="DNS-API"><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? "verfügbar" : "nur Zertifikate")</span></td>
+                        <td data-label="Wildcard"><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--warning")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? "Modul vorhanden" : "Modul fehlt")</span></td>
+                        <td data-label="Verbindung">
                             <span class="status-badge @(provider.LastTestStatus == "ok" ? "status-badge--ok" : provider.LastTestStatus == "failed" ? "status-badge--danger" : "status-badge--neutral")">@(provider.LastTestStatus == "ok" ? "getestet" : provider.LastTestStatus == "failed" ? "Test fehlgeschlagen" : "nicht getestet")</span>
                             @if (!string.IsNullOrWhiteSpace(provider.LastTestError))
                             {
                                 <small>@provider.LastTestError</small>
                             }
                         </td>
-                        <td class="table-actions">
-                            @if (domains.Length > 0 && Model.SupportsDirectApi(provider.ProviderType))
-                            {
-                                <form method="post" asp-page-handler="Test" class="inline-control">
+                        <td class="provider-actions-cell" data-label="Aktionen">
+                            <div class="provider-actions">
+                                @if (domains.Length > 0 && Model.SupportsDirectApi(provider.ProviderType))
+                                {
+                                    <form method="post" asp-page-handler="Test" class="provider-test-form">
+                                        <input type="hidden" name="providerId" value="@provider.Id" />
+                                        <select name="domainId" aria-label="Testdomain">
+                                            @foreach (var domain in domains)
+                                            {
+                                                <option value="@domain.Id">@domain.Name</option>
+                                            }
+                                        </select>
+                                        <button class="button button--compact button--primary" type="submit" disabled="@(!provider.Enabled)">Testen</button>
+                                    </form>
+                                }
+                                <form method="post" asp-page-handler="Toggle" class="provider-toggle-form">
                                     <input type="hidden" name="providerId" value="@provider.Id" />
-                                    <select name="domainId" aria-label="Testdomain">
-                                        @foreach (var domain in domains)
-                                        {
-                                            <option value="@domain.Id">@domain.Name</option>
-                                        }
-                                    </select>
-                                    <button class="button button--compact button--primary" type="submit" disabled="@(!provider.Enabled)">Testen</button>
+                                    <input type="hidden" name="enabled" value="@(!provider.Enabled)" />
+                                    <button class="button button--compact button--quiet" type="submit">@(provider.Enabled ? "Deaktivieren" : "Aktivieren")</button>
                                 </form>
-                            }
-                            <form method="post" asp-page-handler="Toggle">
-                                <input type="hidden" name="providerId" value="@provider.Id" />
-                                <input type="hidden" name="enabled" value="@(!provider.Enabled)" />
-                                <button class="button button--compact button--quiet" type="submit">@(provider.Enabled ? "Deaktivieren" : "Aktivieren")</button>
-                            </form>
+                            </div>
                         </td>
                     </tr>
                 }
                 @if (Model.Providers.Count == 0)
                 {
-                    <tr><td colspan="6" class="empty-state">Noch kein DNS-Provider konfiguriert.</td></tr>
+                    <tr class="provider-table-empty"><td colspan="6" class="empty-state">Noch kein DNS-Provider konfiguriert.</td></tr>
                 }
                 </tbody>
             </table>
