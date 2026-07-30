@@ -81,6 +81,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
+      - name: Install SQLite test utility
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends sqlite3
       - name: Build ${{ matrix.target }}
         uses: docker/build-push-action@v7
         with:
@@ -133,6 +137,7 @@ jobs:
             fi
             sleep 2
           done
+          docker logs caddy-ui-web
           exit 1
       - name: Verify HTTP surfaces and login
         shell: bash
@@ -155,27 +160,8 @@ jobs:
           curl --fail --silent --show-error \
             --cookie-jar /tmp/login.cookies \
             "$base_url/Login" > /tmp/login.html
-          login_token="$(python3 - <<'PY'
-          from html.parser import HTMLParser
-          from pathlib import Path
-
-          class TokenParser(HTMLParser):
-              token = None
-
-              def handle_starttag(self, tag, attrs):
-                  if tag != "input":
-                      return
-                  attributes = dict(attrs)
-                  if attributes.get("name") == "__RequestVerificationToken":
-                      self.token = attributes.get("value")
-
-          parser = TokenParser()
-          parser.feed(Path("/tmp/login.html").read_text(encoding="utf-8"))
-          if not parser.token:
-              raise SystemExit("antiforgery token missing")
-          print(parser.token)
-          PY
-          )"
+          login_token="$(sed -nE 's/.*name="__RequestVerificationToken"[^>]*value="([^"]+)".*/\1/p' /tmp/login.html | head -n1)"
+          test -n "$login_token"
           login_status="$(curl --silent --show-error \
             --header "Origin: ${base_url}" \
             --cookie /tmp/login.cookies \
@@ -197,17 +183,34 @@ jobs:
             exit 1
           fi
           grep -F 'caddy_ui_ci_admin' /tmp/login.cookies
-          workspace_status="$(curl --silent --show-error \
-            --cookie /tmp/login.cookies \
-            --output /tmp/workspace.html \
-            --write-out '%{http_code}' \
-            "$base_url/")"
-          if [ "$workspace_status" != "200" ]; then
-            printf 'Unexpected workspace status: %s\n' "$workspace_status"
-            cat /tmp/workspace.html
-            docker logs caddy-ui-web
-            exit 1
-          fi
+
+          check_page() {
+            path="$1"
+            marker="$2"
+            timeout="${3:-15}"
+            output="/tmp/page-$(printf '%s' "$path" | tr '/?' '--').html"
+            status="$(curl --max-time "$timeout" --silent --show-error \
+              --cookie /tmp/login.cookies \
+              --output "$output" \
+              --write-out '%{http_code}' \
+              "$base_url$path")"
+            if [ "$status" != "200" ]; then
+              printf 'Unexpected status %s for %s\n' "$status" "$path"
+              cat "$output"
+              docker logs caddy-ui-web
+              exit 1
+            fi
+            grep -F "$marker" "$output"
+          }
+
+          check_page / 'Caddy UI'
+          check_page /Requests '<h1>Requests</h1>'
+          check_page /Access '<h1>Zugriffsgruppen</h1>'
+          check_page /LiveLog '<h1>Live-Log</h1>'
+          check_page /Operations/Cutover '<h1>Produktionsprüfung</h1>' 5
+          check_page /Administration/Providers '<h1>DNS-Provider</h1>'
+          check_page /Setup '<h1>DNS, Domain und Route einrichten</h1>'
+
           portal_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
             -H 'X-Caddy-Portal-Secret: portal-smoke-secret' \
             -H 'X-Forwarded-Proto: https' \
@@ -220,11 +223,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/caddy-ui-migration
-          python3 - <<'PY'
-          import sqlite3
-          path = "/tmp/caddy-ui-migration/legacy.db"
-          connection = sqlite3.connect(path)
-          connection.executescript("""
+          sqlite3 /tmp/caddy-ui-migration/legacy.db <<'SQL'
           PRAGMA user_version=2;
           CREATE TABLE users(
               id TEXT PRIMARY KEY,
@@ -254,10 +253,7 @@ jobs:
               '2026-07-27T00:00:00+00:00',
               NULL
           );
-          """)
-          connection.commit()
-          connection.close()
-          PY
+          SQL
           docker run --rm \
             --network caddy-ui-phase3 \
             -v /tmp/caddy-ui-migration:/migration \
@@ -267,13 +263,8 @@ jobs:
               --source /migration/legacy.db \
               --backup-dir /migration/backups \
               --report /migration/import.json
-          python3 - <<'PY'
-          import json
-          with open("/tmp/caddy-ui-migration/import.json", encoding="utf-8") as report:
-              payload = json.load(report)
-          assert payload["status"] == "succeeded", payload
-          assert payload["tables"][0]["sourceRows"] == 1, payload
-          PY
+          test "$(jq -r '.status' /tmp/caddy-ui-migration/import.json)" = "succeeded"
+          test "$(jq -r '.tables[0].sourceRows' /tmp/caddy-ui-migration/import.json)" = "1"
       - name: Verify bundled Caddy module
         if: matrix.target == 'dotnet-bundle'
         run: |
@@ -287,7 +278,7 @@ jobs:
           mkdir -p /tmp/caddy-ui-container-logs
           docker logs caddy-ui-postgres > /tmp/caddy-ui-container-logs/postgres.log 2>&1 || true
           docker logs caddy-ui-web > /tmp/caddy-ui-container-logs/web.log 2>&1 || true
-          cp /tmp/login.headers /tmp/login.response /tmp/workspace.html /tmp/caddy-ui-container-logs/ 2>/dev/null || true
+          cp /tmp/login.headers /tmp/login.response /tmp/page-*.html /tmp/caddy-ui-container-logs/ 2>/dev/null || true
       - name: Upload container logs
         if: always()
         uses: actions/upload-artifact@v7
