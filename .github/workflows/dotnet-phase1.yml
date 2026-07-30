@@ -138,12 +138,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent http://127.0.0.1:18098/health/live
-          for attempt in {1..20}; do
-            if docker logs caddy-ui-web 2>&1 | grep -q 'Created the initial administrator'; then
+          base_url=http://127.0.0.1:18098
+          curl --fail --silent "$base_url/health/live"
+          for attempt in {1..30}; do
+            user_count="$(docker exec caddy-ui-postgres psql -U caddy_ui -d caddy_ui -Atc \
+              "SELECT COUNT(*) FROM caddy_ui.users WHERE lower(username) = 'admin';" 2>/dev/null || true)"
+            if [ "$user_count" = "1" ]; then
               break
             fi
-            if [ "$attempt" = "20" ]; then
+            if [ "$attempt" = "30" ]; then
               docker logs caddy-ui-web
               exit 1
             fi
@@ -151,7 +154,7 @@ jobs:
           done
           curl --fail --silent --show-error \
             --cookie-jar /tmp/login.cookies \
-            http://127.0.0.1:18098/Login > /tmp/login.html
+            "$base_url/Login" > /tmp/login.html
           login_token="$(python3 - <<'PY'
           from html.parser import HTMLParser
           from pathlib import Path
@@ -174,26 +177,37 @@ jobs:
           PY
           )"
           login_status="$(curl --silent --show-error \
+            --header "Origin: ${base_url}" \
             --cookie /tmp/login.cookies \
             --cookie-jar /tmp/login.cookies \
             --dump-header /tmp/login.headers \
             --output /tmp/login.response \
             --write-out '%{http_code}' \
-            --request POST \
             --data-urlencode "__RequestVerificationToken=${login_token}" \
             --data-urlencode 'Input.Username=admin' \
             --data-urlencode 'Input.Password=ci-admin-password-123456789' \
             --data-urlencode 'Input.SecondFactor=' \
             --data-urlencode 'ReturnUrl=/' \
-            http://127.0.0.1:18098/Login)"
-          test "$login_status" = "302"
+            "$base_url/Login")"
+          if [ "$login_status" != "302" ]; then
+            printf 'Unexpected login status: %s\n' "$login_status"
+            cat /tmp/login.headers
+            cat /tmp/login.response
+            docker logs caddy-ui-web
+            exit 1
+          fi
           grep -F 'caddy_ui_ci_admin' /tmp/login.cookies
           workspace_status="$(curl --silent --show-error \
             --cookie /tmp/login.cookies \
             --output /tmp/workspace.html \
             --write-out '%{http_code}' \
-            http://127.0.0.1:18098/)"
-          test "$workspace_status" = "200"
+            "$base_url/")"
+          if [ "$workspace_status" != "200" ]; then
+            printf 'Unexpected workspace status: %s\n' "$workspace_status"
+            cat /tmp/workspace.html
+            docker logs caddy-ui-web
+            exit 1
+          fi
           portal_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
             -H 'X-Caddy-Portal-Secret: portal-smoke-secret' \
             -H 'X-Forwarded-Proto: https' \
@@ -273,6 +287,7 @@ jobs:
           mkdir -p /tmp/caddy-ui-container-logs
           docker logs caddy-ui-postgres > /tmp/caddy-ui-container-logs/postgres.log 2>&1 || true
           docker logs caddy-ui-web > /tmp/caddy-ui-container-logs/web.log 2>&1 || true
+          cp /tmp/login.headers /tmp/login.response /tmp/workspace.html /tmp/caddy-ui-container-logs/ 2>/dev/null || true
       - name: Upload container logs
         if: always()
         uses: actions/upload-artifact@v7
