@@ -146,14 +146,14 @@ services:
       Cutover__Enabled: "false"
       Cutover__LegacySqlitePath: /legacy/caddy-ui.db
       Cutover__ManifestDirectory: /state/cutover
-      CADDY_ADMIN_URL: http://caddy:2019
+      CADDY_ADMIN_URL: caddy:2019
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER:-}
       NETCUP_API_KEY: ${NETCUP_API_KEY:-}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD:-}
     volumes:
       - etc:/etc/caddy
       - data:/data:ro
-      - logs:/var/log/caddy:ro
+      - logs:/var/log/caddy
       - ui-data:/legacy:ro
       - ui-state:/state
       - provider-secrets:/run/caddy-ui-secrets
