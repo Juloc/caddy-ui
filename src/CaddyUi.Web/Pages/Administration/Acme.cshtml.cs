@@ -9,9 +9,9 @@ namespace CaddyUi.Web.Pages.Administration;
 [Authorize(Policy = "Administrator")]
 public sealed class AcmeModel : PageModel
 {
-    private readonly AcmeEmailService _service;
+    private readonly AcmeEmailPreferenceService _service;
 
-    public AcmeModel(AcmeEmailService service)
+    public AcmeModel(AcmeEmailPreferenceService service)
     {
         _service = service;
     }
@@ -46,10 +46,14 @@ public sealed class AcmeModel : PageModel
                 Input.Email,
                 HttpContext.RequestAborted);
             StatusMessage = result.Changed
-                ? result.Email.Length == 0
-                    ? "Die ACME-E-Mail wurde entfernt und dauerhaft übernommen."
-                    : "Die ACME-E-Mail wurde gespeichert und dauerhaft übernommen."
-                : "Die ACME-E-Mail war bereits unverändert konfiguriert.";
+                ? result.UsesEnvironmentVariable
+                    ? "Das UI-Feld ist leer. ACME_EMAIL aus der Umgebung wird verwendet."
+                    : result.Email.Length == 0
+                        ? "Das UI-Feld ist leer und ACME_EMAIL ist nicht verfügbar. Die globale ACME-E-Mail wurde entfernt."
+                        : "Die ACME-E-Mail wurde über die UI gespeichert und dauerhaft übernommen."
+                : result.UsesEnvironmentVariable
+                    ? "ACME_EMAIL aus der Umgebung wurde bereits verwendet."
+                    : "Die ACME-E-Mail war bereits unverändert konfiguriert.";
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
