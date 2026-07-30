@@ -44,45 +44,6 @@ services:
     restart: "no"
     networks: [backend]
 
-  legacy-import:
-    <<: *caddy-ui-image
-    container_name: caddy-ui-legacy-import
-    command:
-      - sh
-      - -c
-      - |
-        if [ -f /legacy/caddy-ui.db ]; then
-          rm -rf /state/legacy-source
-          mkdir -p /state/legacy-source /state/legacy-backups
-          cp /legacy/caddy-ui.db /state/legacy-source/caddy-ui.db
-          if [ -f /legacy/caddy-ui.db-wal ]; then
-            cp /legacy/caddy-ui.db-wal /state/legacy-source/caddy-ui.db-wal
-          fi
-          if [ -f /legacy/caddy-ui.db-shm ]; then
-            cp /legacy/caddy-ui.db-shm /state/legacy-source/caddy-ui.db-shm
-          fi
-          exec dotnet /app/migration/CaddyUi.Migration.dll import \
-            --source /state/legacy-source/caddy-ui.db \
-            --backup-dir /state/legacy-backups \
-            --report /state/legacy-import.json
-        fi
-        echo "No legacy SQLite database found; starting with PostgreSQL state."
-    environment: *database-environment
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    volumes:
-      - ui-data:/legacy:ro
-      - ui-state:/state
-    read_only: true
-    tmpfs:
-      - /tmp:size=64m,mode=1777
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: [ALL]
-    restart: "no"
-    networks: [backend]
-
   config-init:
     <<: *caddy-ui-image
     container_name: caddy-ui-config-init
@@ -107,7 +68,7 @@ services:
     container_name: caddy-ui
     command: ["web"]
     depends_on:
-      legacy-import:
+      migrate:
         condition: service_completed_successfully
     ports:
       - "${CADDY_UI_BIND_ADDRESS:-0.0.0.0}:8098:8098"
@@ -144,7 +105,6 @@ services:
       IpSecurity__BlockWriteMode: active
       IpSecurity__BlocklistPath: /etc/caddy/routes/site-security-blocks.caddy
       Cutover__Enabled: "false"
-      Cutover__LegacySqlitePath: /legacy/caddy-ui.db
       Cutover__ManifestDirectory: /state/cutover
       CADDY_ADMIN_URL: caddy:2019
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER:-}
@@ -154,7 +114,6 @@ services:
       - etc:/etc/caddy
       - data:/data:ro
       - logs:/var/log/caddy
-      - ui-data:/legacy:ro
       - ui-state:/state
       - provider-secrets:/run/caddy-ui-secrets
     read_only: true
@@ -212,7 +171,6 @@ volumes:
   data:
   config:
   logs:
-  ui-data:
   ui-state:
   provider-secrets:
   postgres-data:
