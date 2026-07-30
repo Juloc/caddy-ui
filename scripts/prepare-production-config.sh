@@ -51,22 +51,57 @@ if [ ! -f "$blocklist_fragment" ]; then
     printf '%s\n' '# Managed IP block feed: address|blocked-until|reason' >"$blocklist_fragment"
 fi
 
-remove_empty_email=0
-if [ -z "$acme_email" ]; then
-    remove_empty_email=1
+email_required=0
+if [ -n "$acme_email" ]; then
+    email_required=1
 fi
 
 temporary="${root_config}.caddy-ui-2.tmp"
-awk -v managed="$managed_fragment" -v remove_empty_email="$remove_empty_email" '
-BEGIN { inserted = 0 }
+awk \
+    -v managed="$managed_fragment" \
+    -v email_required="$email_required" '
+BEGIN {
+    inserted = 0
+    global_seen = 0
+    in_global = 0
+    email_written = 0
+}
 {
     trimmed = $0
     sub(/^[[:space:]]+/, "", trimmed)
     sub(/[[:space:]]+$/, "", trimmed)
-    if (remove_empty_email == "1" &&
-        (trimmed == "email {$ACME_EMAIL}" || trimmed == "email")) {
+
+    if (!global_seen && trimmed == "{") {
+        global_seen = 1
+        in_global = 1
+        print $0
+        if (email_required == "1") {
+            print "    email {$ACME_EMAIL}"
+            email_written = 1
+        }
         next
     }
+
+    if (in_global && trimmed == "}") {
+        in_global = 0
+        print $0
+        next
+    }
+
+    if (in_global && trimmed ~ /^email([[:space:]]|$)/) {
+        if (email_required == "1") {
+            if (!email_written) {
+                print "    email {$ACME_EMAIL}"
+                email_written = 1
+            }
+            next
+        }
+
+        if (trimmed == "email {$ACME_EMAIL}" || trimmed == "email") {
+            next
+        }
+    }
+
     if (trimmed == "import /etc/caddy/routes/site-*.caddy" ||
         trimmed == "import /etc/caddy/routes/*.caddy" ||
         trimmed == "import " managed) {
@@ -76,6 +111,7 @@ BEGIN { inserted = 0 }
         }
         next
     }
+
     print $0
 }
 END {
