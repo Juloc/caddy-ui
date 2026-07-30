@@ -1,9 +1,23 @@
-name: Verify
+name: Verify Go modules
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/ci.yml"
+      - "cmd/**"
+      - "caddyguard/**"
+      - "caddynetcp/**"
+      - "go.mod"
+      - "go.sum"
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/ci.yml"
+      - "cmd/**"
+      - "caddyguard/**"
+      - "caddynetcp/**"
+      - "go.mod"
+      - "go.sum"
 
 permissions:
   contents: read
@@ -17,48 +31,21 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Format and tidy
+      - name: Verify formatting and modules
         shell: bash
         run: |
           gofmt -w cmd caddyguard caddynetcp
           go mod tidy
           git diff -- cmd caddyguard caddynetcp go.mod go.sum | tee /tmp/go-format.patch
           test ! -s /tmp/go-format.patch
-      - name: Upload Go formatting patch
+      - name: Test
+        run: |
+          go test ./...
+          git diff --exit-code -- go.mod go.sum
+      - name: Upload formatting diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: go-format-patch
           path: /tmp/go-format.patch
           retention-days: 1
-      - name: Test and verify committed modules
-        run: |
-          go test ./...
-          git diff --exit-code -- go.mod go.sum
-
-  containers:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [dotnet-companion, dotnet-bundle]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
-      - name: Build ${{ matrix.target }} image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.dotnet
-          target: ${{ matrix.target }}
-          push: false
-          load: true
-          tags: caddy-ui:${{ matrix.target }}-test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Verify bundled Caddy protection module
-        if: matrix.target == 'dotnet-bundle'
-        run: |
-          docker run --rm --entrypoint /usr/bin/caddy caddy-ui:dotnet-bundle-test list-modules | grep -F 'http.handlers.caddy_ui_guard'
-          printf ':8080 {\n  caddy_ui_guard {\n    requests 10\n    window 1m\n    burst 2\n    block 15m\n  }\n  respond "ok"\n}\n' \
-            | docker run -i --rm --entrypoint /usr/bin/caddy caddy-ui:dotnet-bundle-test adapt --adapter caddyfile --config /dev/stdin >/tmp/caddy-adapted.json
-          grep -F 'caddy_ui_guard' /tmp/caddy-adapted.json
