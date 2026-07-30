@@ -27,6 +27,8 @@ public sealed class OperationsOptions
 
     public string CertificateDirectory { get; init; } = "/data/caddy/certificates";
 
+    public string ProviderSecretDirectory { get; init; } = "/run/caddy-ui-secrets";
+
     public string PgDumpBinary { get; init; } = "/usr/bin/pg_dump";
 
     public int BackupRetentionCount { get; init; } = 14;
@@ -60,6 +62,7 @@ public sealed class OperationsOptions
             BackupDirectory = Read(configuration, section, "BackupDirectory", "CADDY_UI_BACKUP_DIRECTORY", "/data/caddy-ui/backups"),
             DiagnosticsDirectory = Read(configuration, section, "DiagnosticsDirectory", "CADDY_UI_DIAGNOSTICS_DIRECTORY", "/data/caddy-ui/diagnostics"),
             CertificateDirectory = Read(configuration, section, "CertificateDirectory", "CADDY_UI_CERTIFICATE_DIRECTORY", "/data/caddy/certificates"),
+            ProviderSecretDirectory = Read(configuration, section, "ProviderSecretDirectory", "CADDY_UI_PROVIDER_SECRET_DIRECTORY", "/run/caddy-ui-secrets"),
             PgDumpBinary = Read(configuration, section, "PgDumpBinary", "CADDY_UI_PG_DUMP_BINARY", "/usr/bin/pg_dump"),
             BackupRetentionCount = Clamp(ReadInt(configuration, section, "BackupRetentionCount", "CADDY_UI_BACKUP_RETENTION_COUNT", 14), 1, 365),
             PublicIpv4Services = ReadUris(section.GetSection("PublicIpv4Services"), [new Uri("https://api.ipify.org"), new Uri("https://ipv4.icanhazip.com")]),
