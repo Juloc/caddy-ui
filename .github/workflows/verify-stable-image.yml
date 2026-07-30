@@ -1,0 +1,39 @@
+name: Verify stable production image
+
+on:
+  pull_request:
+    paths:
+      - "VERSION_DOTNET"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/verify-stable-image.yml"
+  push:
+    branches: [main]
+    paths:
+      - "VERSION_DOTNET"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/verify-stable-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull and verify stable image
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION_DOTNET)"
+          image="ghcr.io/juloc/caddy-ui:${version}"
+          docker pull "$image"
+          docker run --rm "$image" caddy list-modules | grep -F 'http.handlers.caddy_ui_guard'
+          docker run --rm "$image" sh -c 'test "$CADDY_UI_VERSION" = "'"$version"'" && test -f /app/CaddyUi.Web.dll && test -x /usr/local/bin/prepare-production-config'
