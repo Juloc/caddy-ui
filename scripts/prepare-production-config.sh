@@ -37,37 +37,31 @@ if [ ! -f "$managed_fragment" ]; then
     } >"$managed_fragment"
 fi
 
-python3 - "$root_config" "$managed_fragment" <<'PY'
-from pathlib import Path
-import sys
-
-root = Path(sys.argv[1])
-managed = sys.argv[2]
-lines = root.read_text(encoding="utf-8").splitlines()
-legacy_imports = {
-    "import /etc/caddy/routes/site-*.caddy",
-    "import /etc/caddy/routes/*.caddy",
+temporary="${root_config}.caddy-ui-2.tmp"
+awk -v managed="$managed_fragment" '
+BEGIN { inserted = 0 }
+{
+    trimmed = $0
+    sub(/^[[:space:]]+/, "", trimmed)
+    sub(/[[:space:]]+$/, "", trimmed)
+    if (trimmed == "import /etc/caddy/routes/site-*.caddy" ||
+        trimmed == "import /etc/caddy/routes/*.caddy" ||
+        trimmed == "import " managed) {
+        if (!inserted) {
+            print "import " managed
+            inserted = 1
+        }
+        next
+    }
+    print $0
 }
-result = []
-inserted = False
-for line in lines:
-    stripped = line.strip()
-    if stripped == f"import {managed}":
-        if not inserted:
-            result.append(f"import {managed}")
-            inserted = True
-        continue
-    if stripped in legacy_imports:
-        if not inserted:
-            result.append(f"import {managed}")
-            inserted = True
-        continue
-    result.append(line)
-if not inserted:
-    if result and result[-1] != "":
-        result.append("")
-    result.append(f"import {managed}")
-root.write_text("\n".join(result) + "\n", encoding="utf-8")
-PY
+END {
+    if (!inserted) {
+        print ""
+        print "import " managed
+    }
+}
+' "$root_config" >"$temporary"
+mv "$temporary" "$root_config"
 
 /usr/bin/caddy validate --config "$root_config" --adapter caddyfile
