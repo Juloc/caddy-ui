@@ -22,8 +22,8 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         cls.preflight = PREFLIGHT.read_text(encoding="utf-8")
         cls.version = VERSION.read_text(encoding="utf-8").strip()
 
-    def test_shadow_stack_uses_immutable_dotnet_beta_image(self) -> None:
-        self.assertEqual("2.0.0-beta.2", self.version)
+    def test_shadow_stack_remains_pinned_to_last_verified_beta(self) -> None:
+        self.assertEqual("2.0.0", self.version)
         self.assertIn(
             "ghcr.io/juloc/caddy-ui-dotnet-companion:${CADDY_UI_SHADOW_VERSION:-2.0.0-beta.2}",
             self.compose,

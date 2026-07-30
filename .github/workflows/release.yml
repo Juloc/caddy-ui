@@ -1,4 +1,4 @@
-name: Release after merge
+name: Release .NET production
 
 on:
   push:
@@ -8,128 +8,186 @@ on:
 permissions:
   contents: write
   packages: write
-  pull-requests: read
 
-# Automatic releases are intentionally paused while the .NET/PostgreSQL
-# cutover is being validated. A new push cancels any older queued/running
-# release workflow, while an explicit workflow_dispatch remains available.
 concurrency:
-  group: caddy-ui-release
-  cancel-in-progress: true
+  group: caddy-ui-dotnet-release
+  cancel-in-progress: false
 
 jobs:
   release:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      published: ${{ steps.existing.outputs.published }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Determine release version
+      - name: Validate stable version contract
         id: version
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          CURRENT="v$(cat caddy_ui/VERSION)"
-          LABELS="$(
-            curl --fail --silent --show-error \
-              --header "Authorization: Bearer ${GITHUB_TOKEN}" \
-              --header "Accept: application/vnd.github+json" \
-              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
-              | jq -c '.[0].labels // []'
-          )"
-          VERSION="$(python scripts/next_version.py --current "${CURRENT#v}" --labels-json "$LABELS")"
+          set -euo pipefail
+          VERSION="$(tr -d '\r\n' < VERSION_DOTNET)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          grep -F "FoundationVersion = \"$VERSION\"" src/CaddyUi.Domain/ProductMetadata.cs
+          grep -F "ARG APP_VERSION=$VERSION" Dockerfile.dotnet
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [[ "$VERSION" == *-* ]]; then CHANNEL="${VERSION#*-}"; CHANNEL="${CHANNEL%%.*}"; else CHANNEL="latest"; fi
-          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
-      - name: Verify source
+      - name: Check existing release
+        id: existing
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          python -m compileall -q caddy_ui caddy_ui_entrypoint.py scripts tests
-          python -m unittest discover -v
-          UNFORMATTED="$(gofmt -l cmd caddynetcp)"
-          if [ -n "$UNFORMATTED" ]; then
-            printf 'Go files need formatting:\n%s\n' "$UNFORMATTED"
-            exit 1
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "Version ${VERSION} is already released."
+          else
+            echo "published=true" >> "$GITHUB_OUTPUT"
           fi
-          go mod tidy
-          git diff --exit-code -- go.mod go.sum
-          go test ./...
+      - uses: actions/setup-dotnet@v5
+        if: steps.existing.outputs.published == 'true'
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - name: Restore
+        if: steps.existing.outputs.published == 'true'
+        run: dotnet restore CaddyUi.slnx
+      - name: Verify formatting
+        if: steps.existing.outputs.published == 'true'
+        run: dotnet format CaddyUi.slnx --no-restore --verify-no-changes
+      - name: Build
+        if: steps.existing.outputs.published == 'true'
+        run: dotnet build CaddyUi.slnx --configuration Release --no-restore
+      - name: Test
+        if: steps.existing.outputs.published == 'true'
+        run: dotnet test CaddyUi.slnx --configuration Release --no-build
       - uses: docker/setup-buildx-action@v4
+        if: steps.existing.outputs.published == 'true'
       - uses: docker/login-action@v4
+        if: steps.existing.outputs.published == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and publish bundle
+      - name: Publish production bundle
+        if: steps.existing.outputs.published == 'true'
+        id: bundle
         uses: docker/build-push-action@v7
         with:
           context: .
-          target: bundle
+          file: Dockerfile.dotnet
+          target: dotnet-bundle
           push: true
           build-args: APP_VERSION=${{ steps.version.outputs.version }}
           tags: |
             ghcr.io/juloc/caddy-ui:${{ steps.version.outputs.version }}
-            ghcr.io/juloc/caddy-ui:${{ steps.version.outputs.channel }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Build and publish companion
+            ghcr.io/juloc/caddy-ui:latest
+            ghcr.io/juloc/caddy-ui-dotnet:${{ steps.version.outputs.version }}
+            ghcr.io/juloc/caddy-ui-dotnet:latest
+          cache-from: type=gha,scope=dotnet-bundle
+          cache-to: type=gha,mode=max,scope=dotnet-bundle
+          provenance: true
+          sbom: true
+      - name: Publish production companion
+        if: steps.existing.outputs.published == 'true'
+        id: companion
         uses: docker/build-push-action@v7
         with:
           context: .
-          target: companion
+          file: Dockerfile.dotnet
+          target: dotnet-companion
           push: true
           build-args: APP_VERSION=${{ steps.version.outputs.version }}
           tags: |
             ghcr.io/juloc/caddy-ui-companion:${{ steps.version.outputs.version }}
-            ghcr.io/juloc/caddy-ui-companion:${{ steps.version.outputs.channel }}
-          cache-from: type=gha
-      - name: Record release version
+            ghcr.io/juloc/caddy-ui-companion:latest
+            ghcr.io/juloc/caddy-ui-dotnet-companion:${{ steps.version.outputs.version }}
+            ghcr.io/juloc/caddy-ui-dotnet-companion:latest
+          cache-from: type=gha,scope=dotnet-companion
+          cache-to: type=gha,mode=max,scope=dotnet-companion
+          provenance: true
+          sbom: true
+      - name: Smoke-test published production images
+        if: steps.existing.outputs.published == 'true'
+        shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          printf '%s\n' "$VERSION" > caddy_ui/VERSION
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add caddy_ui/VERSION
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(release): ${VERSION}"
-            git push origin HEAD:main
-          fi
+          set -euo pipefail
+          bundle="ghcr.io/juloc/caddy-ui:${VERSION}"
+          companion="ghcr.io/juloc/caddy-ui-companion:${VERSION}"
+          docker pull "$bundle"
+          docker pull "$companion"
+          docker run --rm "$bundle" caddy list-modules | grep -F 'http.handlers.caddy_ui_guard'
+          docker run --rm "$companion" sh -c 'test "$CADDY_UI_VERSION" = "'"$VERSION"'" && test -f /app/CaddyUi.Web.dll'
+
+          rm -rf /tmp/caddy-ui-config /tmp/caddy-ui-logs
+          mkdir -p /tmp/caddy-ui-config/routes /tmp/caddy-ui-logs
+          cat >/tmp/caddy-ui-config/Caddyfile <<'EOF'
+          {
+              email admin@example.com
+              admin 0.0.0.0:2019
+          }
+          import /etc/caddy/routes/site-*.caddy
+          EOF
+          cat >/tmp/caddy-ui-config/routes/site-legacy.caddy <<'EOF'
+          legacy.example.com {
+              respond "legacy" 200
+          }
+          EOF
+          docker run --rm \
+            -e ACME_EMAIL=admin@example.com \
+            -v /tmp/caddy-ui-config:/etc/caddy \
+            -v /tmp/caddy-ui-logs:/var/log/caddy \
+            "$bundle" sh -c /usr/local/bin/prepare-production-config
+          grep -F 'import /etc/caddy/routes/site-managed-routes.caddy' /tmp/caddy-ui-config/Caddyfile
+          ! grep -F 'site-security-blocks.caddy' /tmp/caddy-ui-config/Caddyfile
+          grep -F '# Managed IP block feed: address|blocked-until|reason' /tmp/caddy-ui-config/routes/site-security-blocks.caddy
+          test -f /tmp/caddy-ui-config/routes/legacy-dotnet-cutover/site-legacy.caddy
+
+          docker network create caddy-ui-release-smoke
+          trap 'docker rm -f caddy-ui-release-web caddy-ui-release-postgres >/dev/null 2>&1 || true; docker network rm caddy-ui-release-smoke >/dev/null 2>&1 || true' EXIT
+          docker run -d \
+            --name caddy-ui-release-postgres \
+            --network caddy-ui-release-smoke \
+            -e POSTGRES_DB=caddy_ui \
+            -e POSTGRES_USER=caddy_ui \
+            -e POSTGRES_PASSWORD=caddy_ui_release_smoke \
+            postgres:17-alpine
+          for attempt in {1..30}; do
+            if docker exec caddy-ui-release-postgres pg_isready -U caddy_ui -d caddy_ui; then break; fi
+            if [ "$attempt" = "30" ]; then docker logs caddy-ui-release-postgres; exit 1; fi
+            sleep 1
+          done
+          docker run -d \
+            --name caddy-ui-release-web \
+            --network caddy-ui-release-smoke \
+            -p 18098:8098 \
+            -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-release-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui_release_smoke' \
+            -e Database__ApplyMigrationsOnStartup=true \
+            -e Authentication__BootstrapUsername=release-admin \
+            -e Authentication__BootstrapPassword=release-admin-password-123456789 \
+            "$bundle" web
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:18098/health/ready; then break; fi
+            if [ "$attempt" = "40" ]; then docker logs caddy-ui-release-web; exit 1; fi
+            sleep 2
+          done
       - name: Create tag and GitHub release
+        if: steps.existing.outputs.published == 'true'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           git tag -a "v${VERSION}" -m "Caddy UI ${VERSION}"
           git push origin "v${VERSION}"
-          PRERELEASE=false
-          if [[ "$VERSION" == *-* ]]; then PRERELEASE=true; fi
-          jq -n \
-            --arg tag "v${VERSION}" \
-            --arg title "Caddy UI ${VERSION}" \
-            --argjson prerelease "$PRERELEASE" \
-            '{tag_name: $tag, name: $title, generate_release_notes: true, prerelease: $prerelease}' \
-            > /tmp/release.json
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
-            --header "Accept: application/vnd.github+json" \
-            --header "Content-Type: application/json" \
-            --data-binary @/tmp/release.json \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases"
+          gh release create "v${VERSION}" --title "Caddy UI ${VERSION}" --generate-notes
 
   downstream:
     needs: release
-    if: ${{ needs.release.result == 'success' }}
+    if: needs.release.outputs.published == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -142,22 +200,21 @@ jobs:
         run: |
           if [ -n "$TOKEN" ]; then echo "available=true" >> "$GITHUB_OUTPUT"; else echo "available=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/checkout@v7
-        if: ${{ steps.downstream-token.outputs.available == 'true' }}
+        if: steps.downstream-token.outputs.available == 'true'
         with:
           repository: Juloc/docker
           token: ${{ secrets.DOCKER_REPO_TOKEN }}
           path: docker
-      - name: Update two-container deployment
-        if: ${{ steps.downstream-token.outputs.available == 'true' }}
+      - name: Update production deployment
+        if: steps.downstream-token.outputs.available == 'true'
         env:
           VERSION: ${{ needs.release.outputs.version }}
-        run: |
-          sed "s/__CADDY_UI_VERSION__/${VERSION}/g" source/deploy/docker-compose.yml > docker/caddy/docker-compose.yml
-      - name: Open and auto-merge deployment PR
-        if: ${{ steps.downstream-token.outputs.available == 'true' }}
+        run: sed "s/__CADDY_UI_VERSION__/${VERSION}/g" source/deploy/docker-compose.yml > docker/caddy/docker-compose.yml
+      - name: Open deployment PR
+        if: steps.downstream-token.outputs.available == 'true'
         working-directory: docker
         env:
-          GITHUB_TOKEN: ${{ secrets.DOCKER_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.DOCKER_REPO_TOKEN }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           BRANCH="automation/caddy-ui-${VERSION}"
@@ -166,30 +223,10 @@ jobs:
           git switch -c "$BRANCH"
           git add caddy/docker-compose.yml
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "chore(caddy): update Caddy UI to ${VERSION}"
+          git commit -m "chore(caddy): deploy Caddy UI ${VERSION}"
           git push --set-upstream origin "$BRANCH"
-          jq -n \
-            --arg head "$BRANCH" \
-            --arg title "chore(caddy): update Caddy UI to ${VERSION}" \
-            --arg body "Automated two-container deployment update after the verified Caddy UI ${VERSION} release." \
-            '{base: "main", head: $head, title: $title, body: $body}' \
-            > /tmp/downstream-pr.json
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
-            --header "Accept: application/vnd.github+json" \
-            --header "Content-Type: application/json" \
-            --data-binary @/tmp/downstream-pr.json \
-            "${GITHUB_API_URL}/repos/Juloc/docker/pulls" \
-            > /tmp/downstream-pr-response.json
-          PR_ID="$(jq -r '.node_id' /tmp/downstream-pr-response.json)"
-          jq -n \
-            --arg id "$PR_ID" \
-            '{query: "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: SQUASH}) { pullRequest { url } } }", variables: {id: $id}}' \
-            > /tmp/auto-merge.json
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
-            --header "Content-Type: application/json" \
-            --data-binary @/tmp/auto-merge.json \
-            "https://api.github.com/graphql"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(caddy): deploy Caddy UI ${VERSION}" \
+            --body "Deploys the verified .NET/PostgreSQL Caddy UI ${VERSION} production stack with automatic legacy SQLite import and reversible route cutover."

@@ -42,19 +42,25 @@ RUN dotnet publish src/CaddyUi.Web/CaddyUi.Web.csproj \
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-alpine AS dotnet-companion
 WORKDIR /app
-ARG APP_VERSION=2.0.0-beta.2
+ARG APP_VERSION=2.0.0
 
 ENV ASPNETCORE_URLS="http://0.0.0.0:8098;http://0.0.0.0:8099" \
+    ASPNETCORE_HTTP_PORTS="" \
     DOTNET_EnableDiagnostics=0 \
     CADDY_UI_VERSION=${APP_VERSION}
 
-RUN apk add --no-cache curl postgresql-client
+RUN apk add --no-cache curl krb5-libs postgresql-client
 
 COPY --from=dotnet-build /out/web/ /app/
 COPY --from=dotnet-build /out/migration/ /app/migration/
 COPY scripts/dotnet-entrypoint.sh /usr/local/bin/caddy-ui
+COPY scripts/caddy-remote.sh /usr/local/bin/caddy-remote
+COPY scripts/prepare-production-config.sh /usr/local/bin/prepare-production-config
 
-RUN chmod 0755 /usr/local/bin/caddy-ui \
+RUN chmod 0755 \
+        /usr/local/bin/caddy-ui \
+        /usr/local/bin/caddy-remote \
+        /usr/local/bin/prepare-production-config \
     && test -f /app/Microsoft.EntityFrameworkCore.Relational.dll
 
 EXPOSE 8098 8099

@@ -1,0 +1,73 @@
+name: Verify production deployment
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/production-contract.yml"
+      - "deploy/docker-compose.yml"
+      - "Dockerfile.dotnet"
+      - "scripts/caddy-remote.sh"
+      - "scripts/prepare-production-config.sh"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-contract.yml"
+      - "deploy/docker-compose.yml"
+      - "Dockerfile.dotnet"
+      - "scripts/caddy-remote.sh"
+      - "scripts/prepare-production-config.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Compose model
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed 's/__CADDY_UI_VERSION__/contract/g' deploy/docker-compose.yml >/tmp/caddy-ui-compose.yml
+          ACME_EMAIL=admin@example.com \
+          DOMAIN=example.com \
+          CADDY_UI_DB_PASSWORD=database-password-123456789 \
+          CADDY_UI_PASSWORD=admin-password-123456789 \
+          CADDY_UI_ADMIN_PROXY_SECRET=admin-proxy-secret-123456789 \
+          CADDY_UI_PORTAL_PROXY_SECRET=portal-proxy-secret-123456789 \
+          NETCUP_CUSTOMER_NUMBER=123456 \
+          NETCUP_API_KEY=api-key \
+          NETCUP_API_PASSWORD=api-password \
+          docker compose -f /tmp/caddy-ui-compose.yml config --quiet
+      - name: Build production bundle
+        run: docker build --file Dockerfile.dotnet --target dotnet-bundle --tag caddy-ui:production-contract .
+      - name: Verify reversible route preparation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/caddy-ui-contract/etc/routes /tmp/caddy-ui-contract/logs
+          cat >/tmp/caddy-ui-contract/etc/Caddyfile <<'EOF'
+          {
+              email admin@example.com
+              admin 0.0.0.0:2019
+          }
+          import /etc/caddy/routes/site-*.caddy
+          EOF
+          cat >/tmp/caddy-ui-contract/etc/routes/site-legacy.caddy <<'EOF'
+          legacy.example.com {
+              respond "legacy" 200
+          }
+          EOF
+          docker run --rm \
+            -e ACME_EMAIL=admin@example.com \
+            -v /tmp/caddy-ui-contract/etc:/etc/caddy \
+            -v /tmp/caddy-ui-contract/logs:/var/log/caddy \
+            caddy-ui:production-contract \
+            sh -c /usr/local/bin/prepare-production-config
+          grep -Fx 'import /etc/caddy/routes/site-managed-routes.caddy' /tmp/caddy-ui-contract/etc/Caddyfile
+          ! grep -F 'site-security-blocks.caddy' /tmp/caddy-ui-contract/etc/Caddyfile
+          grep -Fx 'import /etc/caddy/routes/legacy-dotnet-cutover/site-*.caddy' /tmp/caddy-ui-contract/etc/routes/site-managed-routes.caddy
+          grep -Fx '# Managed IP block feed: address|blocked-until|reason' /tmp/caddy-ui-contract/etc/routes/site-security-blocks.caddy
+          test -f /tmp/caddy-ui-contract/etc/routes/legacy-dotnet-cutover/site-legacy.caddy
+          test ! -f /tmp/caddy-ui-contract/etc/routes/site-legacy.caddy

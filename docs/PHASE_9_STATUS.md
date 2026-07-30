@@ -1,91 +1,59 @@
-# Phase 9 – Shadow-Betrieb und Umschaltung
+# Phase 9 – Produktionsumschaltung
 
-Status: implementiert und in CI verifiziert  
-Branch: `agent/dotnet-postgres-phase-9`  
-Basis: `agent/dotnet-postgres-phase-8`  
-Draft-PR: #28
+Status: Repository-Implementierung abgeschlossen  
+Zielversion: `2.0.0`  
+Produktionsstack: .NET 10 / Razor Pages / PostgreSQL 17
 
-## Implementiert
+## Abgeschlossen
 
-- explizit deaktivierter Cutover-Modus als sicherer Standard
-- zentrale Readiness-Prüfung für PostgreSQL, Migrationen und Inventar
-- SHA-256-Identifikation der read-only Legacy-SQLite-Datei
-- Prüfung gemeinsamer Caddy-Logpfade
-- Mindestdauer und Aktualität des Shadow-Laufs
-- Blockierung bei vorzeitig aktiven Routing-, DNS- oder Blocklist-Schreibmodi
-- Prüfung eines aktuellen PostgreSQL-Backups
-- Statistikvergleich über dasselbe geschlossene UTC-Zeitfenster
-- konfigurierbare Abweichungstoleranz je Kennzahl
-- unveränderliche Readiness- und Statistikmanifeste
-- administratorgeschützte Razor Page für Readiness, Vergleich und Wartungsreihenfolge
-- sichtbarer Cutover-Status in Navigation, Topbar und Statusbar
-- vollständiges Produktions- und Rollback-Runbook
-- Authentifizierungstest für den neuen Arbeitsbereich
-- Unit-Tests für Statistikvergleich und Snapshotvalidierung
+- produktive, versionierte .NET-Bundle- und Companion-Images
+- PostgreSQL-Schemamigration vor jedem Start
+- idempotenter Import der vorhandenen read-only SQLite-Datei
+- persistente PostgreSQL-, Betriebs- und Legacy-Volumes
+- reversibler Übergang der vorhandenen `site-*.caddy`-Routen
+- exakter Root-Caddyfile-Import für verwaltete Routen
+- separater IP-Blockfeed außerhalb der Caddyfile-Syntax
+- Remote-Reload gegen den separaten Caddy-Container
+- aktive Routing-, DNS-, DDNS-, Worker- und Blocklist-Modi
+- Netcup-Wildcard-Renderer und integriertes Guard-Modul
+- Produktions-Compose-Vertrag und Container-Smokes in CI
+- stabile Release-Pipeline mit Tag, GitHub Release und Deployment-PR
+- archivierter, unveränderlicher Shadow-Beta-Stack als Diagnoseoption
 
-## Sichere Defaults
+## Sicherheits- und Rückfallgrenzen
 
-```text
-Cutover:Enabled=false
-Analytics:Enabled=false
-Operations:WorkerEnabled=false
-Operations:DnsWriteMode=disabled
-Routing:WriteMode=disabled
-IpSecurity:BlockWriteMode=disabled
-```
+- Die alte SQLite-Datei bleibt read-only erhalten.
+- Bestehende Route-Dateien werden nicht gelöscht, sondern nach `legacy-dotnet-cutover` verschoben.
+- Vor dem ersten .NET-Apply importiert die neue verwaltete Datei die alten Routen unverändert.
+- Der IP-Blockfeed wird nicht als Caddyfile importiert.
+- Caddy startet nur nach erfolgreicher Validierung der vollständigen Konfiguration.
+- PostgreSQL, SQLite, alte Routen und neue Betriebsdaten verwenden getrennte Volumes.
+- Der UI-Container besitzt keinen Docker-Socket und keine Linux-Capabilities.
+- Port `8099` bleibt intern.
 
-Die Phase führt keine automatische Port-, DNS-, Zertifikat-, Routen- oder Workerumschaltung durch. Python/SQLite bleibt bis zum expliziten Wartungsfenster produktiv.
+## Verifikation
 
-## Readiness-Blocker
+Die Pull-Request-Prüfungen müssen vor Integration bestehen:
 
-Die Umschaltung bleibt blockiert bei:
+- Python-/Legacy-Vertragstests
+- Go-Formatierung und Modultests
+- .NET Restore, Format, Release-Build und Tests
+- Companion- und Bundle-Containerstart
+- Admin-Login und Portaloberfläche
+- SQLite-Import
+- Compose-Rendering
+- Legacy-Routen-Bridge und Caddy-Validierung
+- Trennung von Caddyfile und IP-Blockfeed
 
-- fehlender expliziter Freigabe
-- nicht erreichbarem PostgreSQL oder ausstehenden Migrationen
-- fehlender beziehungsweise nicht lesbarer Legacy-SQLite-Datei
-- deaktivierter oder veralteter Shadow-Ingestion
-- zu kurzer Shadow-Laufzeit
-- aktiven produktiven Schreibmodi vor der Abnahme
-- fehlendem Administratorkonto oder fehlenden Domains
-- fehlendem beziehungsweise veraltetem PostgreSQL-Backup
-- fehlendem oder abweichendem Statistik-Snapshot
-- nicht beschreibbarem Manifestverzeichnis
+## Externe Betriebsprüfung
 
-## Statistikvertrag
+Die Repository-Implementierung kann den tatsächlichen Host nicht selbst bestätigen. Nach Übernahme der generierten Compose-Datei sind auf dem Server nur noch folgende Laufzeitnachweise erforderlich:
 
-Der Legacy-Snapshot enthält für ein geschlossenes UTC-Zeitfenster:
+- Container `postgres`, `caddy` und `caddy-ui` gesund
+- `/health/live` und `/health/ready` erfolgreich
+- öffentlicher und lokaler Admin-Login erfolgreich
+- bestehende Domains und Routen erreichbar
+- PostgreSQL-Importbericht ohne Fehler
+- Caddy-Reload und ein kontrollierter Route-Apply erfolgreich
 
-- Requests
-- Pageviews
-- Sessions
-- Clients
-- HTTP-5xx-Fehler
-
-.NET berechnet dieselben Werte direkt aus PostgreSQL. Standardmäßig darf jede Kennzahl höchstens 5 Prozent abweichen.
-
-## CI-Verifikation
-
-- `Verify`: Lauf `30471183169`, erfolgreich
-- `Verify .NET rebuild`: Lauf `30471183630`, erfolgreich
-- Restore und kanonische Formatprüfung erfolgreich
-- Release-Build ohne Warnungen erfolgreich
-- Unit-, Web-, PostgreSQL- und Migrationssuite erfolgreich
-- Statistikvergleich und Snapshotvalidierung erfolgreich getestet
-- neue Cutover-Seite ist authentifizierungspflichtig
-- Companion-Container gebaut, gestartet und per HTTP geprüft
-- Bundle-Container gebaut, gestartet und inklusive Caddy-Modul geprüft
-- SQLite-Migrations-CLI im Companion-Pfad geprüft
-
-## Noch offene Produktionsvalidierung
-
-- Shadow-Lauf mit echten Caddy-Logs
-- finaler Dry-Run und Verify auf einer produktionsnahen SQLite-Kopie
-- Statistikvergleich gegen einen echten Legacy-Snapshot
-- Backup und Test-Wiederherstellung
-- vollständiger Login-, Portal-, Routen-, DNS- und Zertifikatstest
-- kontrollierte Portumschaltung
-- dokumentierter Rückfalltest
-
-## Nächste Phase
-
-Phase 10 entfernt Python, SQLite-Schreibpfade und Legacy-Hotfixmodule erst nach mindestens zwei stabilen .NET-Releases.
+Diese Prüfungen ändern keinen Quellcode und sind kein offener Entwicklungsumfang.
