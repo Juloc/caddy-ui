@@ -143,7 +143,8 @@ jobs:
             -v /tmp/caddy-ui-logs:/var/log/caddy \
             "$bundle" sh -c /usr/local/bin/prepare-production-config
           grep -F 'import /etc/caddy/routes/site-managed-routes.caddy' /tmp/caddy-ui-config/Caddyfile
-          grep -F 'import /etc/caddy/routes/site-security-blocks.caddy' /tmp/caddy-ui-config/Caddyfile
+          ! grep -F 'site-security-blocks.caddy' /tmp/caddy-ui-config/Caddyfile
+          grep -F '# Managed IP block feed: address|blocked-until|reason' /tmp/caddy-ui-config/routes/site-security-blocks.caddy
           test -f /tmp/caddy-ui-config/routes/legacy-dotnet-cutover/site-legacy.caddy
 
           docker network create caddy-ui-release-smoke
