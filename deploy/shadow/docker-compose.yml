@@ -1,7 +1,7 @@
 name: caddy-ui-shadow
 
 x-caddy-ui-image: &caddy-ui-image
-  image: ghcr.io/juloc/caddy-ui-dotnet-companion:${CADDY_UI_SHADOW_VERSION:-2.0.0-beta.1}
+  image: ghcr.io/juloc/caddy-ui-dotnet-companion:${CADDY_UI_SHADOW_VERSION:-2.0.0-beta.2}
   pull_policy: always
 
 x-caddy-ui-environment: &caddy-ui-environment
@@ -10,6 +10,8 @@ x-caddy-ui-environment: &caddy-ui-environment
   DataProtection__PersistKeysToPostgreSql: "true"
   Authentication__BootstrapUsername: ${CADDY_UI_SHADOW_ADMIN_USERNAME}
   Authentication__BootstrapPassword: ${CADDY_UI_SHADOW_ADMIN_PASSWORD}
+  Authentication__EnsureBootstrapPassword: "true"
+  Security__CookieNamespace: caddy_ui_shadow
   Security__PublicOrigin: ""
   Security__RequireTotp: "false"
   Analytics__Enabled: "true"
