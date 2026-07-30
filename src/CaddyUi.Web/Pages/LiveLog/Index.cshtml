@@ -3,32 +3,43 @@
 @{
     ViewData["Title"] = "Live-Log";
 }
-<section class="page-heading"><div><p class="eyebrow">Server-Sent Events</p><h1>Live-Log</h1><p class="page-description">Neue Requests werden ohne Vollseiten-Neuladung ergänzt. Die Ansicht ist read-only und nutzt dieselben Filter wie die übrige Statistik.</p></div><span id="live-state" class="status-badge status-badge--neutral">Verbindung wird aufgebaut</span></section>
+<section class="page-heading"><div><p class="eyebrow">Server-Sent Events</p><h1>Live-Log</h1><p class="page-description">Neue Requests werden ohne Vollseiten-Neuladung ergänzt. Die Ansicht ist read-only und nutzt dieselben Filter wie die übrige Statistik.</p></div><span id="live-state" class="status-badge @(Model.EventStreamUrl is null ? "status-badge--warning" : "status-badge--neutral")">@(Model.EventStreamUrl is null ? "Nicht verfügbar" : "Verbindung wird aufgebaut")</span></section>
+@if (!string.IsNullOrWhiteSpace(Model.LoadError))
+{
+    <div class="notice notice--warning"><strong>Live-Log ist momentan nicht verfügbar</strong><span>@Model.LoadError</span><small>Prüfe PostgreSQL-Migrationen, Analytics-Worker und den Mount von <code>/var/log/caddy/access.log</code>.</small></div>
+}
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="panel panel--wide"><div class="panel-body table-wrap"><table class="data-table request-table"><thead><tr><th>Zeit</th><th>Host / Pfad</th><th>Status</th><th>Typ</th><th>Akteur</th><th>Laufzeit</th></tr></thead><tbody id="live-rows">
 @foreach (var request in Model.Requests)
 {
 <tr><td>@request.OccurredAt.ToLocalTime().ToString("G")</td><td><strong>@request.Host</strong><small><code>@request.Method @request.Path</code></small></td><td>@request.Status</td><td>@request.RequestType</td><td>@request.ActorType</td><td>@AnalyticsPageModelBase.FormatDuration(request.DurationMilliseconds)</td></tr>
 }
-</tbody></table></div></section>
+</tbody></table>@if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)){<p class="empty-state">Noch keine Requests für diesen Filter.</p>}</div></section>
+@if (Model.EventStreamUrl is not null)
+{
 <script>
 (() => {
     const rows = document.getElementById('live-rows');
     const state = document.getElementById('live-state');
     const stream = new EventSource(@Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(Model.EventStreamUrl)));
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+    stream.onopen = () => {
+        state.textContent = 'Live';
+        state.className = 'status-badge status-badge--ok';
+    };
     stream.addEventListener('request', event => {
         const item = JSON.parse(event.data);
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${escapeHtml(new Date(item.occurredAt).toLocaleString())}</td><td><strong>${escapeHtml(item.host)}</strong><small><code>${escapeHtml(item.method)} ${escapeHtml(item.path)}</code></small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.requestType)}</td><td>${escapeHtml(item.actorType)}</td><td>${escapeHtml(item.durationMilliseconds.toFixed(1))} ms</td>`;
+        const duration = Number(item.durationMilliseconds || 0).toFixed(1);
+        row.innerHTML = `<td>${escapeHtml(new Date(item.occurredAt).toLocaleString())}</td><td><strong>${escapeHtml(item.host)}</strong><small><code>${escapeHtml(item.method)} ${escapeHtml(item.path)}</code></small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.requestType)}</td><td>${escapeHtml(item.actorType)}</td><td>${escapeHtml(duration)} ms</td>`;
         rows.prepend(row);
         while (rows.children.length > 100) rows.lastElementChild.remove();
-        state.textContent = 'Live';
-        state.className = 'status-badge status-badge--ok';
     });
     stream.onerror = () => {
-        state.textContent = 'Verbindung unterbrochen';
+        state.textContent = 'Verbindung unterbrochen – erneuter Versuch';
         state.className = 'status-badge status-badge--warning';
     };
+    window.addEventListener('beforeunload', () => stream.close(), { once: true });
 })();
 </script>
+}

@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using CaddyUi.Application.Dns;
 using CaddyUi.Infrastructure.Management;
+using CaddyUi.Infrastructure.Operations;
 using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Infrastructure.Setup;
 using CaddyUi.Web.Security;
@@ -16,15 +17,21 @@ public sealed class IndexModel : PageModel
     private readonly GuidedSetupService _setupService;
     private readonly DomainProviderStore _domainProviderStore;
     private readonly RoutingOptions _routingOptions;
+    private readonly ISecretReferenceProtector _secretProtector;
+    private readonly CaddyCertificateSourceRefreshWorker _certificateSources;
 
     public IndexModel(
         GuidedSetupService setupService,
         DomainProviderStore domainProviderStore,
-        RoutingOptions routingOptions)
+        RoutingOptions routingOptions,
+        ISecretReferenceProtector secretProtector,
+        CaddyCertificateSourceRefreshWorker certificateSources)
     {
         _setupService = setupService;
         _domainProviderStore = domainProviderStore;
         _routingOptions = routingOptions;
+        _secretProtector = secretProtector;
+        _certificateSources = certificateSources;
     }
 
     [BindProperty]
@@ -36,6 +43,8 @@ public sealed class IndexModel : PageModel
     public IReadOnlyList<DnsProviderDefinition> ProviderDefinitions => DnsProviderCatalog.All;
 
     public bool AllowCustomRoutes => _routingOptions.AllowCustomRoutes;
+
+    public string? LoadError { get; private set; }
 
     public async Task OnGetAsync()
     {
@@ -52,14 +61,16 @@ public sealed class IndexModel : PageModel
 
         try
         {
+            var providerSettings = ValuesForProvider(Input.ProviderSettings, Input.ProviderType);
+            var providerSecrets = ProtectValuesForProvider(Input.ProviderSecretReferences, Input.ProviderType);
             var result = await _setupService.ProvisionAsync(
                 new GuidedSetupRequest(
                     Input.ProviderMode,
                     Input.ExistingProviderId,
                     Input.ProviderType,
                     Input.ProviderLabel,
-                    ValuesForProvider(Input.ProviderSettings, Input.ProviderType),
-                    ValuesForProvider(Input.ProviderSecretReferences, Input.ProviderType),
+                    providerSettings,
+                    providerSecrets,
                     Input.DomainName,
                     Input.DomainDisplayName,
                     Input.MakeDefaultDomain,
@@ -81,6 +92,7 @@ public sealed class IndexModel : PageModel
                     Input.CustomSnippet),
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
+            await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
 
             TempData["SetupMessage"] = result.RouteId is null
                 ? $"Domain {result.DomainName} wurde als Entwurf angelegt. Die laufende Caddy-Konfiguration wurde nicht verändert."
@@ -89,6 +101,7 @@ public sealed class IndexModel : PageModel
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
+            Input.ProviderSecretReferences.Clear();
             ModelState.AddModelError(string.Empty, exception.Message);
             return Page();
         }
@@ -101,9 +114,30 @@ public sealed class IndexModel : PageModel
 
     private async Task LoadAsync()
     {
-        ExistingProviders = (await _domainProviderStore.ListProvidersAsync(HttpContext.RequestAborted))
-            .Where(provider => provider.Enabled)
-            .ToArray();
+        try
+        {
+            ExistingProviders = (await _domainProviderStore.ListProvidersAsync(HttpContext.RequestAborted))
+                .Where(provider => provider.Enabled)
+                .ToArray();
+            LoadError = null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ExistingProviders = Array.Empty<DnsProviderRecord>();
+            LoadError = $"Vorhandene Provider konnten nicht geladen werden: {exception.Message}";
+        }
+    }
+
+    private IReadOnlyDictionary<string, string> ProtectValuesForProvider(
+        IReadOnlyDictionary<string, string>? values,
+        string providerType)
+    {
+        return ValuesForProvider(values, providerType)
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .ToDictionary(
+                pair => pair.Key,
+                pair => _secretProtector.ProtectOrReference(pair.Value),
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyDictionary<string, string> ValuesForProvider(

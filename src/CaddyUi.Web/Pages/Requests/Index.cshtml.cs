@@ -14,9 +14,20 @@ public sealed class IndexModel : AnalyticsPageModelBase
     public IReadOnlyList<RequestAnalyticsRow> Requests { get; private set; } =
         Array.Empty<RequestAnalyticsRow>();
 
+    public string? LoadError { get; private set; }
+
     public async Task OnGetAsync()
     {
-        var filter = await PrepareFilterAsync(HttpContext.RequestAborted);
-        Requests = await Store.GetRequestsAsync(filter, cancellationToken: HttpContext.RequestAborted);
+        try
+        {
+            var filter = await PrepareFilterAsync(HttpContext.RequestAborted);
+            Requests = await Store.GetRequestsAsync(filter, cancellationToken: HttpContext.RequestAborted);
+            LoadError = null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Requests = Array.Empty<RequestAnalyticsRow>();
+            LoadError = $"Requests konnten nicht geladen werden: {exception.Message}";
+        }
     }
 }

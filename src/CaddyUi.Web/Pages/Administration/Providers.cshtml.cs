@@ -15,15 +15,24 @@ public sealed class ProvidersModel : PageModel
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly DomainProviderStore _store;
     private readonly DnsProviderRuntimeService _runtime;
+    private readonly ISecretReferenceProtector _secretProtector;
+    private readonly CaddyCertificateSourceRefreshWorker _certificateSources;
 
-    public ProvidersModel(DomainProviderStore store, DnsProviderRuntimeService runtime)
+    public ProvidersModel(
+        DomainProviderStore store,
+        DnsProviderRuntimeService runtime,
+        ISecretReferenceProtector secretProtector,
+        CaddyCertificateSourceRefreshWorker certificateSources)
     {
         _store = store;
         _runtime = runtime;
+        _secretProtector = secretProtector;
+        _certificateSources = certificateSources;
     }
 
     public IReadOnlyList<DnsProviderRecord> Providers { get; private set; } = Array.Empty<DnsProviderRecord>();
     public IReadOnlyList<ManagedDomainRecord> Domains { get; private set; } = Array.Empty<ManagedDomainRecord>();
+    public string? LoadError { get; private set; }
 
     [BindProperty]
     public ProviderInput Input { get; set; } = new();
@@ -52,7 +61,8 @@ public sealed class ProvidersModel : PageModel
             var definition = DnsProviderCatalog.Find(Input.ProviderType) ??
                 throw new ArgumentException("Der ausgewählte DNS-Provider wird nicht unterstützt.");
             var settings = ValuesForProvider(Input.Settings, definition.Type);
-            var secrets = ValuesForProvider(Input.SecretReferences, definition.Type);
+            var secrets = ValuesForProvider(Input.Secrets, definition.Type);
+
             foreach (var field in definition.Settings)
             {
                 var value = settings.GetValueOrDefault(field.Key, field.DefaultValue ?? string.Empty).Trim();
@@ -67,18 +77,34 @@ public sealed class ProvidersModel : PageModel
                 }
             }
 
+            foreach (var field in definition.Secrets)
+            {
+                var value = secrets.GetValueOrDefault(field.Key, string.Empty).Trim();
+                if (field.Required && value.Length == 0)
+                {
+                    throw new ArgumentException($"Das Feld '{field.Label}' ist erforderlich.");
+                }
+
+                if (value.Length > 0)
+                {
+                    secrets[field.Key] = _secretProtector.ProtectOrReference(value);
+                }
+            }
+
             await _store.CreateProviderAsync(
                 definition.Type,
                 Input.Label,
                 JsonSerializer.Serialize(settings, JsonOptions),
                 JsonSerializer.Serialize(secrets, JsonOptions),
                 HttpContext.RequestAborted);
-            TempData["Message"] = "DNS-Provider wurde angelegt. Führe vor der ersten produktiven Verwendung einen Verbindungstest aus.";
+            await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
+            TempData["Message"] = "DNS-Provider wurde verschlüsselt gespeichert. Ordne jetzt eine Domain zu und führe einen Verbindungstest aus.";
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
+            Input.Secrets.Clear();
             await LoadAsync();
             return Page();
         }
@@ -86,30 +112,56 @@ public sealed class ProvidersModel : PageModel
 
     public async Task<IActionResult> OnPostToggleAsync(Guid providerId, bool enabled)
     {
-        await _store.SetProviderEnabledAsync(providerId, enabled, HttpContext.RequestAborted);
+        try
+        {
+            await _store.SetProviderEnabledAsync(providerId, enabled, HttpContext.RequestAborted);
+            await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostTestAsync(Guid providerId, Guid domainId)
     {
-        var domain = (await _store.ListDomainsAsync(HttpContext.RequestAborted))
-            .FirstOrDefault(item => item.Id == domainId) ??
-            throw new InvalidOperationException("Die ausgewählte Domain existiert nicht mehr.");
-        if (domain.DnsProviderId != providerId)
+        try
         {
-            TempData["Error"] = "Die Domain ist diesem Provider nicht zugeordnet.";
-            return RedirectToPage();
+            var domain = (await _store.ListDomainsAsync(HttpContext.RequestAborted))
+                .FirstOrDefault(item => item.Id == domainId) ??
+                throw new InvalidOperationException("Die ausgewählte Domain existiert nicht mehr.");
+            if (domain.DnsProviderId != providerId)
+            {
+                throw new InvalidOperationException("Die Domain ist diesem Provider nicht zugeordnet.");
+            }
+
+            var result = await _runtime.TestProviderAsync(providerId, domain.Name, HttpContext.RequestAborted);
+            TempData[result.Succeeded ? "Message" : "Error"] = result.Message;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
         }
 
-        var result = await _runtime.TestProviderAsync(providerId, domain.Name, HttpContext.RequestAborted);
-        TempData[result.Succeeded ? "Message" : "Error"] = result.Message;
         return RedirectToPage();
     }
 
     private async Task LoadAsync()
     {
-        Providers = await _store.ListProvidersAsync(HttpContext.RequestAborted);
-        Domains = await _store.ListDomainsAsync(HttpContext.RequestAborted);
+        try
+        {
+            Providers = await _store.ListProvidersAsync(HttpContext.RequestAborted);
+            Domains = await _store.ListDomainsAsync(HttpContext.RequestAborted);
+            LoadError = null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Providers = Array.Empty<DnsProviderRecord>();
+            Domains = Array.Empty<ManagedDomainRecord>();
+            LoadError = $"DNS-Provider konnten nicht geladen werden: {exception.Message}";
+        }
     }
 
     private static Dictionary<string, string> ValuesForProvider(
@@ -145,7 +197,7 @@ public sealed class ProvidersModel : PageModel
         public Dictionary<string, string> Settings { get; set; } =
             new(StringComparer.OrdinalIgnoreCase);
 
-        public Dictionary<string, string> SecretReferences { get; set; } =
+        public Dictionary<string, string> Secrets { get; set; } =
             new(StringComparer.OrdinalIgnoreCase);
     }
 }

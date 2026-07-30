@@ -1,20 +1,23 @@
 # Caddy UI
 
-Caddy UI is a compact, server-rendered administration application for Caddy. Version 2 uses .NET 10, ASP.NET Core Razor Pages, EF Core and PostgreSQL. The interface follows the restrained AE01 Fluent/Windows 11 style: dark grouped navigation, dense workspaces, clear borders, light/dark themes and little JavaScript.
+Caddy UI is a compact, server-rendered administration application for Caddy. Version 2.1 uses .NET 10, ASP.NET Core Razor Pages, EF Core and PostgreSQL. The interface follows the restrained AE01 Fluent/Windows 11 style: grouped navigation, dense workspaces, clear borders, light/dark themes and progressive enhancement instead of a JavaScript-heavy frontend.
 
 ## Functions
 
 - Admin authentication with administrator, editor and viewer roles
 - LAN and public administration surfaces, TOTP and recovery codes
 - Separate access portal for protected routes
-- Domains, DNS providers, DNS records and DDNS jobs
+- Guided setup for DNS provider, domain, certificates and an optional first route
+- Provider-specific forms for Netcup and other supported DNS services
+- Encrypted provider credentials using ASP.NET Data Protection
+- DNS records and DDNS jobs with explicit connection tests
 - Proxy, redirect, static-response and optional custom routes
 - Preview, diff, validation, atomic apply, verification and rollback
-- Wildcard and individual certificates with Netcup DNS-01 support
+- Separate wildcard and base-domain certificate plans with full Netcup DNS-01 support
 - Request, pageview, session, client, performance and error analytics
 - IP intelligence, risk assessment and managed IP blocks
 - Healthchecks, scheduled jobs, notifications, backups and diagnostics
-- Idempotent migration from the legacy SQLite application
+- Idempotent read-only migration from the legacy SQLite database
 
 ## Architecture
 
@@ -29,7 +32,7 @@ The production stack contains:
 | `caddy` | Caddy with Netcup DNS and integrated protection modules |
 | `caddy-ui` | Razor Pages UI, portal, analytics and workers |
 
-The application does not use the Docker socket. PostgreSQL is reachable only on an internal Docker network. The portal port `8099` is internal-only.
+The application does not use the Docker socket. PostgreSQL is reachable only on an internal Docker network. The portal port `8099` is internal-only. `Dockerfile.dotnet` is the only supported application image definition.
 
 ## Deployment
 
@@ -43,17 +46,16 @@ docker compose --env-file .env up -d
 
 For the canonical versioned deployment use `deploy/docker-compose.yml`; the release workflow replaces `__CADDY_UI_VERSION__` with the stable version in the deployment repository.
 
-Required secrets:
+Required stack secrets:
 
 ```env
 CADDY_UI_DB_PASSWORD=long-random-value
 CADDY_UI_PASSWORD=long-random-value
 CADDY_UI_ADMIN_PROXY_SECRET=long-random-value
 CADDY_UI_PORTAL_PROXY_SECRET=long-random-value
-NETCUP_CUSTOMER_NUMBER=123456
-NETCUP_API_KEY=secret
-NETCUP_API_PASSWORD=secret
 ```
+
+DNS-provider credentials no longer need to be placed in the stack environment. Open **Configuration → Einrichtung** for the guided flow or **Configuration → DNS-Provider** for provider-only setup. Select Netcup to enter customer number, API key and API password. Secret fields are encrypted before PostgreSQL persistence and are never rendered back to the browser. Advanced deployments may still use `secret://env/NAME` or `secret://file/absolute/path` references.
 
 The admin UI is exposed on host port `8098`. The public origin defaults to `https://caddy.juloc.de` in the production template and can be changed through `CADDY_UI_PUBLIC_ORIGIN`.
 
@@ -79,7 +81,7 @@ dotnet test CaddyUi.slnx --configuration Release --no-build
 docker build --file Dockerfile.dotnet --target dotnet-bundle --tag caddy-ui:test .
 ```
 
-CI additionally validates the production Compose model, migration path, login, health endpoints, bundled Caddy modules and reversible route preparation.
+CI additionally starts PostgreSQL and both application image targets, logs in through the real form and verifies `/Requests`, `/Access`, `/LiveLog`, `/Operations/Cutover`, `/Administration/Providers` and `/Setup`. It also validates the migration CLI, production Compose model, health endpoints, bundled Caddy modules and reversible route preparation.
 
 ## Release
 

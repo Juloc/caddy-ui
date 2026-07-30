@@ -4,12 +4,16 @@ on:
   pull_request:
     paths:
       - "VERSION_DOTNET"
+      - "Dockerfile.dotnet"
+      - "src/CaddyUi.Domain/ProductMetadata.cs"
       - ".github/workflows/release.yml"
       - ".github/workflows/verify-stable-image.yml"
   push:
     branches: [main]
     paths:
       - "VERSION_DOTNET"
+      - "Dockerfile.dotnet"
+      - "src/CaddyUi.Domain/ProductMetadata.cs"
       - ".github/workflows/release.yml"
       - ".github/workflows/verify-stable-image.yml"
   workflow_dispatch:
@@ -23,17 +27,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Validate version contract
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION_DOTNET)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          grep -F "FoundationVersion = \"$version\"" src/CaddyUi.Domain/ProductMetadata.cs
+          grep -F "ARG APP_VERSION=$version" Dockerfile.dotnet
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Pull and verify stable image
+      - name: Check publication state
+        id: publication
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          image="ghcr.io/juloc/caddy-ui:${VERSION}"
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "${image} is not published yet; the release workflow will build and smoke-test it after merge."
+          fi
+      - name: Pull and verify published stable image
+        if: steps.publication.outputs.published == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          version="$(tr -d '\r\n' < VERSION_DOTNET)"
-          image="ghcr.io/juloc/caddy-ui:${version}"
+          image="ghcr.io/juloc/caddy-ui:${VERSION}"
           docker pull "$image"
           docker run --rm "$image" caddy list-modules | grep -F 'http.handlers.caddy_ui_guard'
-          docker run --rm "$image" sh -c 'test "$CADDY_UI_VERSION" = "'"$version"'" && test -f /app/CaddyUi.Web.dll && test -x /usr/local/bin/prepare-production-config'
+          docker run --rm "$image" sh -c 'test "$CADDY_UI_VERSION" = "'"$VERSION"'" && test -f /app/CaddyUi.Web.dll && test -x /usr/local/bin/prepare-production-config'

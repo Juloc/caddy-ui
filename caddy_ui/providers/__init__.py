@@ -1,1 +1,0 @@
-"""DNS provider adapters."""

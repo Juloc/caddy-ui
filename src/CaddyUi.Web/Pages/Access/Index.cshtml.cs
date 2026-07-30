@@ -28,6 +28,8 @@ public sealed class IndexModel : PageModel
     public IReadOnlyList<AccessCredentialRecord> Credentials { get; private set; } =
         Array.Empty<AccessCredentialRecord>();
 
+    public string? LoadError { get; private set; }
+
     [BindProperty]
     public GroupInput NewGroup { get; set; } = new();
 
@@ -61,7 +63,7 @@ public sealed class IndexModel : PageModel
             StatusMessage = "Zugriffsgruppe angelegt.";
             return RedirectToPage();
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
             await LoadAsync();
@@ -71,8 +73,16 @@ public sealed class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostToggleGroupAsync(Guid id, bool enabled)
     {
-        await _store.SetAccessGroupEnabledAsync(id, enabled, HttpContext.RequestAborted);
-        StatusMessage = enabled ? "Zugriffsgruppe aktiviert." : "Zugriffsgruppe deaktiviert.";
+        try
+        {
+            await _store.SetAccessGroupEnabledAsync(id, enabled, HttpContext.RequestAborted);
+            StatusMessage = enabled ? "Zugriffsgruppe aktiviert." : "Zugriffsgruppe deaktiviert.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
         return RedirectToPage();
     }
 
@@ -97,9 +107,10 @@ public sealed class IndexModel : PageModel
             StatusMessage = "Portal-Zugang angelegt. Das Kennwort wird nicht erneut angezeigt.";
             return RedirectToPage();
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
+            NewCredential.Password = string.Empty;
             await LoadAsync();
             return Page();
         }
@@ -107,15 +118,33 @@ public sealed class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostToggleCredentialAsync(Guid id, bool enabled)
     {
-        await _store.SetCredentialEnabledAsync(id, enabled, HttpContext.RequestAborted);
-        StatusMessage = enabled ? "Portal-Zugang aktiviert." : "Portal-Zugang deaktiviert.";
+        try
+        {
+            await _store.SetCredentialEnabledAsync(id, enabled, HttpContext.RequestAborted);
+            StatusMessage = enabled ? "Portal-Zugang aktiviert." : "Portal-Zugang deaktiviert.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
         return RedirectToPage();
     }
 
     private async Task LoadAsync()
     {
-        Groups = await _store.ListAccessGroupsAsync(HttpContext.RequestAborted);
-        Credentials = await _store.ListCredentialsAsync(cancellationToken: HttpContext.RequestAborted);
+        try
+        {
+            Groups = await _store.ListAccessGroupsAsync(HttpContext.RequestAborted);
+            Credentials = await _store.ListCredentialsAsync(cancellationToken: HttpContext.RequestAborted);
+            LoadError = null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Groups = Array.Empty<AccessGroupRecord>();
+            Credentials = Array.Empty<AccessCredentialRecord>();
+            LoadError = $"Zugriffsgruppen konnten nicht geladen werden: {exception.Message}";
+        }
     }
 
     public sealed class GroupInput

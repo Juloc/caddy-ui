@@ -4,6 +4,10 @@
     ViewData["Title"] = "Requests";
 }
 <section class="page-heading"><div><p class="eyebrow">Rohereignisse</p><h1>Requests</h1><p class="page-description">Jeder vom Server verarbeitete HTTP-Request erscheint genau einmal. Empfindliche Query- und Headerwerte wurden bereits vor der Speicherung redigiert.</p></div><span class="status-badge status-badge--neutral">@Model.Requests.Count Einträge</span></section>
+@if (!string.IsNullOrWhiteSpace(Model.LoadError))
+{
+    <div class="notice notice--warning"><strong>Requests sind momentan nicht verfügbar</strong><span>@Model.LoadError</span><small>Prüfe PostgreSQL-Migrationen sowie den Analytics-Worker und die eingebundenen Caddy-Logs.</small></div>
+}
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="panel panel--wide">
     <div class="panel-body table-wrap">
@@ -25,6 +29,6 @@
             }
             </tbody>
         </table>
-        @if (Model.Requests.Count == 0) { <p class="empty-state">Keine Requests für den Filter.</p> }
+        @if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)) { <p class="empty-state">Keine Requests für den Filter.</p> }
     </div>
 </section>

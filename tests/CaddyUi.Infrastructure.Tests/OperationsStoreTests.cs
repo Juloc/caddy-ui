@@ -2,6 +2,7 @@ using CaddyUi.Domain.Certificates;
 using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Operations;
 using CaddyUi.Infrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 
@@ -112,7 +113,7 @@ public sealed class OperationsStoreTests : IAsyncLifetime
         Environment.SetEnvironmentVariable(variable, "private-value");
         try
         {
-            var resolver = new SecretReferenceResolver();
+            var resolver = CreateSecretResolver();
 
             var value = await resolver.ResolveAsync($"secret://env/{variable}");
 
@@ -122,5 +123,23 @@ public sealed class OperationsStoreTests : IAsyncLifetime
         {
             Environment.SetEnvironmentVariable(variable, null);
         }
+    }
+
+    [Fact]
+    public async Task SecretResolver_ProtectsAndResolvesUiEnteredSecret()
+    {
+        var resolver = CreateSecretResolver();
+
+        var reference = resolver.ProtectOrReference("netcup-private-value");
+        var value = await resolver.ResolveAsync(reference);
+
+        Assert.StartsWith("secret://protected/v1/", reference, StringComparison.Ordinal);
+        Assert.DoesNotContain("netcup-private-value", reference, StringComparison.Ordinal);
+        Assert.Equal("netcup-private-value", value);
+    }
+
+    private static SecretReferenceResolver CreateSecretResolver()
+    {
+        return new SecretReferenceResolver(new EphemeralDataProtectionProvider());
     }
 }
