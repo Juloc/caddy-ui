@@ -59,14 +59,15 @@ Das vorhandene `ui-data`-Volume wird read-only als `/legacy` eingebunden. Neue D
 
 ## Routenübergang
 
-`prepare-production-config.sh` ersetzt unspezifische Wildcard-Imports durch zwei exakte Dateien:
+`prepare-production-config.sh` ersetzt unspezifische Wildcard-Imports durch den exakten Root-Import:
 
 ```text
 /etc/caddy/routes/site-managed-routes.caddy
-/etc/caddy/routes/site-security-blocks.caddy
 ```
 
 Bestehende `site-*.caddy`-Dateien werden nach `legacy-dotnet-cutover` verschoben. Die neue Managed-Datei importiert sie zunächst weiter. Dadurch bleibt die laufende Konfiguration bis zum ersten erfolgreichen .NET-Apply identisch und kann über den gespeicherten Snapshot zurückgerollt werden.
+
+Die Datei `/etc/caddy/routes/site-security-blocks.caddy` ist trotz des historischen Namens kein Caddyfile. Sie ist ein separater Laufzeitfeed im Format `IP|Ablauf|Grund` und wird nicht in die Root-Konfiguration importiert.
 
 ## Caddy-Steuerung
 
@@ -91,6 +92,7 @@ Der alte Beta-Publisher ist archiviert. `deploy/shadow` bleibt nur als isolierte
 - produktive Dateischreibvorgänge atomisch und serialisiert
 - Caddy-Reload nur nach vollständiger Validierung
 - automatische Rückkehr zum vorherigen Snapshot bei Apply-Fehlern
+- IP-Blockfeed niemals als Caddyfile importieren
 - Portalport `8099` nie auf dem Host veröffentlichen
 - kein Zugriff auf `/var/run/docker.sock`
 - SQLite und Legacy-Routen bis zur bestätigten Serverabnahme nicht löschen
