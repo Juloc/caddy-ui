@@ -8,6 +8,7 @@ blocklist_fragment="${CADDY_UI_BLOCKLIST_PATH:-${routes_dir}/site-security-block
 legacy_dir="${CADDY_UI_LEGACY_ROUTES_DIR:-${routes_dir}/legacy-dotnet-cutover}"
 acme_email="${ACME_EMAIL:-}"
 admin_origins="http://caddy:2019 http://localhost:2019 http://127.0.0.1:2019"
+acme_ui_marker="${CADDY_UI_ACME_EMAIL_MANAGED_MARKER:-$(dirname "$root_config")/.caddy-ui-acme-email-managed}"
 
 mkdir -p "$routes_dir" "$legacy_dir"
 
@@ -15,7 +16,7 @@ if [ ! -f "$root_config" ]; then
     cat >"$root_config" <<'EOF'
 {
 EOF
-    if [ -n "$acme_email" ]; then
+    if [ -n "$acme_email" ] && [ ! -f "$acme_ui_marker" ]; then
         printf '%s\n' '    email {$ACME_EMAIL}' >>"$root_config"
     fi
     cat >>"$root_config" <<'EOF'
@@ -74,7 +75,7 @@ awk -v origins="$admin_origins" '
 mv "$admin_temporary" "$root_config"
 
 email_required=0
-if [ -n "$acme_email" ]; then
+if [ -n "$acme_email" ] && [ ! -f "$acme_ui_marker" ]; then
     email_required=1
 fi
 
