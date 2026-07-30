@@ -2,6 +2,7 @@ using CaddyUi.Application;
 using CaddyUi.Application.Analytics;
 using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Analytics;
+using CaddyUi.Infrastructure.Certificates;
 using CaddyUi.Infrastructure.Cutover;
 using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Operations;
@@ -44,6 +45,7 @@ public static class DependencyInjection
         services.AddSingleton<AuthenticationStore>();
         services.AddSingleton<LoginProtectionService>();
         services.AddSingleton<DomainProviderStore>();
+        services.AddSingleton<CertificateStatusService>();
         services.AddSingleton<RouteManagementStore>();
         services.AddSingleton<RouteImportStore>();
         services.AddSingleton<RouteTransferService>();
