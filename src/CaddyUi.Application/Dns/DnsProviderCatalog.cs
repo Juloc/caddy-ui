@@ -203,7 +203,12 @@ public static class DnsProviderCatalog
         bool required,
         string? defaultValue = null)
     {
-        return new DnsProviderField(key, label, required, defaultValue);
+        return new DnsProviderField(
+            key,
+            label,
+            required,
+            defaultValue,
+            SettingHelp(key, defaultValue));
     }
 
     private static DnsProviderField Secret(string key, string label)
@@ -212,6 +217,35 @@ public static class DnsProviderCatalog
             key,
             label,
             Required: true,
-            HelpText: "Name einer Umgebungsvariable oder Secret-Referenz; der Secret-Wert wird nicht gespeichert.");
+            HelpText: $"Name der Umgebungsvariable oder secret://-Referenz für {SecretPurpose(key)}. Der Wert selbst wird nicht gespeichert.");
+    }
+
+    private static string SettingHelp(string key, string? defaultValue)
+    {
+        var explanation = key switch
+        {
+            "customer_number" => "Netcup-Kundennummer aus dem Customer Control Panel.",
+            "region" => "AWS-Region der DNS-Verwaltung; meist kann der Standard bleiben.",
+            "endpoint" => "OVH-API-Region passend zum Kundenkonto.",
+            "api_user" => "Namecheap-Benutzer, für den der API-Zugriff aktiviert wurde.",
+            "username" => "Namecheap-Kontoname, dem die Domain gehört.",
+            "client_ip" => "Öffentliche Server-IP, die bei Namecheap für API-Zugriffe freigeschaltet ist.",
+            "project_id" => "Google-Cloud-Projekt, in dem die DNS-Zone liegt.",
+            "tenant_id" => "Azure Entra Tenant-ID der App-Registrierung.",
+            "client_id" => "Client-ID der Azure App-Registrierung.",
+            "subscription_id" => "Azure-Abonnement mit der DNS-Zone.",
+            "resource_group" => "Azure Resource Group der DNS-Zone.",
+            "domain" => "Nur der DuckDNS-Name ohne .duckdns.org.",
+            "server" => "DNS-Server mit optionalem Port, zum Beispiel 10.0.0.53:53.",
+            "key_name" => "Name des TSIG-Schlüssels auf dem DNS-Server.",
+            "algorithm" => "TSIG-Signaturalgorithmus, der auf dem DNS-Server konfiguriert ist.",
+            _ => "Nicht geheime Provider-Einstellung.",
+        };
+        return defaultValue is null ? explanation : $"{explanation} Standard: {defaultValue}.";
+    }
+
+    private static string SecretPurpose(string key)
+    {
+        return key.Replace('_', ' ');
     }
 }

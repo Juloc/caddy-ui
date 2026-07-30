@@ -35,6 +35,7 @@
                 }
                 @if (User.IsInRole("admin"))
                 {
+                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Setup") ? "nav-item--active" : string.Empty)" asp-page="/Setup/Index"><span class="nav-icon">＋</span><span>Einrichtung</span></a>
                     <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Administration/Domains") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Domains"><span class="nav-icon">◎</span><span>Domains</span></a>
                     <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Access") ? "nav-item--active" : string.Empty)" asp-page="/Access/Index"><span class="nav-icon">▣</span><span>Zugriffsgruppen</span></a>
                     <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Dns") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Dns"><span class="nav-icon">DNS</span><span>DNS &amp; DDNS</span></a>

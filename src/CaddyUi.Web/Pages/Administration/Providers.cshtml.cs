@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+using CaddyUi.Application.Dns;
 using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Operations;
 using Microsoft.AspNetCore.Authorization;
@@ -10,6 +12,7 @@ namespace CaddyUi.Web.Pages.Administration;
 [Authorize(Policy = "Administrator")]
 public sealed class ProvidersModel : PageModel
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly DomainProviderStore _store;
     private readonly DnsProviderRuntimeService _runtime;
 
@@ -34,6 +37,8 @@ public sealed class ProvidersModel : PageModel
 
     public bool HasCaddyDnsModule(string providerType) => _runtime.IsCaddyDnsModuleInstalled(providerType);
 
+    public static string FieldName(string providerType, string fieldKey) => $"{providerType}.{fieldKey}";
+
     public async Task<IActionResult> OnPostCreateAsync()
     {
         if (!ModelState.IsValid)
@@ -44,16 +49,34 @@ public sealed class ProvidersModel : PageModel
 
         try
         {
+            var definition = DnsProviderCatalog.Find(Input.ProviderType) ??
+                throw new ArgumentException("Der ausgewählte DNS-Provider wird nicht unterstützt.");
+            var settings = ValuesForProvider(Input.Settings, definition.Type);
+            var secrets = ValuesForProvider(Input.SecretReferences, definition.Type);
+            foreach (var field in definition.Settings)
+            {
+                var value = settings.GetValueOrDefault(field.Key, field.DefaultValue ?? string.Empty).Trim();
+                if (field.Required && value.Length == 0)
+                {
+                    throw new ArgumentException($"Das Feld '{field.Label}' ist erforderlich.");
+                }
+
+                if (value.Length > 0)
+                {
+                    settings[field.Key] = value;
+                }
+            }
+
             await _store.CreateProviderAsync(
-                Input.ProviderType,
+                definition.Type,
                 Input.Label,
-                Input.ConfigJson,
-                Input.SecretReferencesJson,
+                JsonSerializer.Serialize(settings, JsonOptions),
+                JsonSerializer.Serialize(secrets, JsonOptions),
                 HttpContext.RequestAborted);
-            TempData["Message"] = "DNS-Provider wurde angelegt.";
+            TempData["Message"] = "DNS-Provider wurde angelegt. Führe vor der ersten produktiven Verwendung einen Verbindungstest aus.";
             return RedirectToPage();
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or System.Text.Json.JsonException)
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
         {
             ModelState.AddModelError(string.Empty, exception.Message);
             await LoadAsync();
@@ -89,6 +112,26 @@ public sealed class ProvidersModel : PageModel
         Domains = await _store.ListDomainsAsync(HttpContext.RequestAborted);
     }
 
+    private static Dictionary<string, string> ValuesForProvider(
+        IReadOnlyDictionary<string, string>? values,
+        string providerType)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (values is null)
+        {
+            return result;
+        }
+
+        var prefix = $"{providerType}.";
+        foreach (var pair in values.Where(pair =>
+                     pair.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            result[pair.Key[prefix.Length..]] = pair.Value ?? string.Empty;
+        }
+
+        return result;
+    }
+
     public sealed class ProviderInput
     {
         [Required]
@@ -99,10 +142,10 @@ public sealed class ProvidersModel : PageModel
         [MaxLength(200)]
         public string Label { get; set; } = string.Empty;
 
-        [Required]
-        public string ConfigJson { get; set; } = "{}";
+        public Dictionary<string, string> Settings { get; set; } =
+            new(StringComparer.OrdinalIgnoreCase);
 
-        [Required]
-        public string SecretReferencesJson { get; set; } = "{}";
+        public Dictionary<string, string> SecretReferences { get; set; } =
+            new(StringComparer.OrdinalIgnoreCase);
     }
 }

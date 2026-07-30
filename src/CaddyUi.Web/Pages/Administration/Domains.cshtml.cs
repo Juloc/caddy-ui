@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using CaddyUi.Domain.Certificates;
+using CaddyUi.Infrastructure.Certificates;
 using CaddyUi.Infrastructure.Management;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,15 +11,22 @@ namespace CaddyUi.Web.Pages.Administration;
 public sealed class DomainsModel : PageModel
 {
     private readonly DomainProviderStore _store;
+    private readonly CertificateStatusService _certificateStatusService;
 
-    public DomainsModel(DomainProviderStore store)
+    public DomainsModel(
+        DomainProviderStore store,
+        CertificateStatusService certificateStatusService)
     {
         _store = store;
+        _certificateStatusService = certificateStatusService;
     }
 
     public IReadOnlyList<ManagedDomainRecord> Domains { get; private set; } = Array.Empty<ManagedDomainRecord>();
 
     public IReadOnlyList<DnsProviderRecord> Providers { get; private set; } = Array.Empty<DnsProviderRecord>();
+
+    public IReadOnlyDictionary<Guid, DomainCertificateStatus> CertificateStatuses { get; private set; } =
+        new Dictionary<Guid, DomainCertificateStatus>();
 
     [BindProperty]
     public DomainInput Input { get; set; } = new();
@@ -39,13 +46,15 @@ public sealed class DomainsModel : PageModel
 
         try
         {
-            await _store.CreateDomainAsync(
+            await _store.CreateDomainWithCertificatePlanAsync(
                 Input.Name,
                 Input.DisplayName,
                 Input.DnsProviderId,
-                Input.DefaultCertificateMode,
+                Input.RequestWildcardCertificate,
+                Input.RequestBaseCertificate,
                 Input.MakeDefault,
                 HttpContext.RequestAborted);
+            TempData["Message"] = "Domain wurde als Entwurf angelegt. Zertifikate werden erst nach Vorschau und Apply beschafft.";
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -68,6 +77,18 @@ public sealed class DomainsModel : PageModel
         Providers = (await _store.ListProvidersAsync(HttpContext.RequestAborted))
             .Where(provider => provider.Enabled)
             .ToArray();
+        CertificateStatuses = await _certificateStatusService.GetDomainStatusesAsync(HttpContext.RequestAborted);
+    }
+
+    public static string StatusClass(string state)
+    {
+        return state switch
+        {
+            "active" => "status-badge--ok",
+            "renewal-due" or "requested" or "draft" => "status-badge--warning",
+            "blocked" or "expired" => "status-badge--danger",
+            _ => "status-badge--neutral",
+        };
     }
 
     public sealed class DomainInput
@@ -81,7 +102,9 @@ public sealed class DomainsModel : PageModel
 
         public Guid? DnsProviderId { get; set; }
 
-        public CertificateMode DefaultCertificateMode { get; set; } = CertificateMode.Wildcard;
+        public bool RequestWildcardCertificate { get; set; } = true;
+
+        public bool RequestBaseCertificate { get; set; } = true;
 
         public bool MakeDefault { get; set; }
     }

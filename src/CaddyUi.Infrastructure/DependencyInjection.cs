@@ -2,12 +2,14 @@ using CaddyUi.Application;
 using CaddyUi.Application.Analytics;
 using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Analytics;
+using CaddyUi.Infrastructure.Certificates;
 using CaddyUi.Infrastructure.Cutover;
 using CaddyUi.Infrastructure.Management;
 using CaddyUi.Infrastructure.Operations;
 using CaddyUi.Infrastructure.Persistence;
 using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Infrastructure.Security;
+using CaddyUi.Infrastructure.Setup;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -43,11 +45,13 @@ public static class DependencyInjection
         services.AddSingleton<AuthenticationStore>();
         services.AddSingleton<LoginProtectionService>();
         services.AddSingleton<DomainProviderStore>();
+        services.AddSingleton<CertificateStatusService>();
         services.AddSingleton<RouteManagementStore>();
         services.AddSingleton<RouteImportStore>();
         services.AddSingleton<RouteTransferService>();
         services.AddSingleton<AccessGroupStateStore>();
         services.AddSingleton(routingOptions);
+        services.AddSingleton<GuidedSetupService>();
         services.AddSingleton<ICaddyCommandRunner, ProcessCaddyCommandRunner>();
         services.AddSingleton<CaddyApplyService>();
 

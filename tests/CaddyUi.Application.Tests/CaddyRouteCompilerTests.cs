@@ -67,19 +67,7 @@ public sealed class CaddyRouteCompilerTests : IDisposable
             "/",
             RouteCertificateMode.Inherit,
             null);
-        var provider = new CaddyDnsProviderSource(
-            "netcup",
-            true,
-            true,
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["customer_number"] = "123456",
-            },
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["api_key"] = "secret://env/NETCUP_API_KEY",
-                ["api_password"] = "NETCUP_API_PASSWORD",
-            });
+        var provider = NetcupProvider();
         var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
 
         var compilation = compiler.Compile([
@@ -93,6 +81,87 @@ public sealed class CaddyRouteCompilerTests : IDisposable
         Assert.Contains("customer_number \"123456\"", compilation.Content, StringComparison.Ordinal);
         Assert.Contains("api_key \"{env.NETCUP_API_KEY}\"", compilation.Content, StringComparison.Ordinal);
         Assert.Contains("api_password \"{env.NETCUP_API_PASSWORD}\"", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("*.example.com {", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("host \"mealie.example.com\"", compilation.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Compile_RendersRequestedWildcardAndBaseCertificateWithoutRoutes()
+    {
+        var domainId = Guid.NewGuid();
+        CaddyCertificateSourceRegistry.Replace([
+            new CaddyDomainCertificateSource(
+                domainId,
+                "example.com",
+                "wildcard",
+                true,
+                true,
+                NetcupProvider()),
+        ]);
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var compilation = compiler.Compile(Array.Empty<CaddyRouteSource>());
+
+        Assert.True(compilation.CertificateReadyForActiveApply);
+        Assert.Contains("*.example.com, example.com {", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("respond \"No managed route matched\" 404", compilation.Content, StringComparison.Ordinal);
+        using var manifest = JsonDocument.Parse(compilation.ManifestJson);
+        var names = manifest.RootElement.GetProperty("certificates")
+            .EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString())
+            .ToArray();
+        Assert.Contains("*.example.com", names);
+        Assert.Contains("example.com", names);
+    }
+
+    [Fact]
+    public void Compile_RendersBaseOnlyCertificateWithoutDnsProvider()
+    {
+        CaddyCertificateSourceRegistry.Replace([
+            new CaddyDomainCertificateSource(
+                Guid.NewGuid(),
+                "example.com",
+                "individual",
+                false,
+                true,
+                null),
+        ]);
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var compilation = compiler.Compile(Array.Empty<CaddyRouteSource>());
+
+        Assert.True(compilation.CertificateReadyForActiveApply);
+        Assert.False(compilation.RequiresWildcardCertificateRenderer);
+        Assert.Contains("example.com {", compilation.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("dns netcup", compilation.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Compile_MarksDeepWildcardRouteAsNotGenerated()
+    {
+        var route = ManagedRouteDefinition.Create(
+            Guid.NewGuid(),
+            "Deep",
+            Guid.NewGuid(),
+            "example.com",
+            "api.internal",
+            ManagedRouteKind.Proxy,
+            true,
+            0,
+            RouteCertificateMode.Wildcard,
+            null,
+            RouteConfigurationDocument.Empty with { Upstream = "api:8080" });
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var compilation = compiler.Compile([
+            new CaddyRouteSource(route, string.Empty, "wildcard", NetcupProvider()),
+        ]);
+
+        Assert.False(compilation.CertificateReadyForActiveApply);
+        Assert.Contains(compilation.Warnings, warning =>
+            warning.Contains("nicht abgedeckt", StringComparison.Ordinal));
+        using var manifest = JsonDocument.Parse(compilation.ManifestJson);
+        Assert.False(manifest.RootElement.GetProperty("routes")[0].GetProperty("generated").GetBoolean());
     }
 
     [Fact]
@@ -165,6 +234,23 @@ public sealed class CaddyRouteCompilerTests : IDisposable
 
         Assert.Contains(diff, line => line.Kind == DiffLineKind.Removed && line.Text == "b");
         Assert.Contains(diff, line => line.Kind == DiffLineKind.Added && line.Text == "c");
+    }
+
+    private static CaddyDnsProviderSource NetcupProvider()
+    {
+        return new CaddyDnsProviderSource(
+            "netcup",
+            true,
+            true,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["customer_number"] = "123456",
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["api_key"] = "secret://env/NETCUP_API_KEY",
+                ["api_password"] = "NETCUP_API_PASSWORD",
+            });
     }
 
     private static ManagedRouteDefinition CreateProxy(

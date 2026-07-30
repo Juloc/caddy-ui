@@ -58,7 +58,9 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
         command.CommandText =
             """
             SELECT domains.id,
+                   domains.name,
                    domains.default_certificate_mode,
+                   domains.config_json::text,
                    providers.provider_type,
                    providers.enabled,
                    providers.config_json::text,
@@ -74,24 +76,62 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
         while (await reader.ReadAsync(cancellationToken))
         {
             CaddyDnsProviderSource? provider = null;
-            if (!reader.IsDBNull(2))
+            if (!reader.IsDBNull(4))
             {
-                var providerType = reader.GetString(2);
+                var providerType = reader.GetString(4);
                 provider = new CaddyDnsProviderSource(
                     providerType,
-                    reader.GetBoolean(3),
+                    reader.GetBoolean(5),
                     _options.InstalledCaddyDnsModules.Contains(providerType),
-                    ReadObject(reader.GetString(4)),
-                    ReadObject(reader.GetString(5)));
+                    ReadObject(reader.GetString(6)),
+                    ReadObject(reader.GetString(7)));
             }
 
+            var mode = reader.GetString(2);
+            var plan = ReadCertificatePlan(mode, reader.GetString(3));
             sources.Add(new CaddyDomainCertificateSource(
                 reader.GetGuid(0),
                 reader.GetString(1),
+                mode,
+                plan.Wildcard,
+                plan.BaseDomain,
                 provider));
         }
 
         CaddyCertificateSourceRegistry.Replace(sources);
+    }
+
+    private static (bool Wildcard, bool BaseDomain) ReadCertificatePlan(string mode, string json)
+    {
+        var defaultWildcard = string.Equals(mode, "wildcard", StringComparison.OrdinalIgnoreCase);
+        var wildcard = defaultWildcard;
+        var baseDomain = defaultWildcard;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("certificatePlan", out var plan) ||
+                plan.ValueKind != JsonValueKind.Object)
+            {
+                return (wildcard, baseDomain);
+            }
+
+            if (plan.TryGetProperty("wildcard", out var wildcardProperty) &&
+                wildcardProperty.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                wildcard = wildcardProperty.GetBoolean();
+            }
+
+            if (plan.TryGetProperty("baseDomain", out var baseProperty) &&
+                baseProperty.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                baseDomain = baseProperty.GetBoolean();
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return (wildcard, baseDomain);
     }
 
     private static IReadOnlyDictionary<string, string> ReadObject(string json)
