@@ -2,42 +2,45 @@
 
 ## Product direction
 
-Caddy UI is a lightweight, public home-lab control plane for Caddy. Its primary jobs are managed reverse-proxy routes, operational status, logs, DNS, and access control. It must remain useful with an existing standard Caddy installation while providing a first-class Netcup bundle.
+Caddy UI is a compact self-hosted control plane for Caddy. Its primary jobs are managed reverse-proxy routes, DNS and certificate setup, operational status, analytics, logs, access control and safe configuration rollout.
 
 ## Engineering rules
 
-- Keep the runtime lightweight: Python standard library, SQLite, server-rendered HTML, and small dependency-free JavaScript.
-- Keep Caddy and Caddy UI as two containers. Never require Docker socket access.
-- Separate transport, application services, persistence, provider integrations, Caddy rendering, and presentation.
-- Do not add a feature without a concrete product requirement in `docs/PRODUCT-SPEC.md`.
-- Remove replaced or dead implementations completely. Do not leave compatibility copies, duplicate CSS systems, or generic final-fix scripts.
-- Preserve user data. All schema and configuration changes require an automatic backup, migration validation, and rollback path.
-- Validate generated Caddy configuration before activation. Apply changes atomically and restore the previous revision if reload fails.
-- Never render secrets back to the browser or write plaintext passwords to managed Caddy snippets.
-- Use English for code, documentation, UI text, tests, logs, and commit messages.
-- Follow standard Python and Go conventions. Format Go with `gofmt`.
-- Keep APIs explicit and permission-checked. State-changing requests require CSRF protection.
-- Prefer focused modules and functions. Avoid catch-all modules and hidden global mutable state.
+- The application runtime is .NET 10 with ASP.NET Core Razor Pages, EF Core and PostgreSQL 17.
+- Go is limited to the custom Caddy build, DNS modules and the Caddy UI request guard.
+- Do not add or restore a parallel Python runtime.
+- Keep the UI server-rendered. Use JavaScript only where progressive enhancement is required.
+- Never require Docker socket access.
+- Separate contracts, domain logic, application services, infrastructure and presentation.
+- Remove replaced or dead implementations completely. Do not leave compatibility copies, duplicate CSS systems or generic final-fix scripts.
+- Preserve user data. Schema and configuration changes require backup, migration validation and rollback paths.
+- The legacy SQLite database is read-only migration input, not an active persistence backend.
+- Validate the complete Caddy configuration before activation. Apply changes atomically and restore the previous revision if reload fails.
+- Never render secrets back to the browser or persist resolved secret values in PostgreSQL, logs, reports, diffs or generated Caddy files.
+- Use English for code, documentation, UI text, tests, logs and commit messages.
+- Format C# with `dotnet format` and Go with `gofmt`.
+- State-changing requests require authorization and CSRF protection.
 
 ## UI rules
 
-- Follow `docs/DESIGN.md`.
+- Follow `docs/UI_DESIGN_CONTRACT.md`.
 - Use a calm Microsoft Fluent 2 / Windows 11 visual language.
-- Dashboard cards may be elevated. Tables, logs, forms, and editors are flat and compact.
-- Use one Fluent icon family, clear focus states, semantic status colors, and accessible contrast.
+- Tables, logs, forms and editors are flat and compact.
+- Use one icon family, clear focus states, semantic status colors and accessible contrast.
 - Default density is compact.
-- Theme selector has exactly three states: System, Light, Dark. System is the default.
-- Desktop edit/create flows use dialogs. On small screens the same dialogs become full-screen.
-- Do not turn the application into a typical marketing-style SaaS dashboard.
+- Theme selector has exactly System, Light and Dark. System is the default.
+- Desktop edit/create flows use dialogs. On small screens the same flows become full-screen.
+- Do not turn the application into a marketing-style SaaS dashboard.
 
 ## Verification
 
 Before declaring a work item complete:
 
-1. Run all Python and Go tests.
-2. Run syntax/compile checks.
-3. Build the container image.
-4. Validate generated Caddy configuration and rollback behavior.
-5. Check desktop and mobile layouts, keyboard navigation, light/dark themes, and empty/error/loading states.
-6. Check that removed features and dead code are actually gone.
-7. Update `docs/BACKLOG.md` and the relevant design/architecture documents.
+1. Run `dotnet restore`, `dotnet format --verify-no-changes`, Release build and all .NET tests.
+2. Run `gofmt`, `go mod tidy` and `go test ./...` without repository changes.
+3. Build the `dotnet-companion` and `dotnet-bundle` targets from `Dockerfile.dotnet`.
+4. Validate the production Compose model, PostgreSQL migration, legacy SQLite import and health endpoints.
+5. Validate generated Caddy configuration, remote reload and rollback behavior.
+6. Check desktop and mobile layouts, keyboard navigation, themes and empty/error/loading states.
+7. Confirm removed features and dead code are actually gone.
+8. Update the relevant architecture, operations and release documentation.
