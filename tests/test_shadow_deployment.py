@@ -23,9 +23,9 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         cls.version = VERSION.read_text(encoding="utf-8").strip()
 
     def test_shadow_stack_uses_immutable_dotnet_beta_image(self) -> None:
-        self.assertEqual("2.0.0-beta.1", self.version)
+        self.assertEqual("2.0.0-beta.2", self.version)
         self.assertIn(
-            "ghcr.io/juloc/caddy-ui-dotnet-companion:${CADDY_UI_SHADOW_VERSION:-2.0.0-beta.1}",
+            "ghcr.io/juloc/caddy-ui-dotnet-companion:${CADDY_UI_SHADOW_VERSION:-2.0.0-beta.2}",
             self.compose,
         )
         self.assertIn("pull_policy: always", self.compose)
@@ -41,6 +41,10 @@ class ShadowDeploymentContractTests(unittest.TestCase):
         self.assertNotIn('"80:80"', self.compose)
         self.assertNotIn('"443:443"', self.compose)
         self.assertNotIn("8099:8099", self.compose)
+
+    def test_shadow_login_is_isolated_and_reconciles_test_password(self) -> None:
+        self.assertIn('Authentication__EnsureBootstrapPassword: "true"', self.compose)
+        self.assertIn("Security__CookieNamespace: caddy_ui_shadow", self.compose)
 
     def test_productive_inputs_and_root_filesystems_are_read_only(self) -> None:
         self.assertIn("source: ${CADDY_UI_SHADOW_LOG_DIR}", self.compose)

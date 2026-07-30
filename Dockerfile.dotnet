@@ -42,7 +42,7 @@ RUN dotnet publish src/CaddyUi.Web/CaddyUi.Web.csproj \
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-alpine AS dotnet-companion
 WORKDIR /app
-ARG APP_VERSION=2.0.0-beta.1
+ARG APP_VERSION=2.0.0-beta.2
 
 ENV ASPNETCORE_URLS="http://0.0.0.0:8098;http://0.0.0.0:8099" \
     DOTNET_EnableDiagnostics=0 \

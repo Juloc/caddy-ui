@@ -35,6 +35,11 @@ public sealed class LoginPageTests :
         using var response = await _client.GetAsync("/Login");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("data-valmsg-summary=\"true\"", html, StringComparison.Ordinal);
+        Assert.Contains("role=\"alert\"", html, StringComparison.Ordinal);
+        Assert.Contains("data-valmsg-for=\"Input.Username\"", html, StringComparison.Ordinal);
+        Assert.Contains("data-valmsg-for=\"Input.Password\"", html, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -7,6 +7,6 @@ public sealed class ProductMetadataTests
     [Fact]
     public void FoundationVersion_IdentifiesCurrentBeta()
     {
-        Assert.Equal("2.0.0-beta.1", ProductMetadata.FoundationVersion);
+        Assert.Equal("2.0.0-beta.2", ProductMetadata.FoundationVersion);
     }
 }
