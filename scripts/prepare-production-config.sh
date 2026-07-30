@@ -26,17 +26,20 @@ EOF
 fi
 
 if [ ! -f "$managed_fragment" ]; then
+    moved_legacy_routes=0
     for route_file in "$routes_dir"/site-*.caddy; do
         [ -e "$route_file" ] || continue
         [ "$route_file" = "$managed_fragment" ] && continue
         [ "$route_file" = "$blocklist_fragment" ] && continue
         mv "$route_file" "$legacy_dir/"
+        moved_legacy_routes=1
     done
 
-    {
-        printf '%s\n' '# Caddy UI 2.0 cutover bridge. Replaced by the first successful managed apply.'
-        printf 'import %s/site-*.caddy\n' "$legacy_dir"
-    } >"$managed_fragment"
+    printf '%s\n' '# Caddy UI 2.0 managed routes.' >"$managed_fragment"
+    if [ "$moved_legacy_routes" = "1" ]; then
+        printf '%s\n' '# Cutover bridge. Replaced by the first successful managed apply.' >>"$managed_fragment"
+        printf 'import %s/site-*.caddy\n' "$legacy_dir" >>"$managed_fragment"
+    fi
 fi
 
 if [ ! -f "$blocklist_fragment" ]; then
