@@ -1,7 +1,8 @@
-@inject CaddyUi.Web.Security.SecurityRuntimeOptions SecurityOptions
-@inject CaddyUi.Infrastructure.Routing.RoutingOptions RoutingOptions
-@inject CaddyUi.Infrastructure.Operations.OperationsOptions OperationsOptions
-@inject CaddyUi.Infrastructure.Cutover.CutoverOptions CutoverOptions
+@{
+    var path = Context.Request.Path;
+    var version = global::System.Environment.GetEnvironmentVariable("CADDY_UI_VERSION")
+        ?? global::CaddyUi.Domain.ProductMetadata.FoundationVersion;
+}
 <!DOCTYPE html>
 <html lang="de" data-theme="system">
 <head>
@@ -9,90 +10,143 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>@ViewData["Title"] · Caddy UI</title>
+    <script>
+        (() => {
+            try {
+            {
+                const preference = localStorage.getItem("caddy-ui-theme");
+                document.documentElement.dataset.theme = preference === "light" || preference === "dark" ? preference : "system";
+            }
+            catch
+            {
+                document.documentElement.dataset.theme = "system";
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/features.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/operations.css" asp-append-version="true" />
 </head>
 <body>
-    <div class="app-shell">
-        <aside class="sidebar">
-            <a class="brand" asp-page="/Index" aria-label="Caddy UI Übersicht">
-                <span class="brand-mark" aria-hidden="true">C</span>
-                <span><strong>Caddy UI</strong><small>.NET / PostgreSQL</small></span>
-            </a>
+    <svg class="icon-sprite" aria-hidden="true">
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3l8.5 7.5v9a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5zM9 21v-7h6v7" /></symbol>
+        <symbol id="icon-traffic" viewBox="0 0 24 24"><path d="M4 18V9m6 9V5m6 13v-7m4 7H2" /></symbol>
+        <symbol id="icon-requests" viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14M2 6h.01M2 12h.01M2 18h.01" /></symbol>
+        <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7" /></symbol>
+        <symbol id="icon-route" viewBox="0 0 24 24"><path d="M6 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm12 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM8 6h3a4 4 0 0 1 4 4v4a4 4 0 0 0 3 3.87" /></symbol>
+        <symbol id="icon-setup" viewBox="0 0 24 24"><path d="m4 20 10-10m-7-4 3 3m5-5 5 5-3 3-5-5zM4 20l4-1-3-3z" /></symbol>
+        <symbol id="icon-provider" viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.5-7.97A6 6 0 0 1 18 8.5a4.5 4.5 0 0 1-.5 9H7Z" /></symbol>
+        <symbol id="icon-domain" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></symbol>
+        <symbol id="icon-access" viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6zM9 12l2 2 4-4" /></symbol>
+        <symbol id="icon-dns" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2" /><rect x="3" y="14" width="18" height="6" rx="2" /><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6" /></symbol>
+        <symbol id="icon-security" viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6zM8.5 12h7M12 8.5v7" /></symbol>
+        <symbol id="icon-performance" viewBox="0 0 24 24"><path d="M4.9 19a9 9 0 1 1 14.2 0M12 12l4-4M7 17h10" /></symbol>
+        <symbol id="icon-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3m6 0h4" /></symbol>
+        <symbol id="icon-health" viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6" /></symbol>
+        <symbol id="icon-jobs" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></symbol>
+        <symbol id="icon-system" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></symbol>
+        <symbol id="icon-notifications" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></symbol>
+        <symbol id="icon-backup" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM2 4h20v3H2zM9 11h6" /></symbol>
+        <symbol id="icon-migration" viewBox="0 0 24 24"><path d="M4 7h12m0 0-3-3m3 3-3 3M20 17H8m0 0 3-3m-3 3 3 3" /></symbol>
+        <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></symbol>
+        <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></symbol>
+        <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></symbol>
+        <symbol id="icon-collapse" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l-4 4 4 4m-4-4h10" /></symbol>
+        <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></symbol>
+        <symbol id="icon-system-theme" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></symbol>
+        <symbol id="icon-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></symbol>
+        <symbol id="icon-dark" viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z" /></symbol>
+        <symbol id="icon-logout" viewBox="0 0 24 24"><path d="M10 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h5m4-4 4-3-4-3m4 3H8" /></symbol>
+    </svg>
+
+    <a class="skip-link" href="#main-content">Zum Inhalt springen</a>
+    <div class="app-shell" data-shell>
+        <button class="mobile-navigation-button icon-button" type="button" data-mobile-navigation aria-controls="app-sidebar" aria-expanded="false" aria-label="Navigation öffnen">
+            <svg aria-hidden="true"><use href="#icon-menu"></use></svg>
+        </button>
+
+        <aside id="app-sidebar" class="sidebar" data-sidebar aria-label="Seitennavigation">
+            <div class="sidebar-header">
+                <a class="brand" asp-page="/Index" aria-label="Caddy UI Übersicht">
+                    <span class="brand-mark" aria-hidden="true">C</span>
+                    <span class="brand-copy"><strong>Caddy UI</strong><small>Serververwaltung</small></span>
+                </a>
+                <button class="icon-button sidebar-collapse-button" type="button" data-sidebar-collapse aria-label="Seitenleiste einklappen" aria-pressed="false">
+                    <svg aria-hidden="true"><use href="#icon-collapse"></use></svg>
+                </button>
+                <button class="icon-button sidebar-close-button" type="button" data-mobile-navigation-close aria-label="Navigation schließen">
+                    <svg aria-hidden="true"><use href="#icon-close"></use></svg>
+                </button>
+            </div>
 
             <nav class="primary-nav" aria-label="Hauptnavigation">
                 <span class="nav-section">Überblick</span>
-                <a class="nav-item @(Context.Request.Path == "/" ? "nav-item--active" : string.Empty)" asp-page="/Index"><span class="nav-icon">⌂</span><span>Übersicht</span></a>
-                <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Traffic") ? "nav-item--active" : string.Empty)" asp-page="/Traffic/Index"><span class="nav-icon">↗</span><span>Traffic</span></a>
-                <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Requests") ? "nav-item--active" : string.Empty)" asp-page="/Requests/Index"><span class="nav-icon">≡</span><span>Requests</span></a>
-                <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Routes/Analytics") ? "nav-item--active" : string.Empty)" asp-page="/Routes/Analytics"><span class="nav-icon">⌘</span><span>Routenanalyse</span></a>
+                <a class="nav-item @(path == "/" ? "nav-item--active" : string.Empty)" asp-page="/Index" title="Übersicht"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg><span class="nav-label">Übersicht</span></a>
+                <a class="nav-item @(path.StartsWithSegments("/Traffic") ? "nav-item--active" : string.Empty)" asp-page="/Traffic/Index" title="Traffic"><svg class="nav-icon" aria-hidden="true"><use href="#icon-traffic"></use></svg><span class="nav-label">Traffic</span></a>
+                <a class="nav-item @(path.StartsWithSegments("/Requests") ? "nav-item--active" : string.Empty)" asp-page="/Requests/Index" title="Requests"><svg class="nav-icon" aria-hidden="true"><use href="#icon-requests"></use></svg><span class="nav-label">Requests</span></a>
+                <a class="nav-item @(path.StartsWithSegments("/Routes/Analytics") ? "nav-item--active" : string.Empty)" asp-page="/Routes/Analytics" title="Routenanalyse"><svg class="nav-icon" aria-hidden="true"><use href="#icon-chart"></use></svg><span class="nav-label">Routenanalyse</span></a>
 
                 @if (User.IsInRole("admin") || User.IsInRole("editor"))
                 {
                     <span class="nav-section">Konfiguration</span>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Routing") ? "nav-item--active" : string.Empty)" asp-page="/Routing/Index"><span class="nav-icon">⇄</span><span>Routen</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Routing") ? "nav-item--active" : string.Empty)" asp-page="/Routing/Index" title="Routen"><svg class="nav-icon" aria-hidden="true"><use href="#icon-route"></use></svg><span class="nav-label">Routen</span></a>
                 }
                 @if (User.IsInRole("admin"))
                 {
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Setup") ? "nav-item--active" : string.Empty)" asp-page="/Setup/Index"><span class="nav-icon">＋</span><span>Einrichtung</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Administration/Providers") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Providers"><span class="nav-icon">API</span><span>DNS-Provider</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Administration/Domains") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Domains"><span class="nav-icon">◎</span><span>Domains &amp; Zertifikate</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Access") ? "nav-item--active" : string.Empty)" asp-page="/Access/Index"><span class="nav-icon">▣</span><span>Zugriffsgruppen</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Dns") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Dns"><span class="nav-icon">DNS</span><span>DNS &amp; DDNS</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Setup") ? "nav-item--active" : string.Empty)" asp-page="/Setup/Index" title="Einrichtung"><svg class="nav-icon" aria-hidden="true"><use href="#icon-setup"></use></svg><span class="nav-label">Einrichtung</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Administration/Providers") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Providers" title="DNS-Provider"><svg class="nav-icon" aria-hidden="true"><use href="#icon-provider"></use></svg><span class="nav-label">DNS-Provider</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Administration/Domains") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Domains" title="Domains und Zertifikate"><svg class="nav-icon" aria-hidden="true"><use href="#icon-domain"></use></svg><span class="nav-label">Domains &amp; Zertifikate</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Access") ? "nav-item--active" : string.Empty)" asp-page="/Access/Index" title="Zugriffsgruppen"><svg class="nav-icon" aria-hidden="true"><use href="#icon-access"></use></svg><span class="nav-label">Zugriffsgruppen</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Operations/Dns") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Dns" title="DNS und DDNS"><svg class="nav-icon" aria-hidden="true"><use href="#icon-dns"></use></svg><span class="nav-label">DNS &amp; DDNS</span></a>
                 }
 
                 <span class="nav-section">Betrieb</span>
-                <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Security") ? "nav-item--active" : string.Empty)" asp-page="/Security/Overview"><span class="nav-icon">◇</span><span>Bots &amp; Sicherheit</span></a>
-                <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Performance") ? "nav-item--active" : string.Empty)" asp-page="/Performance/Index"><span class="nav-icon">△</span><span>Fehler &amp; Performance</span></a>
-                <a class="nav-item @(Context.Request.Path.StartsWithSegments("/LiveLog") ? "nav-item--active" : string.Empty)" asp-page="/LiveLog/Index"><span class="nav-icon">›_</span><span>Live-Log</span></a>
+                <a class="nav-item @(path.StartsWithSegments("/Security") ? "nav-item--active" : string.Empty)" asp-page="/Security/Overview" title="Bots und Sicherheit"><svg class="nav-icon" aria-hidden="true"><use href="#icon-security"></use></svg><span class="nav-label">Bots &amp; Sicherheit</span></a>
+                <a class="nav-item @(path.StartsWithSegments("/Performance") ? "nav-item--active" : string.Empty)" asp-page="/Performance/Index" title="Fehler und Performance"><svg class="nav-icon" aria-hidden="true"><use href="#icon-performance"></use></svg><span class="nav-label">Fehler &amp; Performance</span></a>
+                <a class="nav-item @(path.StartsWithSegments("/LiveLog") ? "nav-item--active" : string.Empty)" asp-page="/LiveLog/Index" title="Live-Log"><svg class="nav-icon" aria-hidden="true"><use href="#icon-terminal"></use></svg><span class="nav-label">Live-Log</span></a>
                 @if (User.IsInRole("admin"))
                 {
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Health") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Health"><span class="nav-icon">✓</span><span>Healthchecks</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Jobs") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Jobs"><span class="nav-icon">⏱</span><span>Jobs</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Operations/Health") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Health" title="Healthchecks"><svg class="nav-icon" aria-hidden="true"><use href="#icon-health"></use></svg><span class="nav-label">Healthchecks</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Operations/Jobs") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Jobs" title="Jobs"><svg class="nav-icon" aria-hidden="true"><use href="#icon-jobs"></use></svg><span class="nav-label">Jobs</span></a>
                 }
-                <a class="nav-item @(Context.Request.Path.StartsWithSegments("/System") ? "nav-item--active" : string.Empty)" asp-page="/SystemStatus/Index"><span class="nav-icon">⚙</span><span>System</span></a>
+                <a class="nav-item @(path.StartsWithSegments("/System") ? "nav-item--active" : string.Empty)" asp-page="/SystemStatus/Index" title="System"><svg class="nav-icon" aria-hidden="true"><use href="#icon-system"></use></svg><span class="nav-label">System</span></a>
 
                 @if (User.IsInRole("admin"))
                 {
                     <span class="nav-section">Administration</span>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Notifications") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Notifications"><span class="nav-icon">!</span><span>Benachrichtigungen</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Backup") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Backup"><span class="nav-icon">⇩</span><span>Backup &amp; Diagnose</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Operations/Cutover") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Cutover"><span class="nav-icon">→</span><span>Migration &amp; Rückfall</span></a>
-                    <a class="nav-item @(Context.Request.Path.StartsWithSegments("/Administration/Security") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Security"><span class="nav-icon">🔒</span><span>Sicherheit</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Operations/Notifications") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Notifications" title="Benachrichtigungen"><svg class="nav-icon" aria-hidden="true"><use href="#icon-notifications"></use></svg><span class="nav-label">Benachrichtigungen</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Operations/Backup") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Backup" title="Backup und Diagnose"><svg class="nav-icon" aria-hidden="true"><use href="#icon-backup"></use></svg><span class="nav-label">Backup &amp; Diagnose</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Operations/Cutover") ? "nav-item--active" : string.Empty)" asp-page="/Operations/Cutover" title="Migration und Rückfall"><svg class="nav-icon" aria-hidden="true"><use href="#icon-migration"></use></svg><span class="nav-label">Migration &amp; Rückfall</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/Administration/Security") ? "nav-item--active" : string.Empty)" asp-page="/Administration/Security" title="Sicherheit"><svg class="nav-icon" aria-hidden="true"><use href="#icon-lock"></use></svg><span class="nav-label">Sicherheit</span></a>
                 }
             </nav>
 
             <div class="sidebar-footer">
-                <span class="connection-dot" aria-hidden="true"></span>
-                <span>Version @(global::System.Environment.GetEnvironmentVariable("CADDY_UI_VERSION") ?? "development")</span>
+                <a class="nav-item sidebar-about @(path.StartsWithSegments("/About") ? "nav-item--active" : string.Empty)" asp-page="/About" title="Über Caddy UI"><svg class="nav-icon" aria-hidden="true"><use href="#icon-info"></use></svg><span class="nav-label">Über Caddy UI</span></a>
+                <div class="sidebar-status" title="Installierte Version"><span class="connection-dot" aria-hidden="true"></span><span class="sidebar-status-label">Version</span><strong>@version</strong></div>
+                <div class="sidebar-controls">
+                    <div class="theme-selector" role="group" aria-label="Farbschema">
+                        <button type="button" data-theme-option="system" aria-label="Systemdesign verwenden" title="System"><svg aria-hidden="true"><use href="#icon-system-theme"></use></svg><span>System</span></button>
+                        <button type="button" data-theme-option="light" aria-label="Helles Design verwenden" title="Hell"><svg aria-hidden="true"><use href="#icon-light"></use></svg><span>Hell</span></button>
+                        <button type="button" data-theme-option="dark" aria-label="Dunkles Design verwenden" title="Dunkel"><svg aria-hidden="true"><use href="#icon-dark"></use></svg><span>Dunkel</span></button>
+                    </div>
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <form method="post" asp-page="/Logout" class="logout-form">
+                            <button type="submit" class="logout-button" title="Abmelden"><svg aria-hidden="true"><use href="#icon-logout"></use></svg><span>Abmelden</span></button>
+                        </form>
+                    }
+                </div>
             </div>
         </aside>
 
+        <button class="sidebar-backdrop" type="button" data-sidebar-backdrop aria-label="Navigation schließen"></button>
         <div class="app-content">
-            <header class="topbar">
-                <div class="topbar-title"><span class="topbar-label">Arbeitsbereich</span><strong>@ViewData["Title"]</strong></div>
-                <div class="topbar-actions">
-                    @if (SecurityOptions.PublicAccessWithoutMandatoryTotp)
-                    {
-                        <span class="environment-chip environment-chip--warning">Public ohne TOTP-Pflicht</span>
-                    }
-                    @if (CutoverOptions.Enabled)
-                    {
-                        <span class="environment-chip environment-chip--warning">Umschaltung freigegeben</span>
-                    }
-                    <span class="environment-chip">Routen @RoutingOptions.WriteMode.ToString().ToLowerInvariant()</span>
-                    <span class="environment-chip">DNS @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant()</span>
-                    @if (User.Identity?.IsAuthenticated == true)
-                    {
-                        <span class="user-chip">@User.Identity.Name · @User.FindFirst(global::System.Security.Claims.ClaimTypes.Role)?.Value</span>
-                        <form method="post" asp-page="/Logout"><button class="button button--compact button--quiet" type="submit">Abmelden</button></form>
-                    }
-                </div>
-            </header>
-            <main class="main-content">@RenderBody()</main>
-            <footer class="app-statusbar"><span><i class="connection-dot"></i>Bereit</span><span>Routen: @RoutingOptions.WriteMode.ToString().ToLowerInvariant() · DNS: @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant() · Worker: @(OperationsOptions.WorkerEnabled ? "aktiv" : "aus") · Rückfall: @(CutoverOptions.Enabled ? "freigegeben" : "gesperrt")</span></footer>
+            <main id="main-content" class="main-content" tabindex="-1">@RenderBody()</main>
         </div>
     </div>
+
+    <script src="~/js/shell.js" asp-append-version="true" defer></script>
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
