@@ -1,42 +1,43 @@
-# Caddy UI 2.0 – UI-Designvertrag
+# Caddy UI – UI-Designvertrag
 
-Status: verbindlich ab Phase 7  
-Referenz: AE01 Fluent-/Windows-11-Arbeitsoberfläche
+Status: verbindlich  
+Referenz: Microsoft Fluent 2 und Windows 11
 
 ## Zielbild
 
-Caddy UI ist ein schnelles Verwaltungswerkzeug, keine Marketingseite. Die Oberfläche soll ruhig, kompakt, eindeutig und ohne visuelle Unschärfe wirken. Bedienelemente müssen auf den ersten Blick als Bedienelemente erkennbar sein. Flächen dürfen nicht nur durch mehrere fast identische Weißtöne voneinander getrennt werden.
+Caddy UI ist ein schnelles Verwaltungswerkzeug, keine Marketingseite. Die Oberfläche wirkt ruhig, kompakt und eindeutig. Bedienelemente sind sofort erkennbar, Zustände werden verständlich erklärt und die Bedienung bleibt auf Desktop, Tablet und Mobilgeräten vollständig erhalten.
 
 ## Grundprinzipien
 
 - servergerenderte Razor Pages; kein schweres SPA-Framework
 - kurze Interaktionen und möglichst wenig JavaScript
-- klare Informationshierarchie: Seite, Toolbar, Arbeitsbereich, Detail
+- klare Informationshierarchie: Seite, Aktionen, Arbeitsbereich, Detail
 - flache Arbeitsbereiche statt verschachtelter Kartenwände
-- sichtbare Rahmen und Zustände statt dekorativer Schatten
-- keine Gradienten, Glows, Glas-/Blur-Effekte oder unnötige Animationen
+- sichtbare Rahmen und Zustände statt dekorativer Effekte
+- keine Gradienten, Glows oder unnötigen Animationen
 - Farbe dient Status, Auswahl und Aktion; nicht Dekoration
 - alle Änderungen bleiben per URL, Formular und Browsernavigation nachvollziehbar
+- Feedback erscheint im Kontext und nicht als unnötiger Dialog oder Popup
 
 ## Design Tokens
 
 ```text
 Abstände:       4 / 8 / 12 / 16 / 20 / 24 / 32 px
-Controls:       34 px Standard, 30 px kompakt
-Radien:         4 px Controls, 8 px Panels, 12 px Dialog/Flyout
+Controls:       36 px Standard, 30 px kompakt
+Radien:         6 px Controls, 10 px Panels, 14 px Dialog/Flyout
 Schrift:        Segoe UI Variable / Segoe UI
 Code:           Cascadia Code / Cascadia Mono
 Tabellenzeile:  ca. 38 px komfortabel, 32 px kompakt
 ```
 
-Semantische Farben werden über `--ui-*`-Tokens gepflegt. Light und Dark verwenden dieselben Bedeutungen, aber eigene Werte.
+Semantische Farben werden ausschließlich über `--ui-*`-Tokens gepflegt. Light und Dark verwenden dieselben Bedeutungen mit jeweils passenden Werten.
 
 ## Flächen und Kontrast
 
 Light:
 
 - Hintergrund ist ein leicht neutrales Grau
-- Arbeitsflächen sind weiß
+- Sidebar und Arbeitsflächen sind hell
 - Panelgrenzen sind sichtbar
 - Hover und Auswahl unterscheiden sich klar
 
@@ -46,7 +47,7 @@ Dark:
 - Textkontrast bleibt hoch
 - Statusfarben werden nicht zu Neonflächen
 
-Verboten ist eine Oberfläche, bei der Hintergrund, Cards, Eingaben und Buttons nahezu denselben Weißton ohne erkennbare Begrenzung besitzen.
+Verboten ist eine Oberfläche, bei der Hintergrund, Panels, Eingaben und Buttons ohne erkennbare Begrenzung ineinanderlaufen.
 
 ## Controls
 
@@ -58,7 +59,7 @@ Primärbutton:
 
 Sekundärbutton:
 
-- helle/ruhige Fläche mit sichtbarem Rand
+- ruhige Fläche mit sichtbarem Rand
 - für Navigation und reversible Nebenaktionen
 
 Gefahraktion:
@@ -69,8 +70,7 @@ Gefahraktion:
 
 Eingaben:
 
-- sichtbarer Rand
-- sichtbarer Fokus
+- sichtbarer Rand und Fokus
 - Label oberhalb des Feldes
 - Hilfetext nur für relevante Bedeutung
 - Fehler direkt am Feld oder als klare Zusammenfassung
@@ -88,19 +88,26 @@ Checkboxen und Schalter:
 - Status als semantisches Badge
 - deaktivierte Einträge bleiben lesbar und werden nur gedämpft
 - keine eigene Card pro Tabellenzeile
+- breite Inhalte bleiben horizontal scrollbar
 
-## Navigation und Status
+## Navigation und Anwendungsshell
 
-- dunkle, kompakte Sidebar mit Gruppen
+- helle Sidebar als Standard, Dark-Variante über dieselben semantischen Tokens
+- eine konsistente Outline-Iconfamilie mit 24-Pixel-Raster
 - aktiver Eintrag klar hervorgehoben
-- Topbar zeigt Arbeitsbereich und globale Zustände
-- feste Statusbar zeigt Betriebsbereitschaft und Schreibmodus
-- Feedback darf das Layout nicht verschieben
+- Sidebar auf Desktop ein- und ausklappbar
+- mobile Navigation als vollständig bedienbare Off-Canvas-Sidebar
+- Escape schließt die mobile Navigation; Fokus wird nachvollziehbar geführt
+- Theme-Auswahl mit genau System, Hell und Dunkel bleibt unten in der Sidebar verankert
+- Abmelden steht direkt neben der Theme-Auswahl
+- Version steht im unteren Statusbereich der Sidebar
+- Laufzeit- und Produktinformationen gehören auf die Seite `Über Caddy UI`
+- keine dauerhafte Topbar und keine Statusanzeige mit erfundenem Bereitschaftszustand
 
 ## Bewegung und Leistung
 
 - Animationen nur für Zustandsübergänge
-- Standarddauer etwa 160 ms
+- Standarddauer etwa 140 bis 180 ms
 - `prefers-reduced-motion` wird respektiert
 - keine dauerhaften Animationen
 - keine UI-Bibliothek oder Icon-Schrift nur für wenige Symbole
@@ -108,19 +115,22 @@ Checkboxen und Schalter:
 
 ## Responsive Verhalten
 
-- Desktop: volle Sidebar und dichte Tabellen
-- mittlere Breite: kompakte Icon-Sidebar
-- mobil: einspaltige Arbeitsbereiche, umbrechende Aktionen und horizontal scrollbare Tabellen
-- keine versteckten Primäraktionen
+- Desktop: volle oder kompakte Sidebar und dichte Tabellen
+- Tablet: einspaltige Arbeitsbereiche, Navigation bei Bedarf als Overlay
+- Mobil: Off-Canvas-Navigation, einspaltige Inhalte und umbrechende Aktionen
+- Primäraktionen bleiben sichtbar und mit Tastatur oder Touch erreichbar
+- Tabellen und Diffs dürfen horizontal scrollen, ohne die Seite zu verbreitern
 
 ## Abnahme
 
-Eine neue Seite ist nur fertig, wenn:
+Eine Seite ist nur fertig, wenn:
 
 1. Primäraktion und Nebenaktionen eindeutig erkennbar sind.
-2. Inputs, Buttons und Panels auch in Light klar voneinander abgegrenzt sind.
+2. Inputs, Buttons und Panels in Light und Dark klar abgegrenzt sind.
 3. Keyboard-Fokus sichtbar ist.
 4. die Seite ohne unnötiges JavaScript funktioniert.
-5. Dark Mode und reduzierte Bewegung funktionieren.
-6. Tabellen und Formulare bei 760 px Breite noch bedienbar sind.
-7. keine dekorativen Gradienten, Blur-Flächen oder Card-Wände eingeführt wurden.
+5. System-, Hell- und Dunkelmodus funktionieren.
+6. reduzierte Bewegung respektiert wird.
+7. Tabellen und Formulare bei 760 Pixel Breite bedienbar bleiben.
+8. leere, fehlerhafte und ladende Zustände verständlich sind.
+9. keine dekorativen Effekte oder unnötigen Popups eingeführt wurden.
