@@ -8,7 +8,7 @@ public sealed class CaddyCertificateLogReaderTests
     [Fact]
     public void ReadReturnsRetryScheduleForWildcardCertificate()
     {
-        var timestamp = DateTimeOffset.Parse("2026-07-31T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
+        var timestamp = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         var path = WriteLog(new
         {
             level = "error",
@@ -40,10 +40,11 @@ public sealed class CaddyCertificateLogReaderTests
     [Fact]
     public void ReadMapsAcmeChallengeNameToWildcardCertificate()
     {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var path = WriteLog(new
         {
             level = "info",
-            ts = DateTimeOffset.Parse("2026-07-31T00:01:00Z", System.Globalization.CultureInfo.InvariantCulture).ToUnixTimeSeconds(),
+            ts = timestamp,
             logger = "tls.obtain",
             msg = "waiting for DNS propagation",
             name = "_acme-challenge.juloc.de",
