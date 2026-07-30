@@ -4,110 +4,82 @@
 
 ```text
 Browser
-  -> Caddy UI HTTP application
+  -> ASP.NET Core Razor Pages (ports 8098 and internal 8099)
       -> application services
-          -> SQLite repositories
-          -> managed Caddy configuration
-          -> Caddy admin API
-          -> provider adapters
-          -> analytics/security collectors
-          -> notification adapters
+          -> EF Core / PostgreSQL
+          -> managed Caddy configuration and revisions
+          -> DNS provider adapters and scheduled operations
+          -> analytics, security and notification workers
+          -> legacy SQLite migration reader
   -> Caddy reverse proxy
-      -> Caddy UI request guard (bundle mode)
-          -> managed reverse-proxy routes
+      -> Netcup DNS module
+      -> Caddy UI request guard
+      -> managed upstream routes
 ```
 
-The application remains a server-rendered Python service with a small amount of dependency-free JavaScript. Go remains limited to the custom Caddy build, the Netcup DNS module, and the lightweight Caddy UI request guard. Core operation requires no additional database, cache, analytics, or security container.
+The production application is .NET 10 with ASP.NET Core Razor Pages, EF Core and PostgreSQL 17. Go is used only for the custom Caddy binary and its modules. There is no Python runtime in the supported build or deployment path.
 
-## Module boundaries
+## Project boundaries
 
-- `caddy_ui/config.py`: environment and path settings.
-- `caddy_ui/db.py`: SQLite connection, core migrations, transactions, backup primitives.
-- `caddy_ui/domain.py`: typed domain objects and validation.
-- `caddy_ui/repositories.py`: persistence access.
-- `caddy_ui/security.py`: password hashing, sessions, CSRF, TOTP, permissions.
-- `caddy_ui/audit.py`: append-only redacted audit events.
-- `caddy_ui/caddy.py`: route rendering, import, validation, reload, revisions, rollback.
-- `caddy_ui/protection.py`: persistent login protection, threat events, temporary restrictions, blocklist synchronization, and security-aware managed-route rendering.
-- `caddy_ui/analytics.py`: request ingestion, redaction, endpoint normalization, structured filters, percentiles, rollups, retention, saved views, and exports.
-- `caddy_ui/observability.py`: bounded background analytics ingestion, security-event ingestion, threat scans, retention, and blocklist refresh.
-- `caddy_ui/providers/`: provider contracts and Netcup implementation.
-- `caddy_ui/monitoring.py`: health probes, certificates, legacy log parsing, and operational aggregation.
-- `caddy_ui/notifications.py`: dashboard, email, and generic webhook dispatch.
-- `caddy_ui/alerts.py`: opt-in Discord and Telegram adapters using environment-referenced secrets.
-- `caddy_ui/web.py` and `views.py`: stable base request routing and existing workspaces.
-- `caddy_ui/enhanced_web.py`, `analytics_views.py`, `security_views.py`, and `static/`: analytics/security routing, presentation, live SSE, and responsive assets.
-- `caddy_ui/jobs.py`: DDNS, legacy traffic aggregation, retention, health checks, and backup schedules.
-- `caddyguard/`: custom Caddy HTTP handler for request-rate limiting, trusted-proxy client resolution, dynamic temporary restrictions, and security-event logging.
+- `src/CaddyUi.Contracts`: transport and status contracts.
+- `src/CaddyUi.Domain`: domain types, product metadata and invariants.
+- `src/CaddyUi.Application`: route compilation, classification and application rules.
+- `src/CaddyUi.Infrastructure`: PostgreSQL persistence, DNS providers, workers, file operations and cutover services.
+- `src/CaddyUi.Web`: Razor Pages, authentication, authorization, UI and health endpoints.
+- `src/CaddyUi.Migration`: idempotent read-only import from the legacy SQLite database.
+- `tests/*`: unit, web, PostgreSQL, migration and acceptance tests.
+- `caddyguard`: request protection and managed block feed support.
+- `caddynetcp`: Netcup DNS module.
+- `cmd/caddy`: custom Caddy entry point.
 
-Presentation code must not call SQLite, provider APIs, or Caddy directly. Views receive already prepared values from the request/application layer.
+Presentation code must not call PostgreSQL, provider APIs or Caddy directly. Pages use application and infrastructure services through dependency injection.
 
-## Request analytics data flow
+## Persistence
 
-1. Caddy writes structured JSON access logs to the shared log volume.
-2. The companion tails a bounded recent window every 15 seconds.
-3. Each source line is hashed so repeated scans are idempotent.
-4. Sensitive query values are redacted before SQLite persistence.
-5. Exact paths and normalized endpoints are stored separately.
-6. Hourly aggregate buckets are updated transactionally as new raw events are inserted.
-7. Raw data older than the configured minimum 30-day window is deleted after hourly data has been compacted into daily aggregates.
-8. Aggregates expire according to the configured retention, one year by default.
+PostgreSQL is the source of truth for users, domains, DNS providers, routes, revisions, operations, analytics, security events, jobs and system state. EF Core migrations run before application startup.
 
-Raw request tables never persist request/response bodies, cookies, or Authorization headers.
+The previous SQLite file is mounted read-only during the transition. `CaddyUi.Migration` creates a backup, imports known records idempotently, preserves unknown legacy data in migration records and writes a report. SQLite is never used as the active runtime database after the migration.
 
-## Security data flow
+ASP.NET Core data-protection keys are persisted in PostgreSQL. Provider credentials are stored only as environment-variable or file-secret references; resolved secret values are not persisted.
 
-### Bundle mode
+## Route and certificate flow
 
-1. Managed route rendering injects `caddy_ui_guard` into eligible managed route handlers.
-2. Caddy enforces per-client token-bucket limits before reverse proxying.
-3. Explicit trusted-proxy networks control whether forwarded client-IP headers may be used.
-4. A shared, atomically replaced blocklist file carries temporary administrator/automatic restrictions from the companion to Caddy without requiring a reload for each change.
-5. The guard writes bounded JSON security events to the shared log volume.
-6. The companion ingests those events into SQLite for auditability and UI drill-downs.
-7. Threat detection uses already persisted request metadata and may create only temporary automatic restrictions.
+1. A provider, domain and optional first route can be created atomically through the guided setup.
+2. Saving changes updates PostgreSQL only; it does not change the active Caddy configuration.
+3. The compiler creates a deterministic managed Caddy fragment, manifest and digest.
+4. Wildcard and base-domain certificate plans are resolved separately. Unsupported or incomplete DNS-01 configurations block active apply instead of silently falling back.
+5. Preview shows warnings and a line diff.
+6. Apply writes a candidate, validates it, snapshots the previous fragment and atomically replaces the managed file.
+7. The complete root Caddy configuration is validated before remote reload.
+8. Failed apply or verification restores the previous snapshot and reloads it.
 
-### Companion mode
+Existing unmanaged route files are preserved in `legacy-dotnet-cutover`. The initial managed fragment imports them until the first successful .NET-managed apply.
 
-The companion may manage a Caddy build without `caddy_ui_guard`. Security-aware configuration activation must validate through Caddy's admin API. Unsupported directives are rolled back and surfaced as a warning; existing working routes must not be left with unsupported configuration.
+## Analytics and security
 
-## Configuration ownership
+Caddy writes structured access and security logs to the shared log volume. Background workers ingest bounded batches into PostgreSQL with persistent checkpoints and rotation handling. Requests, pageviews, sessions, clients and technical assets remain separate metrics.
 
-- Managed routes are stored in SQLite as the source of truth and rendered deterministically to individual snippets.
-- Custom routes are stored separately and are administrator-only.
-- Unmanaged files are never silently changed.
-- Every applied route/security configuration has an immutable revision manifest and content digest.
-- Secrets are excluded from diffs, audit payloads, exports, and diagnostic bundles.
-- Security settings live in SQLite; temporary block state is mirrored to the shared blocklist file as derived runtime state.
-
-## Persistence and migrations
-
-Analytics/security feature schemas are additive to the core SQLite schema. Before the first feature-schema migration, Caddy UI creates an automatic database backup, applies the schema transactionally, and verifies `PRAGMA integrity_check`. Failed migration or configuration activation preserves rollback capability.
-
-SQLite remains in WAL mode with targeted indexes on time, host, endpoint, IP, status, and response-time dimensions. The observability loop uses bounded log reads and batched SQLite transactions so request processing is not on the Caddy critical path.
+Sensitive headers, cookies, tokens and configured query values are redacted before persistence. IP intelligence and risk scoring are evidence-based operational signals, not identity claims. Managed IP blocks are written atomically to a dedicated data feed consumed by `caddy_ui_guard`; the feed is not imported as Caddyfile syntax.
 
 ## Deployment
 
-### Bundle
+The production stack contains:
 
-- `ghcr.io/juloc/caddy-ui:<version>` contains both runtimes and is started once as `caddy` and once as `caddy-ui`.
-- The custom Caddy binary contains the standard modules, Netcup DNS module, and `caddy_ui_guard`.
+- `postgres`: PostgreSQL 17 on an internal network.
+- `migrate`: applies EF Core migrations.
+- `legacy-import`: imports the read-only SQLite database idempotently.
+- `config-init`: prepares and validates the reversible Caddy route bridge.
+- `caddy`: custom Caddy bundle with DNS and guard modules.
+- `caddy-ui`: Razor Pages UI, access portal and workers.
 
-### Companion
-
-- official/custom Caddy image chosen by the operator;
-- `ghcr.io/juloc/caddy-ui-companion:<version>` as the smaller companion.
-
-Both modes use exactly two containers. Caddy initialization is idempotent and performed by Caddy UI before management becomes writable. DDNS and observability jobs run as supervised background threads inside Caddy UI. No Docker socket is mounted.
+`Dockerfile.dotnet` is the only supported application image definition. It provides `dotnet-companion` and `dotnet-bundle` targets. The UI container has no Docker socket, drops Linux capabilities and exposes the access portal only inside Docker networking.
 
 ## Release flow
 
-1. Merge to `main`.
-2. Determine bump: `major` or `minor` PR label; otherwise `patch`.
-3. Create SemVer tag and GitHub Release.
-4. Publish immutable version tags and `latest` for stable releases.
-5. Verify the bundle and companion images.
-6. Open an automated PR in `Juloc/docker` updating all Caddy image references in `caddy/docker-compose.yml`.
-7. Auto-merge only after repository checks pass.
-
-Pre-releases publish `1.0.0-alpha.N`/`beta.N` tags but do not replace stable `latest` unless explicitly promoted.
+1. Update `VERSION_DOTNET`, `ProductMetadata.FoundationVersion`, the Docker build default and its test.
+2. Merge only after .NET, Go, container, migration and production-contract checks pass.
+3. The release workflow publishes immutable bundle and companion tags plus `latest`.
+4. Published images are pulled and smoke-tested.
+5. An annotated Git tag and GitHub Release are created.
+6. The deployment workflow updates `Juloc/docker` with the exact version.
+7. Server deployment keeps the legacy SQLite, Caddy configuration and PostgreSQL volumes for rollback until operational acceptance is complete.
