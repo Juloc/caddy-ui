@@ -54,6 +54,7 @@ public static class DependencyInjection
         services.AddSingleton<LoginProtectionService>();
         services.AddSingleton<DomainProviderStore>();
         services.AddSingleton<CertificateStatusService>();
+        services.AddSingleton<AcmeEmailService>();
         services.AddSingleton<RouteManagementStore>();
         services.AddSingleton<RouteImportStore>();
         services.AddSingleton<RouteTransferService>();
