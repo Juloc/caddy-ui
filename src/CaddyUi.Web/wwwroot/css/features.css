@@ -48,7 +48,6 @@
 .analytics-filters label > span { color: var(--ui-text-muted); font-size: 11px; font-weight: 600; }
 .metric-grid--dense { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .metric-grid--dense .metric-card { min-height: 104px; }
-.workspace-grid--analytics { grid-template-columns: minmax(0, 3fr) minmax(250px, 1fr); }
 .analytics-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
 .analytics-columns--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .analytics-section { margin-top: 16px; }
@@ -69,7 +68,6 @@
 
 .feature-route-editor { display: grid; gap: 16px; }
 .feature-route-editor .workspace-section + .workspace-section { margin-top: 0; }
-.route-kind-panel[hidden] { display: none; }
 .code-editor { min-height: 260px; tab-size: 4; white-space: pre; }
 .feature-config-preview .section-header { align-items: flex-start; }
 .diff-view {
@@ -105,7 +103,7 @@
     .analytics-columns { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
-    .analytics-filters, .metric-grid--dense, .workspace-grid--analytics, .analytics-columns--two { grid-template-columns: 1fr; }
+    .analytics-filters, .metric-grid--dense, .analytics-columns--two { grid-template-columns: 1fr; }
     .chart-legend { display: none; }
     .auth-card { padding: 20px; }
     .diff-line { grid-template-columns: 36px 36px 20px minmax(max-content, 1fr); }
