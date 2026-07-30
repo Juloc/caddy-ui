@@ -15,7 +15,7 @@ public interface ISecretReferenceProtector
 
 public sealed partial class SecretReferenceResolver : ISecretReferenceResolver, ISecretReferenceProtector
 {
-    private const string ProtectedPrefix = "protected://v1/";
+    private const string ProtectedPrefix = "secret://protected/v1/";
     private const string EnvironmentPrefix = "secret://env/";
     private const string FilePrefix = "secret://file/";
     private readonly IDataProtector _protector;
@@ -30,7 +30,8 @@ public sealed partial class SecretReferenceResolver : ISecretReferenceResolver, 
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
         var normalized = value.Trim();
         if (normalized.StartsWith(EnvironmentPrefix, StringComparison.OrdinalIgnoreCase) ||
-            normalized.StartsWith(FilePrefix, StringComparison.OrdinalIgnoreCase))
+            normalized.StartsWith(FilePrefix, StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith(ProtectedPrefix, StringComparison.Ordinal))
         {
             return normalized;
         }
