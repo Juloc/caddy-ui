@@ -217,7 +217,7 @@ public static class DnsProviderCatalog
             key,
             label,
             Required: true,
-            HelpText: $"Name der Umgebungsvariable oder secret://-Referenz für {SecretPurpose(key)}. Der Wert selbst wird nicht gespeichert.");
+            HelpText: $"{SecretPurpose(key)} direkt eingeben; der Wert wird verschlüsselt gespeichert. Alternativ ist eine secret://env/- oder secret://file/-Referenz möglich.");
     }
 
     private static string SettingHelp(string key, string? defaultValue)
