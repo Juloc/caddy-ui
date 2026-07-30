@@ -121,6 +121,9 @@ jobs:
             -p 18099:8099 \
             -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui' \
             -e Database__ApplyMigrationsOnStartup=true \
+            -e CADDY_UI_USERNAME=admin \
+            -e CADDY_UI_PASSWORD=ci-admin-password-123456789 \
+            -e CADDY_UI_COOKIE_NAMESPACE=caddy_ui_ci \
             -e CADDY_UI_PORTAL_PROXY_SECRET=portal-smoke-secret \
             caddy-ui:${{ matrix.target }}-phase3 web
           for attempt in {1..40}; do
@@ -131,12 +134,66 @@ jobs:
             sleep 2
           done
           exit 1
-      - name: Verify HTTP surfaces
+      - name: Verify HTTP surfaces and login
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent http://127.0.0.1:18098/health/live
-          curl --fail --silent http://127.0.0.1:18098/Login
+          for attempt in {1..20}; do
+            if docker logs caddy-ui-web 2>&1 | grep -q 'Created the initial administrator'; then
+              break
+            fi
+            if [ "$attempt" = "20" ]; then
+              docker logs caddy-ui-web
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error \
+            --cookie-jar /tmp/login.cookies \
+            http://127.0.0.1:18098/Login > /tmp/login.html
+          login_token="$(python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          class TokenParser(HTMLParser):
+              token = None
+
+              def handle_starttag(self, tag, attrs):
+                  if tag != "input":
+                      return
+                  attributes = dict(attrs)
+                  if attributes.get("name") == "__RequestVerificationToken":
+                      self.token = attributes.get("value")
+
+          parser = TokenParser()
+          parser.feed(Path("/tmp/login.html").read_text(encoding="utf-8"))
+          if not parser.token:
+              raise SystemExit("antiforgery token missing")
+          print(parser.token)
+          PY
+          )"
+          login_status="$(curl --silent --show-error \
+            --cookie /tmp/login.cookies \
+            --cookie-jar /tmp/login.cookies \
+            --dump-header /tmp/login.headers \
+            --output /tmp/login.response \
+            --write-out '%{http_code}' \
+            --request POST \
+            --data-urlencode "__RequestVerificationToken=${login_token}" \
+            --data-urlencode 'Input.Username=admin' \
+            --data-urlencode 'Input.Password=ci-admin-password-123456789' \
+            --data-urlencode 'Input.SecondFactor=' \
+            --data-urlencode 'ReturnUrl=/' \
+            http://127.0.0.1:18098/Login)"
+          test "$login_status" = "302"
+          grep -F 'caddy_ui_ci_admin' /tmp/login.cookies
+          workspace_status="$(curl --silent --show-error \
+            --cookie /tmp/login.cookies \
+            --output /tmp/workspace.html \
+            --write-out '%{http_code}' \
+            http://127.0.0.1:18098/)"
+          test "$workspace_status" = "200"
           portal_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
             -H 'X-Caddy-Portal-Secret: portal-smoke-secret' \
             -H 'X-Forwarded-Proto: https' \
