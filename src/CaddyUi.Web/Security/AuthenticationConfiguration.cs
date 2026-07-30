@@ -38,13 +38,13 @@ public static class AuthenticationConfiguration
                 AuthenticationSchemes.LanAdmin,
                 options => ConfigureCookie(
                     options,
-                    "caddy_ui_admin",
+                    securityOptions.LanAdminCookieName,
                     CookieSecurePolicy.SameAsRequest))
             .AddCookie(
                 AuthenticationSchemes.PublicAdmin,
                 options => ConfigureCookie(
                     options,
-                    "__Host-caddy_ui_admin",
+                    securityOptions.PublicAdminCookieName,
                     CookieSecurePolicy.Always));
 
         services.AddAuthorizationBuilder()
