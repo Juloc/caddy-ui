@@ -178,12 +178,14 @@ public sealed class CaddyCertificateSourceRefreshWorker : BackgroundService
 
     private static void TrySetMode(string path, UnixFileMode mode)
     {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         try
         {
             File.SetUnixFileMode(path, mode);
-        }
-        catch (PlatformNotSupportedException)
-        {
         }
         catch (UnauthorizedAccessException)
         {
