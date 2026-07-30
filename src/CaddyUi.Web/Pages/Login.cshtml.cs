@@ -158,12 +158,12 @@ public sealed class LoginModel : PageModel
             return !(surface == RequestSurface.PublicAdmin && _securityOptions.RequireTotp);
         }
 
-        if (user.TotpSecretEncrypted is null || string.IsNullOrWhiteSpace(Input.SecondFactor))
+        var candidate = Input.SecondFactor?.Trim();
+        if (user.TotpSecretEncrypted is null || string.IsNullOrWhiteSpace(candidate))
         {
             return false;
         }
 
-        var candidate = Input.SecondFactor.Trim();
         if (candidate.Contains('-'))
         {
             return await _store.ConsumeRecoveryCodeAsync(
@@ -211,6 +211,6 @@ public sealed class LoginModel : PageModel
         public string Password { get; set; } = string.Empty;
 
         [MaxLength(100)]
-        public string SecondFactor { get; set; } = string.Empty;
+        public string? SecondFactor { get; set; }
     }
 }
