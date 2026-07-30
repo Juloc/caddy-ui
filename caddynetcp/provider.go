@@ -31,10 +31,10 @@ func init() {
 // CCP API calls. It only implements the libdns methods needed for ACME DNS-01:
 // append TXT records and delete TXT records.
 type Provider struct {
-	CustomerNumber string `json:"customer_number,omitempty"`
-	APIKey         string `json:"api_key,omitempty"`
-	APIPassword    string `json:"api_password,omitempty"`
-	Endpoint       string `json:"endpoint,omitempty"`
+	CustomerNumber  string `json:"customer_number,omitempty"`
+	APIKey          string `json:"api_key,omitempty"`
+	APIPassword     string `json:"api_password,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
 	SecretDirectory string `json:"secret_directory,omitempty"`
 
 	mu sync.Mutex
