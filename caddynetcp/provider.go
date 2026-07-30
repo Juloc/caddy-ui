@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -16,7 +18,10 @@ import (
 	"github.com/libdns/libdns"
 )
 
-const defaultEndpoint = "https://ccp.netcup.net/run/webservice/servers/endpoint.php?JSON"
+const (
+	defaultEndpoint        = "https://ccp.netcup.net/run/webservice/servers/endpoint.php?JSON"
+	defaultSecretDirectory = "/run/caddy-ui-secrets"
+)
 
 func init() {
 	caddy.RegisterModule(Provider{})
@@ -30,6 +35,7 @@ type Provider struct {
 	APIKey         string `json:"api_key,omitempty"`
 	APIPassword    string `json:"api_password,omitempty"`
 	Endpoint       string `json:"endpoint,omitempty"`
+	SecretDirectory string `json:"secret_directory,omitempty"`
 
 	mu sync.Mutex
 }
@@ -43,12 +49,32 @@ func (Provider) CaddyModule() caddy.ModuleInfo {
 
 func (p *Provider) Provision(ctx caddy.Context) error {
 	replacer := caddy.NewReplacer()
+	apiKeyReference := p.APIKey
+	apiPasswordReference := p.APIPassword
 	p.CustomerNumber = replacer.ReplaceAll(p.CustomerNumber, "")
 	p.APIKey = replacer.ReplaceAll(p.APIKey, "")
 	p.APIPassword = replacer.ReplaceAll(p.APIPassword, "")
 	p.Endpoint = replacer.ReplaceAll(p.Endpoint, "")
+	p.SecretDirectory = replacer.ReplaceAll(p.SecretDirectory, "")
 	if p.Endpoint == "" {
 		p.Endpoint = defaultEndpoint
+	}
+	if p.SecretDirectory == "" {
+		p.SecretDirectory = defaultSecretDirectory
+	}
+
+	var err error
+	if p.APIKey == "" {
+		p.APIKey, err = readRuntimeSecret(apiKeyReference, p.SecretDirectory)
+		if err != nil {
+			return fmt.Errorf("load netcup api_key runtime secret: %w", err)
+		}
+	}
+	if p.APIPassword == "" {
+		p.APIPassword, err = readRuntimeSecret(apiPasswordReference, p.SecretDirectory)
+		if err != nil {
+			return fmt.Errorf("load netcup api_password runtime secret: %w", err)
+		}
 	}
 	return p.Validate()
 }
@@ -87,6 +113,8 @@ func (p *Provider) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			p.APIPassword = value
 		case "endpoint":
 			p.Endpoint = value
+		case "secret_directory":
+			p.SecretDirectory = value
 		default:
 			return d.Errf("unknown netcup DNS provider option %q", key)
 		}
@@ -95,6 +123,53 @@ func (p *Provider) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 		}
 	}
 	return nil
+}
+
+func readRuntimeSecret(reference string, directory string) (string, error) {
+	name, ok := environmentPlaceholderName(reference)
+	if !ok {
+		return "", nil
+	}
+	if directory == "" {
+		directory = defaultSecretDirectory
+	}
+	if !filepath.IsAbs(directory) {
+		return "", errors.New("secret directory must be absolute")
+	}
+	path := filepath.Join(directory, name)
+	cleanDirectory := filepath.Clean(directory) + string(os.PathSeparator)
+	if !strings.HasPrefix(filepath.Clean(path)+string(os.PathSeparator), cleanDirectory) {
+		return "", errors.New("runtime secret path escaped the configured directory")
+	}
+	value, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	secret := strings.TrimRight(string(value), "\r\n")
+	if secret == "" {
+		return "", errors.New("runtime secret file is empty")
+	}
+	return secret, nil
+}
+
+func environmentPlaceholderName(value string) (string, bool) {
+	const prefix = "{env."
+	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, "}") {
+		return "", false
+	}
+	name := value[len(prefix) : len(value)-1]
+	if name == "" {
+		return "", false
+	}
+	for index, character := range name {
+		if !((character >= 'A' && character <= 'Z') ||
+			(character >= 'a' && character <= 'z') ||
+			character == '_' ||
+			(index > 0 && character >= '0' && character <= '9')) {
+			return "", false
+		}
+	}
+	return name, true
 }
 
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
@@ -283,7 +358,7 @@ func (p *Provider) request(ctx context.Context, action string, param requestPara
 		return response{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "caddy-ui-netcup-dns/1.0")
+	req.Header.Set("User-Agent", "caddy-ui-netcup-dns/2.1")
 
 	httpResp, err := http.DefaultClient.Do(req)
 	if err != nil {
