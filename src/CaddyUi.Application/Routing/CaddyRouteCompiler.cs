@@ -186,6 +186,8 @@ public sealed class CaddyRouteCompiler
             }
         }
 
+        requiresWildcardRenderer |= !certificateReady;
+
         if (routes.Length == 0 && builder.ToString().EndsWith("managed-routes-v3\n\n", StringComparison.Ordinal))
         {
             builder.AppendLine("# No enabled managed routes or requested domain certificates.");
