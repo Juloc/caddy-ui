@@ -4,13 +4,18 @@
     ViewData["Title"] = "Domains";
 }
 
-<section class="page-heading">
+<section class="page-heading" data-certificate-auto-refresh="@(Model.HasActiveCertificateWork ? "true" : "false")">
     <div>
         <p class="eyebrow">DNS und Zertifikate</p>
         <h1>Domains</h1>
-        <p class="page-description">Wildcard und Basisdomain werden getrennt geplant. Status, Erneuerungsversuche, Wiederholungen und DNS-Propagation werden aus Caddy-Speicher, aktivem Stand und Caddy-Logs zusammengeführt.</p>
+        <p class="page-description">Versuche, einzelne ACME-Schritte, DNS-Wartezeiten und Wiederholungen werden aus aktivem Stand, Zertifikatsspeicher und Caddy-Logs zusammengeführt.</p>
+        <small class="certificate-time-zone">Zeitangaben: <strong data-local-time-zone>Browser-Zeitzone wird ermittelt</strong>. UTC bleibt als Tooltip erhalten.</small>
     </div>
     <div class="page-actions">
+        @if (Model.HasActiveCertificateWork)
+        {
+            <span class="status-badge status-badge--warning">Automatische Aktualisierung · 15 s</span>
+        }
         <a class="button button--quiet" asp-page="/Administration/Domains">Status aktualisieren</a>
         <a class="button button--primary" asp-page="/Setup/Index">Geführte Einrichtung</a>
     </div>
@@ -19,6 +24,10 @@
 @if (TempData["Message"] is string message)
 {
     <div class="notice notice--success">@message</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="notice notice--warning"><strong>Aktion fehlgeschlagen</strong><span>@error</span></div>
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
@@ -37,6 +46,7 @@
                 @foreach (var domain in Model.Domains)
                 {
                     Model.CertificateStatuses.TryGetValue(domain.Id, out var certificateStatus);
+                    Model.DnsChallengeTimings.TryGetValue(domain.Id, out var dnsTiming);
                     <tr>
                         <td data-label="Domain">
                             <strong>@domain.DisplayName</strong>
@@ -64,7 +74,11 @@
                                     @foreach (var certificate in certificateStatus.Certificates)
                                     {
                                         var lifecycle = certificate.Lifecycle;
-                                        <article class="certificate-status-item">
+                                        var timing = certificate.Kind == "wildcard" ? dnsTiming : null;
+                                        var attempts = DomainsModel.GroupAttempts(lifecycle);
+                                        var estimatedCheckAt = DomainsModel.EstimatedDnsCheckAt(lifecycle, timing);
+                                        var estimatedDeadlineAt = DomainsModel.EstimatedDnsDeadlineAt(lifecycle, timing);
+                                        <article class="certificate-status-item" id="certificate-@domain.Id-@certificate.Kind">
                                             <div class="certificate-status-heading">
                                                 <div>
                                                     <code>@certificate.Name</code>
@@ -73,34 +87,58 @@
                                                 <span class="status-badge @DomainsModel.StatusClass(certificate.State)">@certificate.Label</span>
                                             </div>
 
-                                            <details class="certificate-lifecycle">
+                                            <div class="certificate-current-operation">
+                                                <div class="certificate-current-operation-heading">
+                                                    <div>
+                                                        <span class="eyebrow">Aktueller Schritt</span>
+                                                        <strong>@DomainsModel.CurrentAction(lifecycle)</strong>
+                                                    </div>
+                                                    <span class="status-badge @DomainsModel.StatusClass(certificate.State)">@lifecycle.Label</span>
+                                                </div>
+                                                <p>@DomainsModel.CurrentActionDetail(lifecycle, timing)</p>
+
+                                                @if (certificate.Kind == "wildcard")
+                                                {
+                                                    <ol class="certificate-step-flow" aria-label="DNS-01-Ablauf">
+                                                        <li class="@DomainsModel.StepClass(1, lifecycle)"><span>1</span><div><strong>ACME starten</strong><small>Konto, Namen und DNS-Provider laden</small></div></li>
+                                                        <li class="@DomainsModel.StepClass(2, lifecycle)"><span>2</span><div><strong>TXT schreiben</strong><small><code>@lifecycle.DnsChallengeName</code></small></div></li>
+                                                        <li class="@DomainsModel.StepClass(3, lifecycle)"><span>3</span><div><strong>DNS prüfen</strong><small>Delay @DomainsModel.FormatDuration(timing?.PropagationDelaySeconds), Timeout @DomainsModel.FormatDuration(timing?.PropagationTimeoutSeconds ?? lifecycle.PropagationTimeoutSeconds)</small></div></li>
+                                                        <li class="@DomainsModel.StepClass(4, lifecycle)"><span>4</span><div><strong>Ausstellen und speichern</strong><small>ACME validiert und Caddy übernimmt das Zertifikat</small></div></li>
+                                                    </ol>
+                                                }
+                                            </div>
+
+                                            <details class="certificate-lifecycle" open="@(certificate.State is "renewal-failed" or "acquisition-failed" or "expired" or "retry-scheduled")">
                                                 <summary>
-                                                    <span>@lifecycle.Label</span>
-                                                    <span>Lifecycle anzeigen</span>
+                                                    <span>Diagnose und @attempts.Count Versuch(e)</span>
+                                                    <span>Details anzeigen</span>
                                                 </summary>
                                                 <div class="certificate-lifecycle-body">
                                                     <dl class="certificate-lifecycle-grid">
                                                         <div><dt>Aktiver Caddy-Stand</dt><dd>@(lifecycle.Applied ? "Ja" : "Nein")</dd></div>
-                                                        <div><dt>Erfasst</dt><dd>@DomainsModel.FormatUtc(lifecycle.ObservedAt)</dd></div>
-                                                        <div><dt>Gültig ab</dt><dd>@DomainsModel.FormatUtc(certificate.NotBefore)</dd></div>
-                                                        <div><dt>Gültig bis</dt><dd>@DomainsModel.FormatUtc(certificate.ExpiresAt)</dd></div>
-                                                        <div><dt>Erneuerungsfenster</dt><dd>@DomainsModel.FormatUtc(certificate.RenewalWindowStartsAt)</dd></div>
-                                                        <div><dt>Letzter Versuch</dt><dd>@DomainsModel.FormatUtc(lifecycle.LastAttemptAt)</dd></div>
-                                                        <div><dt>Letzter Erfolg</dt><dd>@DomainsModel.FormatUtc(lifecycle.LastSuccessAt)</dd></div>
-                                                        <div><dt>Nächster Versuch</dt><dd>@DomainsModel.FormatUtc(lifecycle.NextAttemptAt)</dd></div>
-                                                        <div><dt>Versuche im verfügbaren Log</dt><dd>@lifecycle.AttemptCount</dd></div>
+                                                        <div><dt>Erfasst</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(lifecycle.ObservedAt)">@DomainsModel.FormatUtc(lifecycle.ObservedAt)</time></dd></div>
+                                                        <div><dt>Gültig ab</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(certificate.NotBefore)">@DomainsModel.FormatUtc(certificate.NotBefore)</time></dd></div>
+                                                        <div><dt>Gültig bis</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(certificate.ExpiresAt)">@DomainsModel.FormatUtc(certificate.ExpiresAt)</time></dd></div>
+                                                        <div><dt>Erneuerungsfenster</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(certificate.RenewalWindowStartsAt)">@DomainsModel.FormatUtc(certificate.RenewalWindowStartsAt)</time></dd></div>
+                                                        <div><dt>Letzter Versuch</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(lifecycle.LastAttemptAt)">@DomainsModel.FormatUtc(lifecycle.LastAttemptAt)</time></dd></div>
+                                                        <div><dt>Letzter Erfolg</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(lifecycle.LastSuccessAt)">@DomainsModel.FormatUtc(lifecycle.LastSuccessAt)</time></dd></div>
+                                                        <div><dt>Nächster Versuch</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(lifecycle.NextAttemptAt)">@DomainsModel.FormatUtc(lifecycle.NextAttemptAt)</time></dd></div>
+                                                        <div><dt>Versuche im Log</dt><dd>@lifecycle.AttemptCount</dd></div>
                                                         <div><dt>Fehler in Folge</dt><dd>@lifecycle.ConsecutiveFailures</dd></div>
                                                         @if (!string.IsNullOrWhiteSpace(lifecycle.ProviderType))
                                                         {
                                                             <div><dt>DNS-Provider</dt><dd>@lifecycle.ProviderType</dd></div>
                                                             <div><dt>Provider-Test</dt><dd>@DomainsModel.ProviderTestLabel(lifecycle.ProviderTestStatus)</dd></div>
-                                                            <div><dt>Zuletzt getestet</dt><dd>@DomainsModel.FormatUtc(lifecycle.ProviderLastTestedAt)</dd></div>
+                                                            <div><dt>Zuletzt getestet</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(lifecycle.ProviderLastTestedAt)">@DomainsModel.FormatUtc(lifecycle.ProviderLastTestedAt)</time></dd></div>
                                                         }
                                                         @if (!string.IsNullOrWhiteSpace(lifecycle.DnsChallengeName))
                                                         {
                                                             <div><dt>DNS-01 TXT-Name</dt><dd><code>@lifecycle.DnsChallengeName</code></dd></div>
                                                             <div><dt>DNS-TTL</dt><dd>@DomainsModel.FormatDuration(lifecycle.DnsTtlSeconds)</dd></div>
-                                                            <div><dt>Propagation-Timeout</dt><dd>@DomainsModel.FormatDuration(lifecycle.PropagationTimeoutSeconds)</dd></div>
+                                                            <div><dt>Propagation-Delay</dt><dd>@DomainsModel.FormatDuration(timing?.PropagationDelaySeconds)</dd></div>
+                                                            <div><dt>Propagation-Timeout</dt><dd>@DomainsModel.FormatDuration(timing?.PropagationTimeoutSeconds ?? lifecycle.PropagationTimeoutSeconds)</dd></div>
+                                                            <div><dt>Erste DNS-Prüfung, geschätzt</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(estimatedCheckAt)">@DomainsModel.FormatUtc(estimatedCheckAt)</time></dd></div>
+                                                            <div><dt>DNS-Prüfende, geschätzt</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(estimatedDeadlineAt)">@DomainsModel.FormatUtc(estimatedDeadlineAt)</time></dd></div>
                                                         }
                                                     </dl>
 
@@ -112,31 +150,60 @@
                                                         </div>
                                                     }
 
-                                                    @if (lifecycle.RecentAttempts.Count > 0)
+                                                    @if (attempts.Count > 0)
                                                     {
                                                         <section class="certificate-attempts">
-                                                            <h3>Letzte Lifecycle-Ereignisse</h3>
-                                                            <ol>
-                                                                @foreach (var attempt in lifecycle.RecentAttempts)
+                                                            <h3>Versuche einzeln aufgeschlüsselt</h3>
+                                                            <div class="certificate-attempt-groups">
+                                                                @foreach (var attempt in attempts)
                                                                 {
-                                                                    <li>
-                                                                        <time datetime="@attempt.Timestamp.ToString("O")">@DomainsModel.FormatUtc(attempt.Timestamp)</time>
-                                                                        <div>
-                                                                            <strong>@attempt.Label@(attempt.Attempt is null ? string.Empty : $" · Versuch {attempt.Attempt}")</strong>
-                                                                            <small>@attempt.Detail</small>
-                                                                            @if (attempt.NextAttemptAt is not null)
+                                                                    <article class="certificate-attempt-group">
+                                                                        <header>
+                                                                            <div><strong>Versuch @attempt.Number</strong><small>@attempt.Label</small></div>
+                                                                            <span class="status-badge @DomainsModel.StatusClass(attempt.State)">@attempt.State</span>
+                                                                        </header>
+                                                                        <dl class="certificate-attempt-meta">
+                                                                            <div><dt>Beginn</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(attempt.StartedAt)">@DomainsModel.FormatUtc(attempt.StartedAt)</time></dd></div>
+                                                                            <div><dt>Ende</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(attempt.FinishedAt)">@DomainsModel.FormatUtc(attempt.FinishedAt)</time></dd></div>
+                                                                            <div><dt>Wiederholung</dt><dd><time data-local-time datetime="@DomainsModel.FormatIso(attempt.NextAttemptAt)">@DomainsModel.FormatUtc(attempt.NextAttemptAt)</time></dd></div>
+                                                                        </dl>
+                                                                        <ol>
+                                                                            @foreach (var item in attempt.Events)
                                                                             {
-                                                                                <small>Nächster Versuch: @DomainsModel.FormatUtc(attempt.NextAttemptAt)</small>
+                                                                                <li>
+                                                                                    <time data-local-time datetime="@DomainsModel.FormatIso(item.Timestamp)">@DomainsModel.FormatUtc(item.Timestamp)</time>
+                                                                                    <div>
+                                                                                        <strong>@item.Label</strong>
+                                                                                        <small>@item.Detail</small>
+                                                                                        @if (item.NextAttemptAt is not null)
+                                                                                        {
+                                                                                            <small>Nächster Versuch: <time data-local-time datetime="@DomainsModel.FormatIso(item.NextAttemptAt)">@DomainsModel.FormatUtc(item.NextAttemptAt)</time></small>
+                                                                                        }
+                                                                                    </div>
+                                                                                </li>
                                                                             }
-                                                                        </div>
-                                                                    </li>
+                                                                        </ol>
+                                                                    </article>
                                                                 }
-                                                            </ol>
+                                                            </div>
                                                         </section>
                                                     }
                                                     else
                                                     {
                                                         <p class="certificate-no-events">Keine passenden Zertifikatsereignisse in den verfügbaren Caddy-Logdateien erkannt.</p>
+                                                    }
+
+                                                    @if (certificate.Requested && lifecycle.Applied)
+                                                    {
+                                                        <form method="post" asp-page-handler="RetryCertificate" class="certificate-retry-form" data-confirm-certificate-retry>
+                                                            <input type="hidden" name="domainId" value="@domain.Id" />
+                                                            <input type="hidden" name="certificateName" value="@certificate.Name" />
+                                                            <div>
+                                                                <strong>Force-Retry</strong>
+                                                                <small>Validiert die aktive Konfiguration und führt <code>caddy reload --force</code> aus. Zertifikate, Volumes und Container werden nicht gelöscht.</small>
+                                                            </div>
+                                                            <button class="button button--compact button--quiet" type="submit" disabled="@(lifecycle.State == "in-progress")">@(lifecycle.State == "in-progress" ? "Versuch läuft" : "Jetzt erneut anstoßen")</button>
+                                                        </form>
                                                     }
 
                                                     @if (lifecycle.Tips.Count > 0)
@@ -239,14 +306,6 @@
     </div>
 </section>
 
-<script>
-(() => {
-    const form = document.querySelector('[data-domain-form]');
-    if (!form) return;
-    const choices = [...form.querySelectorAll('[data-certificate-choice]')];
-    const warning = form.querySelector('[data-certificate-warning]');
-    const update = () => warning.hidden = choices.some(choice => choice.checked);
-    choices.forEach(choice => choice.addEventListener('change', update));
-    update();
-})();
-</script>
+@section Scripts {
+    <script src="~/js/certificate-diagnostics.js" asp-append-version="true" defer></script>
+}
