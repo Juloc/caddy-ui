@@ -79,6 +79,22 @@
         });
     }
 
+    function attachConfirmationHandlers(root = document) {
+        root.querySelectorAll("form[data-confirm]").forEach(form => {
+            if (form.dataset.confirmAttached === "true") {
+                return;
+            }
+
+            form.dataset.confirmAttached = "true";
+            form.addEventListener("submit", event => {
+                const message = form.dataset.confirm;
+                if (message && !window.confirm(message)) {
+                    event.preventDefault();
+                }
+            });
+        });
+    }
+
     function openMobileNavigation() {
         if (!mobileBreakpoint.matches) {
             return;
@@ -107,6 +123,7 @@
     applyTheme(readPreference(themeStorageKey, "system"), false);
     applyCollapsedState(readPreference(sidebarStorageKey, "false") === "true", false);
     applyLocalTimes();
+    attachConfirmationHandlers();
 
     themeButtons.forEach(button => {
         button.addEventListener("click", () => applyTheme(button.dataset.themeOption, true));
