@@ -21,9 +21,9 @@
 {
     <div class="notice notice--danger" role="alert">@Model.ErrorMessage</div>
 }
-<div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
+<div asp-validation-summary="All" class="validation-summary" role="alert"></div>
 
-<form method="post" class="feature-route-editor" data-route-editor>
+<form method="post" asp-page="/Routing/Edit" asp-antiforgery="true" class="feature-route-editor" data-route-editor>
     <input asp-for="Input.Id" type="hidden" />
 
     <section class="workspace-section">
@@ -187,7 +187,11 @@
     const selector = editor.querySelector('[data-route-kind]');
     const update = () => {
         editor.querySelectorAll('[data-kind-panel]').forEach(panel => {
-            panel.hidden = panel.dataset.kindPanel !== selector.value;
+            const active = panel.dataset.kindPanel === selector.value;
+            panel.hidden = !active;
+            panel.querySelectorAll('input, select, textarea, button').forEach(control => {
+                control.disabled = !active;
+            });
         });
     };
     selector.addEventListener('change', update);

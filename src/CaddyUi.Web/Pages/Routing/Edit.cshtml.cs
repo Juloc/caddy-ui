@@ -15,15 +15,18 @@ public sealed class EditModel : LocalizedPageModel
     private readonly RouteManagementStore _store;
     private readonly CaddyApplyService _applyService;
     private readonly IStringLocalizer<SharedResource> _localizer;
+    private readonly ILogger<EditModel> _logger;
 
     public EditModel(
         RouteManagementStore store,
         CaddyApplyService applyService,
-        IStringLocalizer<SharedResource> localizer)
+        IStringLocalizer<SharedResource> localizer,
+        ILogger<EditModel> logger)
     {
         _store = store;
         _applyService = applyService;
         _localizer = localizer;
+        _logger = logger;
     }
 
     [BindProperty]
@@ -84,6 +87,8 @@ public sealed class EditModel : LocalizedPageModel
     private async Task<IActionResult> SaveAsync(bool applyAfterSave)
     {
         await LoadOptionsAsync();
+        RemoveInactiveFieldValidationErrors();
+        Input.NormalizeInactiveConfiguration();
         if (!ModelState.IsValid)
         {
             return Page();
@@ -166,9 +171,9 @@ public sealed class EditModel : LocalizedPageModel
                 result.Message];
             return RedirectToPage("/Routing/Index");
         }
-        catch (Exception exception) when (
-            exception is ArgumentException or InvalidOperationException or IOException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            _logger.LogError(exception, "Route save or activation failed for {RouteId}.", Input.Id);
             if (routeWasSaved && savedRouteId is not null)
             {
                 ErrorMessage = _localizer[
@@ -179,6 +184,46 @@ public sealed class EditModel : LocalizedPageModel
 
             ModelState.AddModelError(string.Empty, exception.Message);
             return Page();
+        }
+    }
+
+    private void RemoveInactiveFieldValidationErrors()
+    {
+        var activeKind = (Input.Kind ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.Equals(activeKind, "proxy", StringComparison.Ordinal))
+        {
+            RemoveModelState(
+                nameof(RouteInput.Upstream),
+                nameof(RouteInput.PreserveHost),
+                nameof(RouteInput.HealthPath),
+                nameof(RouteInput.HealthIntervalSeconds));
+        }
+
+        if (!string.Equals(activeKind, "redirect", StringComparison.Ordinal))
+        {
+            RemoveModelState(
+                nameof(RouteInput.RedirectTarget),
+                nameof(RouteInput.RedirectPermanent));
+        }
+
+        if (!string.Equals(activeKind, "static", StringComparison.Ordinal))
+        {
+            RemoveModelState(
+                nameof(RouteInput.StaticStatusCode),
+                nameof(RouteInput.StaticBody));
+        }
+
+        if (!string.Equals(activeKind, "custom", StringComparison.Ordinal))
+        {
+            RemoveModelState(nameof(RouteInput.CustomSnippet));
+        }
+    }
+
+    private void RemoveModelState(params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            ModelState.Remove($"{nameof(Input)}.{propertyName}");
         }
     }
 
@@ -244,6 +289,48 @@ public sealed class EditModel : LocalizedPageModel
 
         [MaxLength(64_000)]
         public string CustomSnippet { get; set; } = string.Empty;
+
+        public void NormalizeInactiveConfiguration()
+        {
+            switch ((Kind ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "proxy":
+                    RedirectTarget = string.Empty;
+                    RedirectPermanent = true;
+                    StaticStatusCode = 200;
+                    StaticBody = string.Empty;
+                    CustomSnippet = string.Empty;
+                    break;
+                case "redirect":
+                    Upstream = string.Empty;
+                    PreserveHost = false;
+                    HealthPath = string.Empty;
+                    HealthIntervalSeconds = 30;
+                    StaticStatusCode = 200;
+                    StaticBody = string.Empty;
+                    CustomSnippet = string.Empty;
+                    break;
+                case "static":
+                    Upstream = string.Empty;
+                    PreserveHost = false;
+                    HealthPath = string.Empty;
+                    HealthIntervalSeconds = 30;
+                    RedirectTarget = string.Empty;
+                    RedirectPermanent = true;
+                    CustomSnippet = string.Empty;
+                    break;
+                case "custom":
+                    Upstream = string.Empty;
+                    PreserveHost = false;
+                    HealthPath = string.Empty;
+                    HealthIntervalSeconds = 30;
+                    RedirectTarget = string.Empty;
+                    RedirectPermanent = true;
+                    StaticStatusCode = 200;
+                    StaticBody = string.Empty;
+                    break;
+            }
+        }
 
         public static RouteInput FromRecord(ManagedRouteRecord record)
         {
