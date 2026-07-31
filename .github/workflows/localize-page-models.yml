@@ -1,0 +1,53 @@
+name: Localize page-model messages
+
+on:
+  push:
+    branches:
+      - feature/multilingual-dns-browser-route-save
+    paths:
+      - scripts/localize_page_models.py
+      - .github/workflows/localize-page-models.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: localize-page-models
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feature/multilingual-dns-browser-route-save
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Localize page-model messages
+        run: python3 scripts/localize_page_models.py
+
+      - name: Restore, format, build, and test
+        run: |
+          dotnet restore CaddyUi.slnx
+          dotnet format CaddyUi.slnx --no-restore
+          dotnet build CaddyUi.slnx --configuration Release --no-restore
+          dotnet test CaddyUi.slnx --configuration Release --no-build --no-restore
+
+      - name: Remove temporary migration files
+        run: rm scripts/localize_page_models.py .github/workflows/localize-page-models.yml
+
+      - name: Commit localized page models
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat(localization): migrate page-model feedback"
+          git pull --rebase origin feature/multilingual-dns-browser-route-save
+          git push origin HEAD:feature/multilingual-dns-browser-route-save
