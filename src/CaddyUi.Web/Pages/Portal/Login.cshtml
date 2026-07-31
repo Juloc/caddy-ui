@@ -2,14 +2,15 @@
 @model CaddyUi.Web.Pages.Portal.LoginModel
 @{
     Layout = null;
+    var culture = global::System.Globalization.CultureInfo.CurrentUICulture.Name;
 }
 <!DOCTYPE html>
-<html lang="de">
+<html lang="@culture">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>@Model.GroupName · Geschützter Zugriff</title>
+    <title>@Model.GroupName · @T["Protected access"]</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/features.css" asp-append-version="true" />
 </head>
@@ -19,27 +20,27 @@
             <span class="brand-mark" aria-hidden="true">C</span>
             <div>
                 <strong>Caddy Access Portal</strong>
-                <span>Geschützte Anwendung</span>
+                <span>@T["Protected application"]</span>
             </div>
         </div>
         <div>
-            <p class="eyebrow">Zugriffsgruppe</p>
+            <p class="eyebrow">@T["Access group"]</p>
             <h1>@Model.GroupName</h1>
-            <p class="page-description">Diese Anwendung erfordert eine gültige Portal-Sitzung für die zugeordnete Gruppe.</p>
+            <p class="page-description">@T["This application requires a valid portal session for the assigned group."]</p>
         </div>
-        <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+        <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
         <form method="post" class="form-stack">
             <input type="hidden" asp-for="Group" />
             <input type="hidden" asp-for="ReturnTo" />
             <label>
-                <span>Benutzername</span>
+                <span>@T["Username"]</span>
                 <input asp-for="Input.Username" autocomplete="username" autofocus />
             </label>
             <label>
-                <span>Passwort</span>
+                <span>@T["Password"]</span>
                 <input asp-for="Input.Password" type="password" autocomplete="current-password" />
             </label>
-            <button class="button button--primary" type="submit">Anmelden</button>
+            <button class="button button--primary" type="submit">@T["Sign in"]</button>
         </form>
     </main>
 </body>
