@@ -41,12 +41,14 @@ RUN dotnet publish src/CaddyUi.Web/CaddyUi.Web.csproj \
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-alpine AS dotnet-companion
 WORKDIR /app
-ARG APP_VERSION=2.1.8
+ARG APP_VERSION=2.1.9
 
 ENV ASPNETCORE_URLS="http://0.0.0.0:8098;http://0.0.0.0:8099" \
     ASPNETCORE_HTTP_PORTS="" \
     DOTNET_EnableDiagnostics=0 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
+    XDG_DATA_HOME=/data \
+    XDG_CONFIG_HOME=/config \
     CADDY_UI_VERSION=${APP_VERSION}
 
 RUN apk add --no-cache curl icu-libs krb5-libs postgresql-client
