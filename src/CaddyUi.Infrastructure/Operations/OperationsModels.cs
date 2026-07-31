@@ -135,6 +135,18 @@ public sealed record DnsRecordMutation(
     public string Fqdn => Name is "" or "@" ? Domain : $"{Name}.{Domain}";
 }
 
+public sealed record ProviderDnsRecord(
+    string ExternalId,
+    string Name,
+    string RecordType,
+    string Value,
+    int? Ttl,
+    int? Priority,
+    bool Enabled)
+{
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? "@" : Name;
+}
+
 public sealed record ProviderOperationResult(bool Succeeded, string Message, string ExternalId = "")
 {
     public static ProviderOperationResult Success(string message, string externalId = "") => new(true, message, externalId);
