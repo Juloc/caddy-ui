@@ -87,6 +87,7 @@
 .safe-apply-note { display: grid; gap: 3px; margin-top: 12px; padding: 10px 12px; border-left: 3px solid var(--ui-success); background: var(--ui-success-soft); }
 .safe-apply-note span { color: var(--ui-text-muted); font-size: 12px; }
 
+.certificate-time-zone { display: block; margin-top: 5px; color: var(--ui-text-muted); }
 .certificate-status-list { display: grid; min-width: 430px; gap: 10px; }
 .certificate-status-item {
     display: grid;
@@ -101,6 +102,31 @@
 .certificate-status-heading > div { display: grid; min-width: 0; gap: 3px; }
 .certificate-status-heading code, .certificate-status-heading small { overflow-wrap: anywhere; }
 .certificate-status-heading small { max-width: 620px; color: var(--ui-text-muted); line-height: 1.45; }
+.certificate-current-operation {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-control);
+    background: var(--ui-surface);
+}
+.certificate-current-operation-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.certificate-current-operation-heading > div { display: grid; min-width: 0; gap: 2px; }
+.certificate-current-operation p { margin: 0; color: var(--ui-text-muted); font-size: 12px; line-height: 1.45; }
+.certificate-step-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 0; padding: 0; list-style: none; }
+.certificate-step-flow li { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr); gap: 7px; padding: 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-control); color: var(--ui-text-muted); }
+.certificate-step-flow li > span { display: grid; width: 20px; height: 20px; place-items: center; border: 1px solid var(--ui-border-strong); border-radius: 50%; font-size: 10px; font-weight: 700; }
+.certificate-step-flow li > div { display: grid; min-width: 0; gap: 2px; }
+.certificate-step-flow strong { color: var(--ui-text); font-size: 11px; }
+.certificate-step-flow small { overflow-wrap: anywhere; font-size: 10px; line-height: 1.35; }
+.certificate-step-flow code { white-space: normal; overflow-wrap: anywhere; }
+.certificate-step-flow .certificate-step--active { border-color: color-mix(in srgb, var(--ui-accent) 40%, var(--ui-border)); background: var(--ui-accent-soft); }
+.certificate-step-flow .certificate-step--active > span { border-color: var(--ui-accent); background: var(--ui-accent); color: var(--ui-on-accent); }
+.certificate-step-flow .certificate-step--done { border-color: color-mix(in srgb, var(--ui-success) 35%, var(--ui-border)); background: var(--ui-success-soft); }
+.certificate-step-flow .certificate-step--done > span { border-color: var(--ui-success); color: var(--ui-success); }
+.certificate-step-flow .certificate-step--failed { border-color: color-mix(in srgb, var(--ui-danger) 35%, var(--ui-border)); background: var(--ui-danger-soft); }
+.certificate-step-flow .certificate-step--failed > span { border-color: var(--ui-danger); color: var(--ui-danger); }
 .certificate-lifecycle { min-width: 0; border-top: 1px solid var(--ui-border); }
 .certificate-lifecycle > summary {
     display: flex;
@@ -130,11 +156,25 @@
 .certificate-lifecycle-error { min-width: 0; padding: 10px; border-left: 3px solid var(--ui-danger); background: var(--ui-danger-soft); color: var(--ui-danger); }
 .certificate-lifecycle-error p { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.45; white-space: pre-wrap; }
 .certificate-attempts h3, .certificate-tips h3 { margin: 0 0 7px; font-size: 12px; }
-.certificate-attempts ol { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.certificate-attempt-groups { display: grid; gap: 8px; }
+.certificate-attempt-group { min-width: 0; overflow: hidden; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-control); background: var(--ui-surface); }
+.certificate-attempt-group > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--ui-border); background: var(--ui-surface-subtle); }
+.certificate-attempt-group > header div { display: grid; gap: 2px; }
+.certificate-attempt-group > header small { color: var(--ui-text-muted); }
+.certificate-attempt-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--ui-border); }
+.certificate-attempt-meta > div { min-width: 0; padding: 7px 9px; background: var(--ui-surface); }
+.certificate-attempt-meta dt { color: var(--ui-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.certificate-attempt-meta dd { margin: 2px 0 0; overflow-wrap: anywhere; font-size: 11px; font-weight: 600; }
+.certificate-attempts ol { display: grid; gap: 0; margin: 0; padding: 0 10px; list-style: none; }
 .certificate-attempts li { display: grid; grid-template-columns: minmax(145px, auto) minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--ui-border); }
+.certificate-attempts li:first-child { border-top: 0; }
 .certificate-attempts time { color: var(--ui-text-muted); font-size: 11px; white-space: nowrap; }
 .certificate-attempts li > div { display: grid; min-width: 0; gap: 3px; }
 .certificate-attempts small { overflow-wrap: anywhere; color: var(--ui-text-muted); line-height: 1.4; white-space: pre-wrap; }
+.certificate-retry-form { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-control); background: var(--ui-surface); }
+.certificate-retry-form > div { display: grid; min-width: 0; gap: 3px; }
+.certificate-retry-form small { color: var(--ui-text-muted); font-size: 11px; line-height: 1.4; }
+.certificate-retry-form code { white-space: normal; overflow-wrap: anywhere; }
 .certificate-tips ul { display: grid; gap: 5px; margin: 0; padding-left: 18px; color: var(--ui-text-muted); font-size: 12px; line-height: 1.45; }
 .certificate-no-events { margin: 0; color: var(--ui-text-muted); font-size: 12px; }
 .certificate-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -151,6 +191,7 @@
 @media (max-width: 1100px) {
     .operations-grid, .operations-grid--sidebar { grid-template-columns: 1fr; }
     .setup-summary, .certificate-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .certificate-step-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 820px) {
@@ -183,12 +224,14 @@
 }
 
 @media (max-width: 720px) {
-    .form-grid--two, .setup-summary, .certificate-legend { grid-template-columns: 1fr; }
+    .form-grid--two, .setup-summary, .certificate-legend, .certificate-step-flow, .certificate-attempt-meta { grid-template-columns: 1fr; }
     .form-span { grid-column: auto; }
     .page-actions, .table-actions { justify-content: flex-start; }
-    .provider-field-heading, .certificate-status-heading { align-items: stretch; flex-direction: column; }
+    .provider-field-heading, .certificate-status-heading, .certificate-current-operation-heading { align-items: stretch; flex-direction: column; }
     .certificate-lifecycle-grid { grid-template-columns: 1fr; }
     .certificate-attempts li { grid-template-columns: 1fr; gap: 3px; }
+    .certificate-retry-form { align-items: stretch; flex-direction: column; }
+    .certificate-retry-form .button { width: 100%; }
 
     .provider-table-wrap { overflow: visible; padding: 0; }
     .provider-table, .provider-table tbody, .provider-table tr, .provider-table td { display: block; width: 100%; }
