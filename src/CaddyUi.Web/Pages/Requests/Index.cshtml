@@ -1,23 +1,23 @@
 @page
 @model CaddyUi.Web.Pages.Requests.IndexModel
 @{
-    ViewData["Title"] = "Requests";
+    ViewData["Title"] = T["Requests"];
 }
-<section class="page-heading"><div><p class="eyebrow">Rohereignisse</p><h1>Requests</h1><p class="page-description">Jeder vom Server verarbeitete HTTP-Request erscheint genau einmal. Empfindliche Query- und Headerwerte wurden bereits vor der Speicherung redigiert.</p></div><span class="status-badge status-badge--neutral">@Model.Requests.Count Einträge</span></section>
+<section class="page-heading"><div><p class="eyebrow">@T["Raw events"]</p><h1>@T["Requests"]</h1><p class="page-description">@T["Every HTTP request processed by the server appears exactly once. Sensitive query and header values were redacted before storage."]</p></div><span class="status-badge status-badge--neutral">@T["{0} entries", Model.Requests.Count]</span></section>
 @if (!string.IsNullOrWhiteSpace(Model.LoadError))
 {
-    <div class="notice notice--warning"><strong>Requests sind momentan nicht verfügbar</strong><span>@Model.LoadError</span><small>Prüfe PostgreSQL-Migrationen sowie den Analytics-Worker und die eingebundenen Caddy-Logs.</small></div>
+    <div class="notice notice--warning"><strong>@T["Requests are currently unavailable"]</strong><span>@Model.LoadError</span><small>@T["Check PostgreSQL migrations, the analytics worker, and the mounted Caddy logs."]</small></div>
 }
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="panel panel--wide">
     <div class="panel-body table-wrap">
         <table class="data-table request-table">
-            <thead><tr><th>Zeit</th><th>Host / Pfad</th><th>Methode</th><th>Status</th><th>Typ</th><th>Akteur</th><th>Laufzeit</th><th>Bytes</th><th>Client</th></tr></thead>
+            <thead><tr><th>@T["Time"]</th><th>@T["Host / path"]</th><th>@T["Method"]</th><th>@T["Status"]</th><th>@T["Type"]</th><th>@T["Actor"]</th><th>@T["Duration"]</th><th>@T["Bytes"]</th><th>@T["Client"]</th></tr></thead>
             <tbody>
             @foreach (var request in Model.Requests)
             {
                 <tr>
-                    <td>@request.OccurredAt.ToLocalTime().ToString("G")</td>
+                    <td><time datetime="@request.OccurredAt.ToString("O")" data-local-time>@request.OccurredAt.ToString("u")</time></td>
                     <td><strong>@request.Host</strong><small><code>@request.Path</code></small></td>
                     <td><code>@request.Method</code></td>
                     <td><span class="status-code status-code--@((request.Status / 100).ToString())xx">@request.Status</span></td>
@@ -29,6 +29,6 @@
             }
             </tbody>
         </table>
-        @if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)) { <p class="empty-state">Keine Requests für den Filter.</p> }
+        @if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)) { <p class="empty-state">@T["No requests match the filter."]</p> }
     </div>
 </section>
