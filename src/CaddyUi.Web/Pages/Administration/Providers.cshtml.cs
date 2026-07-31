@@ -46,7 +46,32 @@ public sealed class ProvidersModel : PageModel
 
     public bool HasCaddyDnsModule(string providerType) => _runtime.IsCaddyDnsModuleInstalled(providerType);
 
+    public static bool SupportsManagedDnsChallengeTiming(string providerType)
+    {
+        return string.Equals(providerType, "netcup", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string FieldName(string providerType, string fieldKey) => $"{providerType}.{fieldKey}";
+
+    public static string ProviderSetting(DnsProviderRecord provider, string key)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(provider.ConfigJson);
+            if (!document.RootElement.TryGetProperty(key, out var value))
+            {
+                return string.Empty;
+            }
+
+            return value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? string.Empty
+                : value.GetRawText();
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
 
     public async Task<IActionResult> OnPostCreateAsync()
     {
@@ -118,6 +143,29 @@ public sealed class ProvidersModel : PageModel
             await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostDnsChallengeTimingAsync(
+        Guid providerId,
+        string? propagationDelay,
+        string? propagationTimeout)
+    {
+        try
+        {
+            await _store.UpdateDnsChallengeTimingAsync(
+                providerId,
+                propagationDelay,
+                propagationTimeout,
+                HttpContext.RequestAborted);
+            await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
+            TempData["Message"] = "DNS-01-Zeiten wurden gespeichert. Prüfe anschließend die Caddy-Vorschau und wende sie an.";
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
         {
             TempData["Error"] = exception.Message;
         }
