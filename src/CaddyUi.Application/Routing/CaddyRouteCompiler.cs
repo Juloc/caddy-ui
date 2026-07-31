@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using CaddyUi.Application.Dns;
 using CaddyUi.Domain.Routing;
 
 namespace CaddyUi.Application.Routing;
@@ -336,6 +337,10 @@ public sealed class CaddyRouteCompiler
             var apiKey = EnvironmentPlaceholder(Required(provider.SecretReferences, "api_key"));
             var apiPassword = EnvironmentPlaceholder(Required(provider.SecretReferences, "api_password"));
             var endpoint = Optional(provider.Settings, "endpoint");
+            var propagationDelay = DnsChallengeTiming.NormalizeDelay(
+                Optional(provider.Settings, DnsChallengeTiming.PropagationDelayKey));
+            var propagationTimeout = DnsChallengeTiming.NormalizeTimeout(
+                Optional(provider.Settings, DnsChallengeTiming.PropagationTimeoutKey));
             return new CertificateState(
                 true,
                 true,
@@ -344,9 +349,11 @@ public sealed class CaddyRouteCompiler
                 apiKey,
                 apiPassword,
                 endpoint,
+                propagationDelay,
+                propagationTimeout,
                 string.Empty);
         }
-        catch (InvalidOperationException exception)
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
         {
             var error = $"Wildcard-Zertifikat für *.{domainName} ist nicht einsatzbereit: {exception.Message}";
             warnings.Add(error);
@@ -382,6 +389,16 @@ public sealed class CaddyRouteCompiler
         }
 
         builder.AppendLine("        }");
+        if (state.PropagationDelay.Length > 0)
+        {
+            builder.Append("        propagation_delay ").Append(state.PropagationDelay).AppendLine();
+        }
+
+        if (state.PropagationTimeout.Length > 0)
+        {
+            builder.Append("        propagation_timeout ").Append(state.PropagationTimeout).AppendLine();
+        }
+
         builder.AppendLine("    }");
         builder.AppendLine();
     }
@@ -623,13 +640,35 @@ public sealed class CaddyRouteCompiler
         string ApiKey,
         string ApiPassword,
         string Endpoint,
+        string PropagationDelay,
+        string PropagationTimeout,
         string Error)
     {
         public static CertificateState Individual { get; } =
-            new(false, true, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+            new(
+                false,
+                true,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty);
 
         public static CertificateState Blocked(string error, string providerType = "") =>
-            new(true, false, providerType, string.Empty, string.Empty, string.Empty, string.Empty, error);
+            new(
+                true,
+                false,
+                providerType,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                error);
     }
 
     private sealed class StringTupleComparer : IEqualityComparer<(string Host, string PathPrefix)>
