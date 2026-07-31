@@ -1,22 +1,22 @@
 @page
 @model CaddyUi.Web.Pages.Traffic.IndexModel
 @{
-    ViewData["Title"] = "Traffic";
+    ViewData["Title"] = T["Traffic"];
 }
-<section class="page-heading"><div><p class="eyebrow">Serverlast</p><h1>Traffic</h1><p class="page-description">Requests, Pageviews, Fehler, Datenmenge und Laufzeit werden pro Zeitintervall getrennt dargestellt.</p></div><span class="status-badge status-badge--neutral">@Model.Series.Count Intervalle</span></section>
+<section class="page-heading"><div><p class="eyebrow">@T["Server load"]</p><h1>@T["Traffic"]</h1><p class="page-description">@T["Requests, page views, errors, transferred data, and duration are shown separately for each time interval."]</p></div><span class="status-badge status-badge--neutral">@T["{0} intervals", Model.Series.Count]</span></section>
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="panel panel--wide">
-    <header class="panel-header"><div><p class="eyebrow">Zeitreihe</p><h2>Verdichtete Intervalle</h2></div></header>
+    <header class="panel-header"><div><p class="eyebrow">@T["Time series"]</p><h2>@T["Aggregated intervals"]</h2></div></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
-            <thead><tr><th>Intervall</th><th>Requests</th><th>Pageviews</th><th>Fehler</th><th>Traffic</th><th>Ø Laufzeit</th></tr></thead>
+            <thead><tr><th>@T["Interval"]</th><th>@T["Requests"]</th><th>@T["Page views"]</th><th>@T["Errors"]</th><th>@T["Traffic"]</th><th>@T["Average duration"]</th></tr></thead>
             <tbody>
             @foreach (var point in Model.Series)
             {
-                <tr><td>@point.BucketStart.ToLocalTime().ToString("g")</td><td>@point.Requests.ToString("N0")</td><td>@point.PageViews.ToString("N0")</td><td>@point.Errors.ToString("N0")</td><td>@AnalyticsPageModelBase.FormatBytes(point.BytesSent)</td><td>@AnalyticsPageModelBase.FormatDuration(point.AverageDurationMilliseconds)</td></tr>
+                <tr><td><time datetime="@point.BucketStart.ToString("O")" data-local-time>@point.BucketStart.ToString("u")</time></td><td>@point.Requests.ToString("N0")</td><td>@point.PageViews.ToString("N0")</td><td>@point.Errors.ToString("N0")</td><td>@AnalyticsPageModelBase.FormatBytes(point.BytesSent)</td><td>@AnalyticsPageModelBase.FormatDuration(point.AverageDurationMilliseconds)</td></tr>
             }
             </tbody>
         </table>
-        @if (Model.Series.Count == 0) { <p class="empty-state">Keine Daten für den Filter.</p> }
+        @if (Model.Series.Count == 0) { <p class="empty-state">@T["No data matches the filter."]</p> }
     </div>
 </section>
