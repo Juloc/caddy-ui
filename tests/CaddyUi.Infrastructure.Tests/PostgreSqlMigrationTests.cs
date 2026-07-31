@@ -1,4 +1,5 @@
 using CaddyUi.Infrastructure.Persistence;
+using CaddyUi.Infrastructure.Routing;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
@@ -47,6 +48,10 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         Assert.Contains("20260728240000_PhaseFourAnalyticsRuntime", appliedMigrations);
         Assert.Contains("20260728250000_PhaseFiveIpSecurity", appliedMigrations);
         Assert.Contains("20260728270000_PhaseSevenRouteManagement", appliedMigrations);
+
+        var routeStore = new RouteManagementStore(
+            new RuntimeDbContextFactory(_postgres.GetConnectionString()));
+        Assert.Empty(await routeStore.ListCredentialsAsync());
 
         var requiredTables = new[]
         {

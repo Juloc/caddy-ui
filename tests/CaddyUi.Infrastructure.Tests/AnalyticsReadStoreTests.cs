@@ -91,6 +91,14 @@ public sealed class AnalyticsReadStoreTests : IAsyncLifetime
                 DateTimeOffset.FromUnixTimeSeconds(1785261700),
                 host: "mealie.example.com"));
 
+        var requestsWithoutCursor = await readStore.GetRequestsAsync(
+            AnalyticsReadFilter.Create(
+                DateTimeOffset.FromUnixTimeSeconds(1785261500),
+                DateTimeOffset.FromUnixTimeSeconds(1785261700),
+                host: "mealie.example.com"));
+
+        Assert.Equal(3, requestsWithoutCursor.Count);
+
         Assert.Equal(3, dashboard.Requests);
         Assert.Equal(1, dashboard.PageViews);
         Assert.Equal(3, dashboard.RequestsPerPageView);

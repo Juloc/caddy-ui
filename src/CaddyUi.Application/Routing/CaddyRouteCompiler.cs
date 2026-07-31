@@ -134,6 +134,7 @@ public sealed class CaddyRouteCompiler
             }
 
             builder.Append(string.Join(", ", addresses)).AppendLine(" {");
+            AppendAccessLogConfiguration(builder);
             AppendCertificateConfiguration(builder, dnsState);
             foreach (var source in wildcardRoutes.Where(source =>
                          !deepWildcardRoutes.Any(deep => deep.Route.Id == source.Route.Id)))
@@ -160,6 +161,7 @@ public sealed class CaddyRouteCompiler
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             builder.Append(group.Key).AppendLine(" {");
+            AppendAccessLogConfiguration(builder);
             foreach (var source in group)
             {
                 AppendRoute(builder, source, warnings, includeHostMatcher: false);
@@ -369,6 +371,19 @@ public sealed class CaddyRouteCompiler
             domains.TryGetValue(source.Route.DomainId, out var registered)
                 ? registered.DomainCertificateMode
                 : source.DomainCertificateMode);
+    }
+
+    private static void AppendAccessLogConfiguration(StringBuilder builder)
+    {
+        builder.AppendLine("    log {");
+        builder.AppendLine("        output file /var/log/caddy/access.log {");
+        builder.AppendLine("            roll_size 100mb");
+        builder.AppendLine("            roll_keep 10");
+        builder.AppendLine("            roll_keep_for 720h");
+        builder.AppendLine("        }");
+        builder.AppendLine("        format json");
+        builder.AppendLine("    }");
+        builder.AppendLine();
     }
 
     private static void AppendCertificateConfiguration(StringBuilder builder, CertificateState state)

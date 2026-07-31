@@ -33,6 +33,7 @@ public sealed class CaddyRouteCompilerTests : IDisposable
         Assert.Equal(first.Content, second.Content);
         Assert.Equal(first.Digest, second.Digest);
         Assert.Contains("mealie.example.com {", first.Content, StringComparison.Ordinal);
+        Assert.Contains("output file /var/log/caddy/access.log", first.Content, StringComparison.Ordinal);
         Assert.Contains("forward_auth 127.0.0.1:8099", first.Content, StringComparison.Ordinal);
         Assert.Contains($"group={accessGroupId:D}", first.Content, StringComparison.Ordinal);
         Assert.Contains("reverse_proxy \"mealie:9925\"", first.Content, StringComparison.Ordinal);

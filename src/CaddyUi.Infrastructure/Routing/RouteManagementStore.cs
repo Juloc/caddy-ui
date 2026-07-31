@@ -283,7 +283,7 @@ public sealed class RouteManagementStore
             """
             SELECT id, group_id, username, enabled, created_at, updated_at
             FROM caddy_ui.access_credentials
-            WHERE (@group_id IS NULL OR group_id = @group_id)
+            WHERE (CAST(@group_id AS uuid) IS NULL OR group_id = @group_id)
             ORDER BY lower(username), id
             """;
         AddParameter(command, "group_id", groupId);
