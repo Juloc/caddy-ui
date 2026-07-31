@@ -72,7 +72,10 @@ public static class DependencyInjection
             serviceProvider.GetRequiredService<SecretReferenceResolver>());
         services.AddSingleton<IDnsProviderAdapter, NetcupDnsProviderAdapter>();
         services.AddSingleton<IDnsProviderAdapter, CommonRestDnsProviderAdapter>();
+        services.AddSingleton<IDnsProviderRecordReader, NetcupDnsProviderRecordReader>();
+        services.AddSingleton<IDnsProviderRecordReader, CommonRestDnsProviderRecordReader>();
         services.AddSingleton<DnsProviderRuntimeService>();
+        services.AddSingleton<DnsProviderRecordQueryService>();
         services.AddSingleton<NotificationDispatcher>();
         services.AddSingleton<PublicIpAddressResolver>();
         services.AddSingleton<DdnsService>();
