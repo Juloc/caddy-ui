@@ -162,14 +162,14 @@ jobs:
             grep -F "$marker" "$output"
           }
 
-          check_page / '<h1>Traffic und Nutzung</h1>'
-          check_page /About '<h1>Über Caddy UI</h1>'
+          check_page / '<h1>Traffic and usage</h1>'
+          check_page /About '<h1>About Caddy UI</h1>'
           check_page /Requests '<h1>Requests</h1>'
-          check_page /Access '<h1>Zugriffsgruppen</h1>'
-          check_page /LiveLog '<h1>Live-Log</h1>'
-          check_page /Operations/Cutover '<h1>Produktionsprüfung</h1>' 5
-          check_page /Administration/Providers '<h1>DNS-Provider</h1>'
-          check_page /Setup '<h1>DNS, Domain und Route einrichten</h1>'
+          check_page /Access '<h1>Access groups</h1>'
+          check_page /LiveLog '<h1>Live log</h1>'
+          check_page /Operations/Cutover '<h1>Production readiness</h1>' 5
+          check_page /Administration/Providers '<h1>DNS providers</h1>'
+          check_page /Setup '<h1>Set up DNS, domain, and route</h1>'
           grep -F 'data-theme-option="system"' /tmp/page--.html
           grep -F 'data-theme-option="light"' /tmp/page--.html
           grep -F 'data-theme-option="dark"' /tmp/page--.html

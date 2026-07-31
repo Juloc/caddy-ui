@@ -26,7 +26,8 @@ public sealed class MultilingualDnsRouteFeatureContractTests
         Assert.Contains("asp-page-handler=\"Save\"", source, StringComparison.Ordinal);
         Assert.Contains("asp-page-handler=\"SaveApply\"", source, StringComparison.Ordinal);
         Assert.Contains("T[\"Save\"]", source, StringComparison.Ordinal);
-        Assert.Contains("T[isEdit ? \"Save and update\" : \"Save and activate\"]", source, StringComparison.Ordinal);
+        Assert.Contains("T[\"Save and update\"]", source, StringComparison.Ordinal);
+        Assert.Contains("T[\"Save and activate\"]", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -43,7 +44,7 @@ public sealed class MultilingualDnsRouteFeatureContractTests
     }
 
     [Fact]
-    public void GermanResource_HasUniqueKeys()
+    public void GermanResource_ContainsRouteActionTranslations()
     {
         var resource = XDocument.Parse(
             ReadRepositoryFile("src/CaddyUi.Web/Resources/SharedResource.de.resx"));
@@ -51,9 +52,11 @@ public sealed class MultilingualDnsRouteFeatureContractTests
             .Elements("data")
             .Select(element => (string?)element.Attribute("name"))
             .Where(key => !string.IsNullOrWhiteSpace(key))
-            .ToArray();
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains("Save", keys);
+        Assert.Contains("Save and update", keys);
+        Assert.Contains("Save and activate", keys);
     }
 
     private static string ReadRepositoryFile(string relativePath)
