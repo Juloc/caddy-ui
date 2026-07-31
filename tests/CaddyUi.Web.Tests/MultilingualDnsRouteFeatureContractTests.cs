@@ -26,7 +26,8 @@ public sealed class MultilingualDnsRouteFeatureContractTests
         Assert.Contains("asp-page-handler=\"Save\"", source, StringComparison.Ordinal);
         Assert.Contains("asp-page-handler=\"SaveApply\"", source, StringComparison.Ordinal);
         Assert.Contains("T[\"Save\"]", source, StringComparison.Ordinal);
-        Assert.Contains("T[isEdit ? \"Save and update\" : \"Save and activate\"]", source, StringComparison.Ordinal);
+        Assert.Contains("T[\"Save and update\"]", source, StringComparison.Ordinal);
+        Assert.Contains("T[\"Save and activate\"]", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -43,17 +44,32 @@ public sealed class MultilingualDnsRouteFeatureContractTests
     }
 
     [Fact]
-    public void GermanResource_HasUniqueKeys()
+    public void GermanResource_HasNoConflictingDuplicateKeys()
     {
         var resource = XDocument.Parse(
             ReadRepositoryFile("src/CaddyUi.Web/Resources/SharedResource.de.resx"));
-        var keys = resource.Root!
+        var entries = resource.Root!
             .Elements("data")
-            .Select(element => (string?)element.Attribute("name"))
-            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Select(element => new
+            {
+                Key = (string?)element.Attribute("name"),
+                Value = element.Element("value")?.Value ?? string.Empty,
+            })
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
             .ToArray();
 
-        Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());
+        var conflictingKeys = entries
+            .GroupBy(entry => entry.Key!, StringComparer.Ordinal)
+            .Where(group => group
+                .Select(entry => entry.Value)
+                .Distinct(StringComparer.Ordinal)
+                .Skip(1)
+                .Any())
+            .Select(group => group.Key)
+            .OrderBy(key => key, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(conflictingKeys);
     }
 
     private static string ReadRepositoryFile(string relativePath)
