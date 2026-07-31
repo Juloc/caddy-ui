@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Administration;
 
 [Authorize(Policy = "Administrator")]
-public sealed class SecurityModel : PageModel
+public sealed class SecurityModel : LocalizedPageModel
 {
     private readonly AuthenticationStore _store;
     private readonly TotpService _totp;

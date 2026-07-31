@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Portal;
 
 [AllowAnonymous]
-public sealed class LoginModel : PageModel
+public sealed class LoginModel : LocalizedPageModel
 {
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
     private readonly AuthenticationStore _store;
@@ -72,7 +72,7 @@ public sealed class LoginModel : PageModel
             HttpContext.RequestAborted);
         if (!protection.Allowed)
         {
-            ModelState.AddModelError(string.Empty, "Die Anmeldung ist vorübergehend gesperrt.");
+            ModelState.AddModelError(string.Empty, Text("Login is temporarily blocked."));
             return Page();
         }
 

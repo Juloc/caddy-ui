@@ -9,7 +9,7 @@ using Microsoft.Extensions.Localization;
 namespace CaddyUi.Web.Pages.Operations;
 
 [Authorize(Policy = "Administrator")]
-public sealed class DnsModel : PageModel
+public sealed class DnsModel : LocalizedPageModel
 {
     private readonly OperationsStore _store;
     private readonly DomainProviderStore _management;

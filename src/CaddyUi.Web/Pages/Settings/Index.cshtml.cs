@@ -10,7 +10,7 @@ using Microsoft.Extensions.Localization;
 namespace CaddyUi.Web.Pages.Settings;
 
 [Authorize(Policy = "Viewer")]
-public sealed class IndexModel : PageModel
+public sealed class IndexModel : LocalizedPageModel
 {
     private readonly UserPreferenceStore _preferences;
     private readonly UiCultureCatalog _cultures;

@@ -15,7 +15,7 @@ using Microsoft.Extensions.Localization;
 namespace CaddyUi.Web.Pages;
 
 [AllowAnonymous]
-public sealed class LoginModel : PageModel
+public sealed class LoginModel : LocalizedPageModel
 {
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
     private readonly AuthenticationStore _store;

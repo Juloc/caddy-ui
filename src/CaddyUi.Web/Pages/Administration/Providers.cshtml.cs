@@ -11,7 +11,7 @@ using Microsoft.Extensions.Localization;
 namespace CaddyUi.Web.Pages.Administration;
 
 [Authorize(Policy = "Administrator")]
-public sealed class ProvidersModel : PageModel
+public sealed class ProvidersModel : LocalizedPageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly DomainProviderStore _store;

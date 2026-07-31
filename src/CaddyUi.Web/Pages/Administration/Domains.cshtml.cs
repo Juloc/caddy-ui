@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Administration;
 
 [Authorize(Policy = "Administrator")]
-public sealed class DomainsModel : PageModel
+public sealed class DomainsModel : LocalizedPageModel
 {
     private readonly DomainProviderStore _store;
     private readonly CertificateStatusService _certificateStatusService;
@@ -97,7 +97,7 @@ public sealed class DomainsModel : PageModel
             var statuses = await _certificateStatusService.GetDomainStatusesAsync(HttpContext.RequestAborted);
             if (!statuses.TryGetValue(domainId, out var domainStatus))
             {
-                throw new InvalidOperationException("Die ausgewählte Domain existiert nicht mehr.");
+                throw new InvalidOperationException(Text("The selected domain no longer exists."));
             }
 
             var certificate = domainStatus.Certificates.FirstOrDefault(item =>

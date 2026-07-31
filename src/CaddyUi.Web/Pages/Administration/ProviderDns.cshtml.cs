@@ -8,7 +8,7 @@ using Microsoft.Extensions.Localization;
 namespace CaddyUi.Web.Pages.Administration;
 
 [Authorize(Policy = "Administrator")]
-public sealed class ProviderDnsModel : PageModel
+public sealed class ProviderDnsModel : LocalizedPageModel
 {
     private readonly DomainProviderStore _store;
     private readonly DnsProviderRecordQueryService _records;

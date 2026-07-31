@@ -8,7 +8,7 @@ using Microsoft.Extensions.Localization;
 namespace CaddyUi.Web.Pages.Routing;
 
 [Authorize(Policy = "Editor")]
-public sealed class IndexModel : PageModel
+public sealed class IndexModel : LocalizedPageModel
 {
     private readonly RouteManagementStore _store;
     private readonly CaddyApplyService _applyService;

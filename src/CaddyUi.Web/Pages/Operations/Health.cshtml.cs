@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Operations;
 
 [Authorize(Policy = "Administrator")]
-public sealed class HealthModel : PageModel
+public sealed class HealthModel : LocalizedPageModel
 {
     private readonly OperationsStore _store;
     private readonly HealthProbeService _health;

@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Security;
 
 [Authorize(Policy = "Viewer")]
-public sealed class ClientModel : PageModel
+public sealed class ClientModel : LocalizedPageModel
 {
     private readonly ClientSecurityQueryStore _store;
     private readonly IpBlockService _blockService;

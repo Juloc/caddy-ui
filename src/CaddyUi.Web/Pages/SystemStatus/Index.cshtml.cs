@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.SystemStatus;
 
 [Authorize(Policy = "Viewer")]
-public sealed class IndexModel : PageModel
+public sealed class IndexModel : LocalizedPageModel
 {
     private readonly AnalyticsReadStore _store;
 
