@@ -47,6 +47,8 @@ ENV ASPNETCORE_URLS="http://0.0.0.0:8098;http://0.0.0.0:8099" \
     ASPNETCORE_HTTP_PORTS="" \
     DOTNET_EnableDiagnostics=0 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
+    XDG_DATA_HOME=/data \
+    XDG_CONFIG_HOME=/config \
     CADDY_UI_VERSION=${APP_VERSION}
 
 RUN apk add --no-cache curl icu-libs krb5-libs postgresql-client
