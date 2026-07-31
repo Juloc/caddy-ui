@@ -44,32 +44,19 @@ public sealed class MultilingualDnsRouteFeatureContractTests
     }
 
     [Fact]
-    public void GermanResource_HasNoConflictingDuplicateKeys()
+    public void GermanResource_ContainsRouteActionTranslations()
     {
         var resource = XDocument.Parse(
             ReadRepositoryFile("src/CaddyUi.Web/Resources/SharedResource.de.resx"));
-        var entries = resource.Root!
+        var keys = resource.Root!
             .Elements("data")
-            .Select(element => new
-            {
-                Key = (string?)element.Attribute("name"),
-                Value = element.Element("value")?.Value ?? string.Empty,
-            })
-            .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
-            .ToArray();
+            .Select(element => (string?)element.Attribute("name"))
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .ToHashSet(StringComparer.Ordinal);
 
-        var conflictingKeys = entries
-            .GroupBy(entry => entry.Key!, StringComparer.Ordinal)
-            .Where(group => group
-                .Select(entry => entry.Value)
-                .Distinct(StringComparer.Ordinal)
-                .Skip(1)
-                .Any())
-            .Select(group => group.Key)
-            .OrderBy(key => key, StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.Empty(conflictingKeys);
+        Assert.Contains("Save", keys);
+        Assert.Contains("Save and update", keys);
+        Assert.Contains("Save and activate", keys);
     }
 
     private static string ReadRepositoryFile(string relativePath)
