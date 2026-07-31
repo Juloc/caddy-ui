@@ -6,6 +6,7 @@ using CaddyUi.Infrastructure.Operations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace CaddyUi.Web.Pages.Administration;
 
@@ -15,19 +16,25 @@ public sealed class ProvidersModel : PageModel
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly DomainProviderStore _store;
     private readonly DnsProviderRuntimeService _runtime;
+    private readonly DnsProviderRecordQueryService _recordQuery;
     private readonly ISecretReferenceProtector _secretProtector;
     private readonly CaddyCertificateSourceRefreshWorker _certificateSources;
+    private readonly IStringLocalizer<SharedResource> _localizer;
 
     public ProvidersModel(
         DomainProviderStore store,
         DnsProviderRuntimeService runtime,
+        DnsProviderRecordQueryService recordQuery,
         ISecretReferenceProtector secretProtector,
-        CaddyCertificateSourceRefreshWorker certificateSources)
+        CaddyCertificateSourceRefreshWorker certificateSources,
+        IStringLocalizer<SharedResource> localizer)
     {
         _store = store;
         _runtime = runtime;
+        _recordQuery = recordQuery;
         _secretProtector = secretProtector;
         _certificateSources = certificateSources;
+        _localizer = localizer;
     }
 
     public IReadOnlyList<DnsProviderRecord> Providers { get; private set; } = Array.Empty<DnsProviderRecord>();
@@ -43,6 +50,8 @@ public sealed class ProvidersModel : PageModel
     }
 
     public bool SupportsDirectApi(string providerType) => _runtime.IsRuntimeSupported(providerType);
+
+    public bool CanListRecords(string providerType) => _recordQuery.CanList(providerType);
 
     public bool HasCaddyDnsModule(string providerType) => _runtime.IsCaddyDnsModuleInstalled(providerType);
 
@@ -84,7 +93,7 @@ public sealed class ProvidersModel : PageModel
         try
         {
             var definition = DnsProviderCatalog.Find(Input.ProviderType) ??
-                throw new ArgumentException("Der ausgewählte DNS-Provider wird nicht unterstützt.");
+                throw new ArgumentException(_localizer["The selected DNS provider is not supported."]);
             var settings = ValuesForProvider(Input.Settings, definition.Type);
             var secrets = ValuesForProvider(Input.Secrets, definition.Type);
 
@@ -93,7 +102,7 @@ public sealed class ProvidersModel : PageModel
                 var value = settings.GetValueOrDefault(field.Key, field.DefaultValue ?? string.Empty).Trim();
                 if (field.Required && value.Length == 0)
                 {
-                    throw new ArgumentException($"Das Feld '{field.Label}' ist erforderlich.");
+                    throw new ArgumentException(_localizer["The field '{0}' is required.", field.Label]);
                 }
 
                 if (value.Length > 0)
@@ -107,7 +116,7 @@ public sealed class ProvidersModel : PageModel
                 var value = secrets.GetValueOrDefault(field.Key, string.Empty).Trim();
                 if (field.Required && value.Length == 0)
                 {
-                    throw new ArgumentException($"Das Feld '{field.Label}' ist erforderlich.");
+                    throw new ArgumentException(_localizer["The field '{0}' is required.", field.Label]);
                 }
 
                 if (value.Length > 0)
@@ -123,7 +132,8 @@ public sealed class ProvidersModel : PageModel
                 JsonSerializer.Serialize(secrets, JsonOptions),
                 HttpContext.RequestAborted);
             await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
-            TempData["Message"] = "DNS-Provider wurde verschlüsselt gespeichert. Ordne jetzt eine Domain zu und führe einen Verbindungstest aus.";
+            TempData["Message"] = _localizer[
+                "DNS provider saved with encrypted credentials. Assign a domain and run a connection test."];
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
@@ -141,6 +151,9 @@ public sealed class ProvidersModel : PageModel
         {
             await _store.SetProviderEnabledAsync(providerId, enabled, HttpContext.RequestAborted);
             await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
+            TempData["Message"] = enabled
+                ? _localizer["DNS provider enabled."]
+                : _localizer["DNS provider disabled."];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -163,7 +176,8 @@ public sealed class ProvidersModel : PageModel
                 propagationTimeout,
                 HttpContext.RequestAborted);
             await _certificateSources.RefreshAsync(HttpContext.RequestAborted);
-            TempData["Message"] = "DNS-01-Zeiten wurden gespeichert. Prüfe anschließend die Caddy-Vorschau und wende sie an.";
+            TempData["Message"] = _localizer[
+                "DNS-01 timing saved. Review the Caddy preview and apply it."];
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException)
         {
@@ -179,10 +193,10 @@ public sealed class ProvidersModel : PageModel
         {
             var domain = (await _store.ListDomainsAsync(HttpContext.RequestAborted))
                 .FirstOrDefault(item => item.Id == domainId) ??
-                throw new InvalidOperationException("Die ausgewählte Domain existiert nicht mehr.");
+                throw new InvalidOperationException(_localizer["The selected domain no longer exists."]);
             if (domain.DnsProviderId != providerId)
             {
-                throw new InvalidOperationException("Die Domain ist diesem Provider nicht zugeordnet.");
+                throw new InvalidOperationException(_localizer["The domain is not assigned to this provider."]);
             }
 
             var result = await _runtime.TestProviderAsync(providerId, domain.Name, HttpContext.RequestAborted);
@@ -208,7 +222,7 @@ public sealed class ProvidersModel : PageModel
         {
             Providers = Array.Empty<DnsProviderRecord>();
             Domains = Array.Empty<ManagedDomainRecord>();
-            LoadError = $"DNS-Provider konnten nicht geladen werden: {exception.Message}";
+            LoadError = _localizer["DNS providers could not be loaded: {0}", exception.Message];
         }
     }
 
