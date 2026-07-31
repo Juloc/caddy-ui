@@ -246,6 +246,7 @@ public sealed class EditModel : LocalizedPageModel
         [Required]
         public Guid DomainId { get; set; }
 
+        [DisplayFormat(ConvertEmptyStringToNull = false)]
         [MaxLength(190)]
         public string Subdomain { get; set; } = string.Empty;
 
@@ -265,17 +266,20 @@ public sealed class EditModel : LocalizedPageModel
         [MaxLength(1024)]
         public string PathPrefix { get; set; } = "/";
 
+        [DisplayFormat(ConvertEmptyStringToNull = false)]
         [MaxLength(2048)]
         public string Upstream { get; set; } = string.Empty;
 
         public bool PreserveHost { get; set; }
 
+        [DisplayFormat(ConvertEmptyStringToNull = false)]
         [MaxLength(1024)]
         public string HealthPath { get; set; } = string.Empty;
 
         [Range(5, 3600)]
         public int HealthIntervalSeconds { get; set; } = 30;
 
+        [DisplayFormat(ConvertEmptyStringToNull = false)]
         [MaxLength(4096)]
         public string RedirectTarget { get; set; } = string.Empty;
 
@@ -284,9 +288,11 @@ public sealed class EditModel : LocalizedPageModel
         [Range(100, 599)]
         public int StaticStatusCode { get; set; } = 200;
 
+        [DisplayFormat(ConvertEmptyStringToNull = false)]
         [MaxLength(64_000)]
         public string StaticBody { get; set; } = string.Empty;
 
+        [DisplayFormat(ConvertEmptyStringToNull = false)]
         [MaxLength(64_000)]
         public string CustomSnippet { get; set; } = string.Empty;
 
