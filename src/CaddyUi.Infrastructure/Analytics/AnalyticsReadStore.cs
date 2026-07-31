@@ -502,7 +502,7 @@ public sealed class AnalyticsReadStore
                    COALESCE(requests.anonymous_client_id::text, '')
             FROM caddy_ui.request_events AS requests
             WHERE {RequestFilterSql("requests")}
-              AND (@after IS NULL OR requests.occurred_at > @after)
+              AND (CAST(@after AS timestamp with time zone) IS NULL OR requests.occurred_at > @after)
             ORDER BY requests.occurred_at DESC
             LIMIT @limit
             """;
