@@ -3,12 +3,14 @@ using System.Security.Claims;
 using System.Text;
 using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Security;
+using CaddyUi.Web.Localization;
 using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace CaddyUi.Web.Pages;
 
@@ -17,29 +19,38 @@ public sealed class LoginModel : PageModel
 {
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
     private readonly AuthenticationStore _store;
+    private readonly UserPreferenceStore _preferences;
     private readonly LoginProtectionService _protection;
     private readonly PasswordHashService _passwords;
     private readonly TotpService _totp;
     private readonly IDataProtector _totpProtector;
     private readonly RequestSurfaceResolver _surfaceResolver;
     private readonly SecurityRuntimeOptions _securityOptions;
+    private readonly UiCultureCatalog _cultures;
+    private readonly IStringLocalizer<SharedResource> _localizer;
 
     public LoginModel(
         AuthenticationStore store,
+        UserPreferenceStore preferences,
         LoginProtectionService protection,
         PasswordHashService passwords,
         TotpService totp,
         IDataProtectionProvider dataProtectionProvider,
         RequestSurfaceResolver surfaceResolver,
-        SecurityRuntimeOptions securityOptions)
+        SecurityRuntimeOptions securityOptions,
+        UiCultureCatalog cultures,
+        IStringLocalizer<SharedResource> localizer)
     {
         _store = store;
+        _preferences = preferences;
         _protection = protection;
         _passwords = passwords;
         _totp = totp;
         _totpProtector = dataProtectionProvider.CreateProtector("CaddyUi.UserTotp.v1");
         _surfaceResolver = surfaceResolver;
         _securityOptions = securityOptions;
+        _cultures = cultures;
+        _localizer = localizer;
     }
 
     [BindProperty]
@@ -85,7 +96,7 @@ public sealed class LoginModel : PageModel
         {
             Response.Headers.RetryAfter = Math.Ceiling(protection.RetryAfter.TotalSeconds).ToString(
                 System.Globalization.CultureInfo.InvariantCulture);
-            ModelState.AddModelError(string.Empty, "Die Anmeldung ist vorübergehend gesperrt.");
+            ModelState.AddModelError(string.Empty, _localizer["Login is temporarily blocked."]);
             return Page();
         }
 
@@ -124,6 +135,13 @@ public sealed class LoginModel : PageModel
             remoteAddress,
             Request.Headers.UserAgent.ToString(),
             HttpContext.RequestAborted);
+        var language = _cultures.Normalize(
+            await _preferences.GetLanguageAsync(user.Id, HttpContext.RequestAborted));
+        Response.Cookies.Append(
+            UiCultureCatalog.LanguageCookieName,
+            language,
+            UserCultureMiddleware.CreateCookieOptions(HttpContext));
+
         var scheme = surface == RequestSurface.PublicAdmin
             ? AuthenticationSchemes.PublicAdmin
             : AuthenticationSchemes.LanAdmin;
@@ -133,6 +151,7 @@ public sealed class LoginModel : PageModel
             new Claim(ClaimTypes.Name, user.Username),
             new Claim("display_name", user.DisplayName),
             new Claim(ClaimTypes.Role, user.Role),
+            new Claim(UiCultureCatalog.LanguageClaimType, language),
             new Claim(AdminCookieEvents.SessionTokenClaim, token),
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, scheme));
@@ -192,7 +211,9 @@ public sealed class LoginModel : PageModel
             remoteAddress,
             reason,
             HttpContext.RequestAborted);
-        ModelState.AddModelError(string.Empty, "Benutzername, Passwort oder Sicherheitscode ist ungültig.");
+        ModelState.AddModelError(
+            string.Empty,
+            _localizer["Username, password, or security code is invalid."]);
     }
 
     private string SafeReturnUrl(string? value)
