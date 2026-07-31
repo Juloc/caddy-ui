@@ -36,6 +36,8 @@ jobs:
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           grep -F "FoundationVersion = \"$version\"" src/CaddyUi.Domain/ProductMetadata.cs
           grep -F "ARG APP_VERSION=$version" Dockerfile.dotnet
+          grep -F "XDG_DATA_HOME=/data" Dockerfile.dotnet
+          grep -F "XDG_CONFIG_HOME=/config" Dockerfile.dotnet
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v4
         with:
@@ -65,4 +67,4 @@ jobs:
           image="ghcr.io/juloc/caddy-ui:${VERSION}"
           docker pull "$image"
           docker run --rm "$image" caddy list-modules | grep -F 'http.handlers.caddy_ui_guard'
-          docker run --rm "$image" sh -c 'test "$CADDY_UI_VERSION" = "'"$VERSION"'" && test -f /app/CaddyUi.Web.dll && test -x /usr/local/bin/prepare-production-config'
+          docker run --rm "$image" sh -c 'test "$CADDY_UI_VERSION" = "'"$VERSION"'" && test "$XDG_DATA_HOME" = /data && test "$XDG_CONFIG_HOME" = /config && test -f /app/CaddyUi.Web.dll && test -x /usr/local/bin/prepare-production-config'
