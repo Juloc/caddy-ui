@@ -1,7 +1,7 @@
 @page
 @model IndexModel
 @{
-    ViewData["Title"] = "Übersicht";
+    ViewData["Title"] = T["Overview"];
     var series = Model.Dashboard.Series;
     var maximum = Math.Max(1L, series.Count == 0 ? 1 : series.Max(point => point.Requests));
     var barWidth = series.Count == 0 ? 1 : Math.Max(1, 700 / series.Count);
@@ -9,42 +9,42 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Übersicht</p>
-        <h1>Traffic und Nutzung</h1>
+        <p class="eyebrow">@T["Overview"]</p>
+        <h1>@T["Traffic and usage"]</h1>
         <p class="page-description">
-            Pageviews beschreiben erfolgreiche Dokumentnavigationen. Requests zeigen die tatsächliche Serverlast einschließlich JavaScript, CSS, Bildern, APIs, Bots und Fehlern.
+            @T["Page views describe successful document navigations. Requests show actual server load including JavaScript, CSS, images, APIs, bots, and errors."]
         </p>
     </div>
 </section>
 
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 
-<section class="metric-grid metric-grid--dense" aria-label="Analytics-Kennzahlen">
-    <article class="metric-card"><span class="metric-label">Pageviews</span><strong class="metric-value">@Model.Dashboard.PageViews.ToString("N0")</strong><span class="metric-detail">erfolgreiche Dokumente</span></article>
-    <article class="metric-card"><span class="metric-label">Fehlgeschlagene Navigationen</span><strong class="metric-value">@Model.Dashboard.FailedNavigations.ToString("N0")</strong><span class="metric-detail">4xx/5xx Dokumentaufrufe</span></article>
-    <article class="metric-card"><span class="metric-label">Sessions</span><strong class="metric-value">@Model.Dashboard.Sessions.ToString("N0")</strong><span class="metric-detail">30 Minuten Inaktivität</span></article>
-    <article class="metric-card"><span class="metric-label">Geschätzte Clients</span><strong class="metric-value">@Model.Dashboard.Clients.ToString("N0")</strong><span class="metric-detail">keine sichere Personenzahl</span></article>
-    <article class="metric-card"><span class="metric-label">Requests gesamt</span><strong class="metric-value">@Model.Dashboard.Requests.ToString("N0")</strong><span class="metric-detail">technische Serverlast</span></article>
-    <article class="metric-card"><span class="metric-label">Requests / Pageview</span><strong class="metric-value">@Model.Dashboard.RequestsPerPageView.ToString("N1")</strong><span class="metric-detail">inklusive Assets und APIs</span></article>
-    <article class="metric-card"><span class="metric-label">Traffic</span><strong class="metric-value">@AnalyticsPageModelBase.FormatBytes(Model.Dashboard.BytesSent)</strong><span class="metric-detail">gesendete Antwortdaten</span></article>
-    <article class="metric-card"><span class="metric-label">Fehlerquote</span><strong class="metric-value">@Model.Dashboard.ErrorRatePercent.ToString("N2") %</strong><span class="metric-detail">HTTP-Status ab 400</span></article>
-    <article class="metric-card"><span class="metric-label">p95-Latenz</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Dashboard.P95DurationMilliseconds)</strong><span class="metric-detail">95 Prozent schneller</span></article>
-    <article class="metric-card"><span class="metric-label">Bot-Anteil</span><strong class="metric-value">@Model.Dashboard.BotSharePercent.ToString("N1") %</strong><span class="metric-detail">Requestanteil, nicht Besucher</span></article>
+<section class="metric-grid metric-grid--dense" aria-label="@T["Analytics metrics"]">
+    <article class="metric-card"><span class="metric-label">@T["Page views"]</span><strong class="metric-value">@Model.Dashboard.PageViews.ToString("N0")</strong><span class="metric-detail">@T["successful documents"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Failed navigations"]</span><strong class="metric-value">@Model.Dashboard.FailedNavigations.ToString("N0")</strong><span class="metric-detail">@T["4xx/5xx document requests"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Sessions"]</span><strong class="metric-value">@Model.Dashboard.Sessions.ToString("N0")</strong><span class="metric-detail">@T["30 minutes of inactivity"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Estimated clients"]</span><strong class="metric-value">@Model.Dashboard.Clients.ToString("N0")</strong><span class="metric-detail">@T["not a confirmed person count"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Total requests"]</span><strong class="metric-value">@Model.Dashboard.Requests.ToString("N0")</strong><span class="metric-detail">@T["technical server load"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Requests per page view"]</span><strong class="metric-value">@Model.Dashboard.RequestsPerPageView.ToString("N1")</strong><span class="metric-detail">@T["including assets and APIs"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Traffic"]</span><strong class="metric-value">@AnalyticsPageModelBase.FormatBytes(Model.Dashboard.BytesSent)</strong><span class="metric-detail">@T["response data sent"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Error rate"]</span><strong class="metric-value">@Model.Dashboard.ErrorRatePercent.ToString("N2") %</strong><span class="metric-detail">@T["HTTP status 400 and above"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["p95 latency"]</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Dashboard.P95DurationMilliseconds)</strong><span class="metric-detail">@T["95 percent completed faster"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Bot share"]</span><strong class="metric-value">@Model.Dashboard.BotSharePercent.ToString("N1") %</strong><span class="metric-detail">@T["share of requests, not visitors"]</span></article>
 </section>
 
 <section class="panel panel--wide">
     <header class="panel-header">
-        <div><p class="eyebrow">Zeitreihe</p><h2>Requests und Pageviews</h2></div>
-        <div class="chart-legend"><span><i class="legend-request"></i>Requests</span><span><i class="legend-pageview"></i>Pageviews</span></div>
+        <div><p class="eyebrow">@T["Time series"]</p><h2>@T["Requests and page views"]</h2></div>
+        <div class="chart-legend"><span><i class="legend-request"></i>@T["Requests"]</span><span><i class="legend-pageview"></i>@T["Page views"]</span></div>
     </header>
     <div class="panel-body">
         @if (series.Count == 0)
         {
-            <p class="empty-state">Für den ausgewählten Zeitraum liegen keine Daten vor.</p>
+            <p class="empty-state">@T["No data is available for the selected period."]</p>
         }
         else
         {
-            <svg class="traffic-chart" viewBox="0 0 720 220" role="img" aria-label="Requests und Pageviews im Zeitverlauf">
+            <svg class="traffic-chart" viewBox="0 0 720 220" role="img" aria-label="@T["Requests and page views over time"]">
                 <line x1="10" y1="200" x2="710" y2="200" class="chart-axis" />
                 @for (var index = 0; index < series.Count; index++)
                 {
@@ -62,51 +62,51 @@
 
 <section class="analytics-columns">
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Nutzung</p><h2>Top-Seiten</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Usage"]</p><h2>@T["Top pages"]</h2></div></header>
         <div class="panel-body compact-list">
             @foreach (var route in Model.Dashboard.TopPages)
             {
                 <div><span><strong>@route.Path</strong><small>@route.Host</small></span><b>@route.RequestCount.ToString("N0")</b></div>
             }
-            @if (Model.Dashboard.TopPages.Count == 0) { <p class="empty-state">Keine Pageviews.</p> }
+            @if (Model.Dashboard.TopPages.Count == 0) { <p class="empty-state">@T["No page views."]</p> }
         </div>
     </article>
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Backend</p><h2>Top-API-Routen</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Backend"]</p><h2>@T["Top API routes"]</h2></div></header>
         <div class="panel-body compact-list">
             @foreach (var route in Model.Dashboard.TopApiRoutes)
             {
                 <div><span><strong>@route.Path</strong><small>@route.Host</small></span><b>@route.RequestCount.ToString("N0")</b></div>
             }
-            @if (Model.Dashboard.TopApiRoutes.Count == 0) { <p class="empty-state">Keine API-Requests.</p> }
+            @if (Model.Dashboard.TopApiRoutes.Count == 0) { <p class="empty-state">@T["No API requests."]</p> }
         </div>
     </article>
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Übertragung</p><h2>Größte Assets</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Transfer"]</p><h2>@T["Largest assets"]</h2></div></header>
         <div class="panel-body compact-list">
             @foreach (var route in Model.Dashboard.LargestAssets)
             {
                 <div><span><strong>@route.Path</strong><small>@route.Host</small></span><b>@AnalyticsPageModelBase.FormatBytes(route.BytesSent)</b></div>
             }
-            @if (Model.Dashboard.LargestAssets.Count == 0) { <p class="empty-state">Keine Asset-Requests.</p> }
+            @if (Model.Dashboard.LargestAssets.Count == 0) { <p class="empty-state">@T["No asset requests."]</p> }
         </div>
     </article>
 </section>
 
 <section class="panel panel--wide analytics-section">
-    <header class="panel-header"><div><p class="eyebrow">Regelbasierte Hinweise</p><h2>Auffällige Clients</h2></div><a asp-page="/Security/Overview">Sicherheitsanalyse öffnen</a></header>
+    <header class="panel-header"><div><p class="eyebrow">@T["Rule-based signals"]</p><h2>@T["Suspicious clients"]</h2></div><a asp-page="/Security/Overview">@T["Open security analysis"]</a></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
-            <thead><tr><th>Client</th><th>IP</th><th>Klassifikation</th><th>Score</th><th>Zuletzt gesehen</th></tr></thead>
+            <thead><tr><th>@T["Client"]</th><th>@T["IP"]</th><th>@T["Classification"]</th><th>@T["Score"]</th><th>@T["Last seen"]</th></tr></thead>
             <tbody>
             @foreach (var client in Model.Dashboard.SuspiciousClients)
             {
                 <tr>
-                    <td><a asp-page="/Security/Client" asp-route-id="@client.ClientId"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? "geschätzt" : "First-Party-ID")</small></td>
+                    <td><a asp-page="/Security/Client" asp-route-id="@client.ClientId"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? T["estimated"] : T["First-party ID"])</small></td>
                     <td><code>@(client.RemoteAddress.Length == 0 ? "–" : client.RemoteAddress)</code></td>
                     <td>@client.Classification</td>
                     <td><span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">@client.AutomationScore · @client.RiskLevel</span></td>
-                    <td>@client.LastSeenAt.ToLocalTime().ToString("g")</td>
+                    <td><time datetime="@client.LastSeenAt.ToString("O")" data-local-time>@client.LastSeenAt.ToString("u")</time></td>
                 </tr>
             }
             </tbody>
