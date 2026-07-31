@@ -44,25 +44,6 @@ services:
     restart: "no"
     networks: [backend]
 
-  config-init:
-    <<: *caddy-ui-image
-    container_name: caddy-ui-config-init
-    command: ["sh", "-c", "exec /usr/local/bin/prepare-production-config"]
-    environment:
-      ACME_EMAIL: ${ACME_EMAIL:-}
-      CADDY_UI_CADDY_ROOT_CONFIG: /etc/caddy/Caddyfile
-      CADDY_UI_ROUTES_DIR: /etc/caddy/routes
-      CADDY_UI_MANAGED_ROUTES_PATH: /etc/caddy/routes/site-managed-routes.caddy
-      CADDY_UI_BLOCKLIST_PATH: /etc/caddy/routes/site-security-blocks.caddy
-    volumes:
-      - etc:/etc/caddy
-      - logs:/var/log/caddy
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: [ALL]
-    restart: "no"
-    networks: [proxy]
-
   caddy-ui:
     <<: *caddy-ui-image
     container_name: caddy-ui
@@ -135,10 +116,13 @@ services:
   caddy:
     <<: *caddy-ui-image
     container_name: caddy
-    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    command:
+      - sh
+      - -ec
+      - |
+        /usr/local/bin/prepare-production-config
+        exec /usr/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     depends_on:
-      config-init:
-        condition: service_completed_successfully
       caddy-ui:
         condition: service_healthy
     ports:
@@ -148,6 +132,10 @@ services:
     environment:
       ACME_EMAIL: ${ACME_EMAIL:-}
       DOMAIN: ${DOMAIN:-}
+      CADDY_UI_CADDY_ROOT_CONFIG: /etc/caddy/Caddyfile
+      CADDY_UI_ROUTES_DIR: /etc/caddy/routes
+      CADDY_UI_MANAGED_ROUTES_PATH: /etc/caddy/routes/site-managed-routes.caddy
+      CADDY_UI_BLOCKLIST_PATH: /etc/caddy/routes/site-security-blocks.caddy
       NETCUP_CUSTOMER_NUMBER: ${NETCUP_CUSTOMER_NUMBER:-}
       NETCUP_API_KEY: ${NETCUP_API_KEY:-}
       NETCUP_API_PASSWORD: ${NETCUP_API_PASSWORD:-}
