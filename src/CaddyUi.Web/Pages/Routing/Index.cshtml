@@ -2,19 +2,19 @@
 @model CaddyUi.Web.Pages.Routing.IndexModel
 @using CaddyUi.Domain.Routing
 @{
-    ViewData["Title"] = "Routen";
+    ViewData["Title"] = T["Routes"];
 }
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">Caddy-Konfiguration</p>
-        <h1>Routen</h1>
-        <p class="page-description">Routen werden zuerst gespeichert, anschließend als vollständige Konfiguration geprüft und erst danach kontrolliert angewendet.</p>
+        <p class="eyebrow">@T["Caddy configuration"]</p>
+        <h1>@T["Routes"]</h1>
+        <p class="page-description">@T["Routes are saved first, validated as a complete configuration, and only then applied in a controlled operation."]</p>
     </div>
     <div class="page-actions">
-        <a class="button button--quiet" asp-page="/Routing/Transfer">Import &amp; Export</a>
-        <a class="button button--quiet" asp-page="/Routing/Preview">Preview &amp; Apply</a>
-        <a class="button button--primary" asp-page="/Routing/Edit">Neue Route</a>
+        <a class="button button--quiet" asp-page="/Routing/Transfer">@T["Import and export"]</a>
+        <a class="button button--quiet" asp-page="/Routing/Preview">@T["Preview and apply"]</a>
+        <a class="button button--primary" asp-page="/Routing/Edit">@T["New route"]</a>
     </div>
 </section>
 
@@ -24,18 +24,18 @@
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
-<section class="workspace-toolbar" aria-label="Routenstatus">
+<section class="workspace-toolbar" aria-label="@T["Route status"]">
     <div class="toolbar-group">
-        <span class="toolbar-label">Write Mode</span>
+        <span class="toolbar-label">@T["Write mode"]</span>
         <span class="status-badge @(Model.RoutingOptions.WriteMode == CaddyUi.Infrastructure.Routing.RouteWriteMode.Active ? "status-badge--warning" : "status-badge--neutral")">@Model.RoutingOptions.WriteMode.ToString().ToLowerInvariant()</span>
         <span class="toolbar-separator"></span>
-        <span class="toolbar-summary">@Model.Routes.Count Routen · @Model.Routes.Count(route => route.Definition.Enabled) aktiv</span>
+        <span class="toolbar-summary">@T["{0} routes · {1} enabled", Model.Routes.Count, Model.Routes.Count(route => route.Definition.Enabled)]</span>
     </div>
     @if (User.IsInRole("admin"))
     {
         <div class="toolbar-group">
-            <a class="button button--compact button--quiet" asp-page="/Administration/Domains">Domains</a>
-            <a class="button button--compact button--quiet" asp-page="/Access/Index">Zugriffsgruppen</a>
+            <a class="button button--compact button--quiet" asp-page="/Administration/Domains">@T["Domains"]</a>
+            <a class="button button--compact button--quiet" asp-page="/Access/Index">@T["Access groups"]</a>
         </div>
     }
 </section>
@@ -43,19 +43,19 @@
 <section class="workspace-section feature-routing-list">
     <header class="section-header">
         <div>
-            <h2>Verwaltete Routen</h2>
-            <p>Aktiv bedeutet nur: in der nächsten generierten Revision enthalten. Es schreibt nicht sofort nach Caddy.</p>
+            <h2>@T["Managed routes"]</h2>
+            <p>@T["Enabled only means that the route is included in the next generated revision. It does not write to Caddy immediately."]</p>
         </div>
     </header>
     <div class="table-wrap">
         <table class="data-table data-table--comfortable">
             <thead>
                 <tr>
-                    <th>Route</th>
-                    <th>Ziel</th>
-                    <th>Zugriff</th>
-                    <th>Status</th>
-                    <th class="table-actions">Aktionen</th>
+                    <th>@T["Route"]</th>
+                    <th>@T["Target"]</th>
+                    <th>@T["Access"]</th>
+                    <th>@T["Status"]</th>
+                    <th class="table-actions">@T["Actions"]</th>
                 </tr>
             </thead>
             <tbody>
@@ -68,7 +68,7 @@
                         <small><code>@route.Host@route.Configuration.PathPrefix</code></small>
                         <div class="inline-meta">
                             <span>@ManagedRouteDefinition.ToStorageValue(route.Kind)</span>
-                            <span>Reihenfolge @route.SortOrder</span>
+                            <span>@T["Order {0}", route.SortOrder]</span>
                             <span>@ManagedRouteDefinition.ToStorageValue(route.CertificateMode)</span>
                         </div>
                     </td>
@@ -79,27 +79,27 @@
                                 <strong>@route.Configuration.Upstream</strong>
                                 @if (route.Configuration.HealthPath.Length > 0)
                                 {
-                                    <small>Health: @route.Configuration.HealthPath · @route.Configuration.HealthIntervalSeconds s</small>
+                                    <small>@T["Health"]: @route.Configuration.HealthPath · @route.Configuration.HealthIntervalSeconds @T["sec."]</small>
                                 }
                                 break;
                             case ManagedRouteKind.Redirect:
                                 <strong>@route.Configuration.RedirectTarget</strong>
-                                <small>@(route.Configuration.RedirectPermanent ? "308 permanent" : "302 temporary")</small>
+                                <small>@(route.Configuration.RedirectPermanent ? T["308 permanent"] : T["302 temporary"])</small>
                                 break;
                             case ManagedRouteKind.StaticResponse:
                                 <strong>HTTP @route.Configuration.StaticStatusCode</strong>
-                                <small>Statische Antwort</small>
+                                <small>@T["Static response"]</small>
                                 break;
                             case ManagedRouteKind.Custom:
-                                <strong>Benutzerdefinierte Direktiven</strong>
-                                <small>Erweiterter Modus</small>
+                                <strong>@T["Custom directives"]</strong>
+                                <small>@T["Advanced mode"]</small>
                                 break;
                         }
                     </td>
                     <td>
                         @if (route.AccessGroupId is null)
                         {
-                            <span class="status-badge status-badge--neutral">Öffentlich</span>
+                            <span class="status-badge status-badge--neutral">@T["Public"]</span>
                         }
                         else
                         {
@@ -107,20 +107,20 @@
                         }
                     </td>
                     <td>
-                        <span class="status-badge @(route.Enabled ? "status-badge--ok" : "status-badge--neutral")">@(route.Enabled ? "Aktiv" : "Deaktiviert")</span>
-                        <small>Geändert @item.UpdatedAt.ToLocalTime().ToString("g")</small>
+                        <span class="status-badge @(route.Enabled ? "status-badge--ok" : "status-badge--neutral")">@(route.Enabled ? T["Enabled"] : T["Disabled"])</span>
+                        <small>@T["Changed"] <time datetime="@item.UpdatedAt.ToString("O")" data-local-time>@item.UpdatedAt.ToString("u")</time></small>
                     </td>
                     <td class="table-actions">
                         <div class="row-actions">
-                            <a class="button button--compact button--quiet" asp-page="/Routing/Edit" asp-route-id="@route.Id">Bearbeiten</a>
+                            <a class="button button--compact button--quiet" asp-page="/Routing/Edit" asp-route-id="@route.Id">@T["Edit"]</a>
                             <form method="post" asp-page-handler="Toggle">
                                 <input type="hidden" name="id" value="@route.Id" />
                                 <input type="hidden" name="enabled" value="@(!route.Enabled)" />
-                                <button class="button button--compact button--quiet" type="submit">@(route.Enabled ? "Deaktivieren" : "Aktivieren")</button>
+                                <button class="button button--compact button--quiet" type="submit">@(route.Enabled ? T["Disable"] : T["Enable"])</button>
                             </form>
-                            <form method="post" asp-page-handler="Delete" onsubmit="return confirm('Route endgültig aus der Verwaltung löschen? Die aktive Caddy-Konfiguration bleibt bis zum nächsten Apply unverändert.');">
+                            <form method="post" asp-page-handler="Delete" data-confirm="@T["Delete this route from management permanently? The active Caddy configuration remains unchanged until the next apply."]">
                                 <input type="hidden" name="id" value="@route.Id" />
-                                <button class="button button--compact button--danger-quiet" type="submit">Löschen</button>
+                                <button class="button button--compact button--danger-quiet" type="submit">@T["Delete"]</button>
                             </form>
                         </div>
                     </td>
@@ -128,7 +128,7 @@
             }
             @if (Model.Routes.Count == 0)
             {
-                <tr><td colspan="5" class="empty-state">Noch keine Route angelegt.</td></tr>
+                <tr><td colspan="5" class="empty-state">@T["No route has been created yet."]</td></tr>
             }
             </tbody>
         </table>
