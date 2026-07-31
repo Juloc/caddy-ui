@@ -1,0 +1,59 @@
+name: Finalize multilingual implementation
+
+on:
+  push:
+    branches:
+      - feature/multilingual-dns-browser-route-save
+    paths:
+      - scripts/finalize_multilingual.py
+      - .github/workflows/finalize-multilingual.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-multilingual
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feature/multilingual-dns-browser-route-save
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Apply deterministic finalization
+        run: python3 scripts/finalize_multilingual.py
+
+      - name: Restore
+        run: dotnet restore CaddyUi.slnx
+
+      - name: Format
+        run: dotnet format CaddyUi.slnx --no-restore
+
+      - name: Build
+        run: dotnet build CaddyUi.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test CaddyUi.slnx --configuration Release --no-build --no-restore
+
+      - name: Remove temporary finalizer
+        run: rm scripts/finalize_multilingual.py .github/workflows/finalize-multilingual.yml
+
+      - name: Commit final implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: complete multilingual UI and DNS management"
+          git push origin HEAD:feature/multilingual-dns-browser-route-save
