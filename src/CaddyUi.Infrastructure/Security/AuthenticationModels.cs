@@ -9,7 +9,8 @@ public sealed record UserAccount(
     bool Enabled,
     byte[]? TotpSecretEncrypted,
     bool TotpEnabled,
-    string Theme);
+    string Theme,
+    string Language);
 
 public sealed record ValidatedAdminSession(
     UserAccount User,
