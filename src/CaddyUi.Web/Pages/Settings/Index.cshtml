@@ -1,0 +1,50 @@
+@page
+@model CaddyUi.Web.Pages.Settings.IndexModel
+@{
+    ViewData["Title"] = T["User settings"];
+}
+
+<section class="page-heading page-heading--compact">
+    <div>
+        <p class="eyebrow">@T["Preferences"]</p>
+        <h1>@T["User settings"]</h1>
+        <p class="page-description">@T["Choose how Caddy UI is displayed for your account."]</p>
+    </div>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
+}
+
+<div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
+
+<form method="post" class="workspace-section settings-form">
+    <header class="section-header">
+        <div>
+            <h2>@T["Language"]</h2>
+            <p>@T["English is the default. The preference is stored with your user account."]</p>
+        </div>
+    </header>
+
+    <div class="form-grid form-grid--two">
+        <label class="field">
+            <span class="field-label">@T["Interface language"]</span>
+            <select asp-for="Input.Language">
+                @foreach (var culture in Model.Cultures)
+                {
+                    <option value="@culture.Name">@culture.NativeName (@culture.DisplayName)</option>
+                }
+            </select>
+            <span asp-validation-for="Input.Language" class="field-error"></span>
+        </label>
+    </div>
+
+    <footer class="editor-actionbar">
+        <div>
+            <strong>@T["Language changes apply after saving."]</strong>
+            <span>@T["Additional languages can be added through the culture catalog and resource files."]</span>
+        </div>
+        <button class="button button--primary" type="submit">@T["Save settings"]</button>
+    </footer>
+</form>
