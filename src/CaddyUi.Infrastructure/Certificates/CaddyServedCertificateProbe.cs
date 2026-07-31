@@ -44,8 +44,7 @@ internal static class CaddyServedCertificateProbe
             await client.ConnectAsync(host, port, timeout.Token);
             await using var stream = new SslStream(
                 client.GetStream(),
-                leaveInnerStreamOpen: false,
-                static (_, _, _, _) => true);
+                leaveInnerStreamOpen: false);
             await stream.AuthenticateAsClientAsync(
                 new SslClientAuthenticationOptions
                 {
