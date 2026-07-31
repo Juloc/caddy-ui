@@ -306,6 +306,13 @@ internal static partial class CaddyCertificateLogReader
 
     private static void AddSubjectCandidates(string value, ISet<string> subjects)
     {
+        var candidate = value.Trim().TrimEnd('.');
+        if (candidate.StartsWith("_acme-challenge.", StringComparison.OrdinalIgnoreCase))
+        {
+            AddSubject(candidate, subjects);
+            return;
+        }
+
         foreach (Match match in DomainPattern().Matches(value))
         {
             AddSubject(match.Value, subjects);
@@ -500,7 +507,7 @@ internal static partial class CaddyCertificateLogReader
     [GeneratedRegex(@"(?<![A-Za-z0-9_-])(?:\*\.)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}(?![A-Za-z0-9_-])", RegexOptions.CultureInvariant)]
     private static partial Regex DomainPattern();
 
-    [GeneratedRegex("(?i)((?:password|token|api[_-]?key|secret)\\s*[=:]\\s*)[^\\s,;\\\"']+")]
+    [GeneratedRegex("""(?i)((?:password|token|api[_-]?key|secret)\s*[=:]\s*)[^\s,;\"']+""")]
     private static partial Regex SecretPattern();
 
     [GeneratedRegex(@"^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h|d)$", RegexOptions.CultureInvariant)]
