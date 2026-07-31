@@ -21,7 +21,10 @@ public sealed class IndexModel : AnalyticsPageModelBase
         try
         {
             var filter = await PrepareFilterAsync(HttpContext.RequestAborted);
-            Requests = await Store.GetRequestsAsync(filter, cancellationToken: HttpContext.RequestAborted);
+            Requests = await Store.GetRequestsAsync(
+                filter,
+                InitialCursor(filter),
+                HttpContext.RequestAborted);
             LoadError = null;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -29,5 +32,12 @@ public sealed class IndexModel : AnalyticsPageModelBase
             Requests = Array.Empty<RequestAnalyticsRow>();
             LoadError = $"Requests konnten nicht geladen werden: {exception.Message}";
         }
+    }
+
+    private static DateTimeOffset InitialCursor(AnalyticsReadFilter filter)
+    {
+        return filter.From == DateTimeOffset.MinValue
+            ? filter.From
+            : filter.From.AddTicks(-1);
     }
 }
