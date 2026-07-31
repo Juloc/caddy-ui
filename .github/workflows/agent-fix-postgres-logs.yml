@@ -1,0 +1,119 @@
+name: Apply PostgreSQL and access log fix
+
+on:
+  push:
+    branches:
+      - agent/fix-postgres-optional-parameters-and-access-logs
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/fix-postgres-optional-parameters-and-access-logs
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Apply focused fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if old not in text:
+                  return
+              file.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+
+          replace_once(
+              "src/CaddyUi.Infrastructure/Analytics/AnalyticsReadStore.cs",
+              "AND (@after IS NULL OR requests.occurred_at > @after)",
+              "AND (CAST(@after AS timestamp with time zone) IS NULL OR requests.occurred_at > @after)",
+          )
+          replace_once(
+              "src/CaddyUi.Infrastructure/Routing/RouteManagementStore.cs",
+              "WHERE (@group_id IS NULL OR group_id = @group_id)",
+              "WHERE (CAST(@group_id AS uuid) IS NULL OR group_id = @group_id)",
+          )
+
+          compiler = Path("src/CaddyUi.Application/Routing/CaddyRouteCompiler.cs")
+          text = compiler.read_text(encoding="utf-8")
+          text = text.replace(
+              '            builder.Append(string.Join(", ", addresses)).AppendLine(" {");\n            AppendCertificateConfiguration(builder, dnsState);',
+              '            builder.Append(string.Join(", ", addresses)).AppendLine(" {");\n            AppendAccessLogConfiguration(builder);\n            AppendCertificateConfiguration(builder, dnsState);',
+              1,
+          )
+          text = text.replace(
+              '            builder.Append(group.Key).AppendLine(" {");\n            foreach (var source in group)',
+              '            builder.Append(group.Key).AppendLine(" {");\n            AppendAccessLogConfiguration(builder);\n            foreach (var source in group)',
+              1,
+          )
+          marker = "    private static void AppendCertificateConfiguration(StringBuilder builder, CertificateState state)\n"
+          helper = '''    private static void AppendAccessLogConfiguration(StringBuilder builder)\n    {\n        builder.AppendLine("    log {");\n        builder.AppendLine("        output file /var/log/caddy/access.log {");\n        builder.AppendLine("            roll_size 100mb");\n        builder.AppendLine("            roll_keep 10");\n        builder.AppendLine("            roll_keep_for 720h");\n        builder.AppendLine("        }");\n        builder.AppendLine("        format json");\n        builder.AppendLine("    }");\n        builder.AppendLine();\n    }\n\n'''
+          if "AppendAccessLogConfiguration(StringBuilder builder)" not in text:
+              if marker not in text:
+                  raise SystemExit("Caddy compiler insertion point not found")
+              text = text.replace(marker, helper + marker, 1)
+          compiler.write_text(text, encoding="utf-8", newline="\n")
+
+          analytics_tests = Path("tests/CaddyUi.Infrastructure.Tests/AnalyticsReadStoreTests.cs")
+          text = analytics_tests.read_text(encoding="utf-8")
+          insertion = '''        var requestsWithoutCursor = await readStore.GetRequestsAsync(\n            AnalyticsReadFilter.Create(\n                DateTimeOffset.FromUnixTimeSeconds(1785261500),\n                DateTimeOffset.FromUnixTimeSeconds(1785261700),\n                host: "mealie.example.com"));\n\n        Assert.Equal(3, requestsWithoutCursor.Count);\n'''
+          anchor = "        Assert.Equal(3, dashboard.Requests);\n"
+          if "requestsWithoutCursor" not in text:
+              if anchor not in text:
+                  raise SystemExit("Analytics test insertion point not found")
+              text = text.replace(anchor, insertion + "\n" + anchor, 1)
+          analytics_tests.write_text(text, encoding="utf-8", newline="\n")
+
+          migration_tests = Path("tests/CaddyUi.Infrastructure.Tests/PostgreSqlMigrationTests.cs")
+          text = migration_tests.read_text(encoding="utf-8")
+          using_anchor = "using CaddyUi.Infrastructure.Persistence;\n"
+          if "using CaddyUi.Infrastructure.Routing;" not in text:
+              text = text.replace(using_anchor, using_anchor + "using CaddyUi.Infrastructure.Routing;\n", 1)
+          credential_test = '''        var routeStore = new RouteManagementStore(\n            new RuntimeDbContextFactory(_postgres.GetConnectionString()));\n        Assert.Empty(await routeStore.ListCredentialsAsync());\n\n'''
+          anchor = "        var requiredTables = new[]\n"
+          if "routeStore.ListCredentialsAsync" not in text:
+              if anchor not in text:
+                  raise SystemExit("Migration test insertion point not found")
+              text = text.replace(anchor, credential_test + anchor, 1)
+          migration_tests.write_text(text, encoding="utf-8", newline="\n")
+
+          compiler_tests = Path("tests/CaddyUi.Application.Tests/CaddyRouteCompilerTests.cs")
+          text = compiler_tests.read_text(encoding="utf-8")
+          assertion = '        Assert.Contains("output file /var/log/caddy/access.log", first.Content, StringComparison.Ordinal);\n'
+          anchor = '        Assert.Contains("mealie.example.com {", first.Content, StringComparison.Ordinal);\n'
+          if assertion.strip() not in text:
+              if anchor not in text:
+                  raise SystemExit("Compiler test insertion point not found")
+              text = text.replace(anchor, anchor + assertion, 1)
+          compiler_tests.write_text(text, encoding="utf-8", newline="\n")
+          PY
+      - name: Verify
+        run: |
+          dotnet restore CaddyUi.slnx
+          dotnet format CaddyUi.slnx --no-restore --verify-no-changes
+          dotnet build CaddyUi.slnx --configuration Release --no-restore
+          dotnet test CaddyUi.slnx --configuration Release --no-build
+      - name: Commit changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/CaddyUi.Infrastructure/Analytics/AnalyticsReadStore.cs \
+                  src/CaddyUi.Infrastructure/Routing/RouteManagementStore.cs \
+                  src/CaddyUi.Application/Routing/CaddyRouteCompiler.cs \
+                  tests/CaddyUi.Infrastructure.Tests/AnalyticsReadStoreTests.cs \
+                  tests/CaddyUi.Infrastructure.Tests/PostgreSqlMigrationTests.cs \
+                  tests/CaddyUi.Application.Tests/CaddyRouteCompilerTests.cs
+          git commit -m "fix: type optional PostgreSQL parameters and enable access logs"
+          git push origin HEAD:agent/fix-postgres-optional-parameters-and-access-logs
