@@ -23,5 +23,6 @@ public sealed class MigrationDiscoveryTests
         Assert.Contains("20260728250000_PhaseFiveIpSecurity", migrations);
         Assert.Contains("20260728270000_PhaseSevenRouteManagement", migrations);
         Assert.Contains("20260728280000_PhaseEightDnsAndOperations", migrations);
+        Assert.Contains("20260731200000_MultilingualUserPreferences", migrations);
     }
 }
