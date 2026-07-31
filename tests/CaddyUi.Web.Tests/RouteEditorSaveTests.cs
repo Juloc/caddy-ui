@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using CaddyUi.Web.Pages.Routing;
 
 namespace CaddyUi.Web.Tests;
@@ -30,6 +32,24 @@ public sealed class RouteEditorSaveTests
         Assert.Equal(200, input.StaticStatusCode);
         Assert.Empty(input.StaticBody);
         Assert.Empty(input.CustomSnippet);
+    }
+
+    [Theory]
+    [InlineData(nameof(EditModel.RouteInput.Subdomain))]
+    [InlineData(nameof(EditModel.RouteInput.Upstream))]
+    [InlineData(nameof(EditModel.RouteInput.HealthPath))]
+    [InlineData(nameof(EditModel.RouteInput.RedirectTarget))]
+    [InlineData(nameof(EditModel.RouteInput.StaticBody))]
+    [InlineData(nameof(EditModel.RouteInput.CustomSnippet))]
+    public void OptionalTextFields_PreserveEmptyStringsDuringModelBinding(string propertyName)
+    {
+        var property = typeof(EditModel.RouteInput).GetProperty(
+            propertyName,
+            BindingFlags.Instance | BindingFlags.Public);
+        var attribute = property?.GetCustomAttribute<DisplayFormatAttribute>();
+
+        Assert.NotNull(attribute);
+        Assert.False(attribute!.ConvertEmptyStringToNull);
     }
 
     [Fact]
