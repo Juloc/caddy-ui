@@ -2,14 +2,15 @@
 @model CaddyUi.Web.Pages.LoginModel
 @{
     Layout = null;
+    var culture = global::System.Globalization.CultureInfo.CurrentUICulture.Name;
 }
 <!DOCTYPE html>
-<html lang="de">
+<html lang="@culture">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>Anmelden · Caddy UI</title>
+    <title>@T["Sign in"] · Caddy UI</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/features.css" asp-append-version="true" />
 </head>
@@ -19,20 +20,20 @@
             <span class="brand-mark" aria-hidden="true">C</span>
             <div>
                 <strong>Caddy UI</strong>
-                <span>Administration</span>
+                <span>@T["Administration"]</span>
             </div>
         </div>
 
         <div>
-            <p class="eyebrow">Geschützter Bereich</p>
-            <h1>Anmelden</h1>
-            <p class="page-description">Lokaler und öffentlicher Zugriff verwenden getrennte, serverseitig geprüfte Sitzungen.</p>
+            <p class="eyebrow">@T["Protected area"]</p>
+            <h1>@T["Sign in"]</h1>
+            <p class="page-description">@T["Local and public access use separate server-validated sessions."]</p>
         </div>
 
         @if (Model.ShowPublicWarning)
         {
             <div class="notice notice--warning">
-                Öffentlicher Zugriff ist aktiv, aber TOTP ist nicht verpflichtend. Dieser Betriebsmodus bleibt erlaubt, wird jedoch nicht empfohlen.
+                @T["Public access is enabled without mandatory TOTP. This mode remains supported, but is not recommended."]
             </div>
         }
 
@@ -40,22 +41,22 @@
             <input type="hidden" asp-for="ReturnUrl" />
             <div asp-validation-summary="All" class="validation-summary" role="alert" aria-live="polite"></div>
             <label>
-                <span>Benutzername</span>
+                <span>@T["Username"]</span>
                 <input asp-for="Input.Username" autocomplete="username" autofocus />
                 <span asp-validation-for="Input.Username" class="field-error"></span>
             </label>
             <label>
-                <span>Passwort</span>
+                <span>@T["Password"]</span>
                 <input asp-for="Input.Password" type="password" autocomplete="current-password" />
                 <span asp-validation-for="Input.Password" class="field-error"></span>
             </label>
             <label>
-                <span>TOTP- oder Recovery-Code</span>
+                <span>@T["TOTP or recovery code"]</span>
                 <input asp-for="Input.SecondFactor" inputmode="numeric" autocomplete="one-time-code" />
                 <span asp-validation-for="Input.SecondFactor" class="field-error"></span>
-                <small>Nur erforderlich, wenn TOTP für das Konto aktiv oder öffentlich vorgeschrieben ist.</small>
+                <small>@T["Required only when TOTP is enabled for the account or required for public access."]</small>
             </label>
-            <button class="button button--primary" type="submit">Anmelden</button>
+            <button class="button button--primary" type="submit">@T["Sign in"]</button>
         </form>
     </main>
 </body>
