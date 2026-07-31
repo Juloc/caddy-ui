@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using CaddyUi.Infrastructure.Certificates;
 using CaddyUi.Infrastructure.Management;
 using Microsoft.AspNetCore.Authorization;
@@ -84,10 +85,55 @@ public sealed class DomainsModel : PageModel
     {
         return state switch
         {
-            "active" => "status-badge--ok",
-            "renewal-due" or "requested" or "draft" => "status-badge--warning",
-            "blocked" or "expired" => "status-badge--danger",
+            "active" or "succeeded" => "status-badge--ok",
+            "renewal-due" or "requested" or "draft" or "renewing" or "obtaining" or
+                "retry-scheduled" or "renewal-pending" or "verifying" => "status-badge--warning",
+            "blocked" or "expired" or "renewal-failed" or "acquisition-failed" => "status-badge--danger",
             _ => "status-badge--neutral",
+        };
+    }
+
+    public static string FormatUtc(DateTimeOffset? value)
+    {
+        return value is null
+            ? "Nicht bekannt"
+            : value.Value.ToUniversalTime().ToString("dd.MM.yyyy HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
+    }
+
+    public static string FormatDuration(int? seconds)
+    {
+        if (seconds is null)
+        {
+            return "Nicht hinterlegt";
+        }
+
+        if (seconds > 0 && seconds % 86_400 == 0)
+        {
+            return $"{seconds / 86_400} d";
+        }
+
+        if (seconds > 0 && seconds % 3_600 == 0)
+        {
+            return $"{seconds / 3_600} h";
+        }
+
+        if (seconds > 0 && seconds % 60 == 0)
+        {
+            return $"{seconds / 60} min";
+        }
+
+        return $"{seconds} s";
+    }
+
+    public static string ProviderTestLabel(string status)
+    {
+        return status switch
+        {
+            "passed" or "success" or "succeeded" => "Erfolgreich",
+            "failed" => "Fehlgeschlagen",
+            "untested" => "Noch nicht getestet",
+            _ when string.IsNullOrWhiteSpace(status) => "Nicht bekannt",
+            _ => status,
         };
     }
 

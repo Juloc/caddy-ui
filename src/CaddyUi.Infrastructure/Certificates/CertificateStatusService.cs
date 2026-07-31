@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Formats.Asn1;
+using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using CaddyUi.Infrastructure.Operations;
@@ -8,6 +9,34 @@ using CaddyUi.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace CaddyUi.Infrastructure.Certificates;
+
+public sealed record CertificateAttemptItem(
+    DateTimeOffset Timestamp,
+    string State,
+    string Label,
+    string Detail,
+    int? Attempt,
+    DateTimeOffset? NextAttemptAt);
+
+public sealed record CertificateLifecycleStatus(
+    string State,
+    string Label,
+    bool Applied,
+    DateTimeOffset ObservedAt,
+    DateTimeOffset? LastAttemptAt,
+    DateTimeOffset? LastSuccessAt,
+    DateTimeOffset? NextAttemptAt,
+    int AttemptCount,
+    int ConsecutiveFailures,
+    string LastError,
+    string ProviderType,
+    string ProviderTestStatus,
+    DateTimeOffset? ProviderLastTestedAt,
+    int? DnsTtlSeconds,
+    int? PropagationTimeoutSeconds,
+    string DnsChallengeName,
+    IReadOnlyList<string> Tips,
+    IReadOnlyList<CertificateAttemptItem> RecentAttempts);
 
 public sealed record CertificateStatusItem(
     string Kind,
@@ -18,7 +47,9 @@ public sealed record CertificateStatusItem(
     string Detail,
     DateTimeOffset? NotBefore,
     DateTimeOffset? ExpiresAt,
-    int? DaysRemaining);
+    int? DaysRemaining,
+    DateTimeOffset? RenewalWindowStartsAt,
+    CertificateLifecycleStatus Lifecycle);
 
 public sealed record DomainCertificateStatus(
     Guid DomainId,
@@ -42,6 +73,7 @@ public sealed class CertificateStatusService
         CancellationToken cancellationToken = default)
     {
         var inventory = ReadInventory();
+        var lifecycleLogs = CaddyCertificateLogReader.Read(_options.CaddyLogPath);
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var connection = context.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
@@ -59,6 +91,8 @@ public sealed class CertificateStatusService
                    domains.config_json::text,
                    providers.provider_type,
                    providers.enabled,
+                   providers.config_json::text,
+                   providers.last_tested_at,
                    providers.last_test_status,
                    providers.last_test_error
             FROM caddy_ui.managed_domains AS domains
@@ -80,23 +114,29 @@ public sealed class CertificateStatusService
                     reader.GetString(4),
                     reader.GetBoolean(5),
                     reader.GetString(6),
-                    reader.GetString(7));
+                    reader.IsDBNull(7) ? null : ReadTimestamp(reader, 7),
+                    reader.GetString(8),
+                    reader.GetString(9));
             var certificates = new[]
             {
                 BuildStatus(
                     "wildcard",
                     $"*.{domainName}",
+                    domainName,
                     plan.Wildcard,
                     provider,
                     inventory,
-                    appliedNames),
+                    appliedNames,
+                    lifecycleLogs),
                 BuildStatus(
                     "base",
+                    domainName,
                     domainName,
                     plan.BaseDomain,
                     provider: null,
                     inventory,
-                    appliedNames),
+                    appliedNames,
+                    lifecycleLogs),
             };
             result[domainId] = new DomainCertificateStatus(domainId, domainName, certificates);
         }
@@ -107,114 +147,480 @@ public sealed class CertificateStatusService
     private CertificateStatusItem BuildStatus(
         string kind,
         string name,
+        string domainName,
         bool requested,
         ProviderStatus? provider,
         IReadOnlyDictionary<string, CertificateArtifact> inventory,
-        IReadOnlySet<string> appliedNames)
+        IReadOnlySet<string> appliedNames,
+        IReadOnlyDictionary<string, CaddyCertificateLogState> lifecycleLogs)
     {
+        inventory.TryGetValue(name, out var artifact);
+        lifecycleLogs.TryGetValue(name, out var logState);
+        var applied = appliedNames.Contains(name);
+        var providerProblem = kind == "wildcard" ? ProviderProblem(provider) : null;
+        DateTimeOffset? renewalWindowStartsAt = artifact is null ? null : RenewalWindowStartsAt(artifact);
+        var lifecycle = BuildLifecycle(
+            kind,
+            name,
+            domainName,
+            requested,
+            provider,
+            applied,
+            artifact,
+            logState,
+            providerProblem,
+            renewalWindowStartsAt);
+
         if (!requested)
         {
-            return new CertificateStatusItem(
+            return CreateItem(
                 kind,
                 name,
-                false,
+                requested,
                 "not-requested",
                 "Nicht angefordert",
                 "Kann später über die Domain-Einstellungen aktiviert werden.",
-                null,
-                null,
-                null);
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
         }
 
-        if (inventory.TryGetValue(name, out var artifact))
+        var now = DateTimeOffset.UtcNow;
+        var nextAttemptScheduled = logState?.NextAttemptAt is not null && logState.NextAttemptAt > now;
+        var latestFailed = logState?.CurrentState is "failed" or "retry-scheduled";
+        if (providerProblem is not null && (artifact is null || artifact.ExpiresAt <= now || renewalWindowStartsAt <= now))
         {
-            var now = DateTimeOffset.UtcNow;
-            var days = (int)Math.Floor((artifact.ExpiresAt - now).TotalDays);
+            var prefix = artifact?.ExpiresAt <= now
+                ? $"Das gespeicherte Zertifikat ist seit {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC abgelaufen. "
+                : string.Empty;
+            return CreateItem(
+                kind,
+                name,
+                requested,
+                "blocked",
+                artifact?.ExpiresAt <= now ? "Erneuerung blockiert" : "Beschaffung blockiert",
+                $"{prefix}{providerProblem}",
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
+        }
+
+        if (artifact is not null)
+        {
+            var days = DaysRemaining(artifact, now);
             if (artifact.ExpiresAt <= now)
             {
-                return new CertificateStatusItem(
+                if (logState?.Active == true)
+                {
+                    return CreateItem(
+                        kind,
+                        name,
+                        requested,
+                        "renewing",
+                        "Erneuerung läuft",
+                        $"Das alte Zertifikat ist seit {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC abgelaufen. Caddy bearbeitet aktuell einen Erneuerungsversuch.",
+                        artifact,
+                        renewalWindowStartsAt,
+                        lifecycle);
+                }
+
+                if (nextAttemptScheduled)
+                {
+                    return CreateItem(
+                        kind,
+                        name,
+                        requested,
+                        "retry-scheduled",
+                        "Neuer Versuch geplant",
+                        $"Das Zertifikat ist abgelaufen. Der nächste Versuch ist laut Caddy-Log für {logState!.NextAttemptAt:dd.MM.yyyy HH:mm:ss} UTC geplant.",
+                        artifact,
+                        renewalWindowStartsAt,
+                        lifecycle);
+                }
+
+                if (latestFailed || logState?.ConsecutiveFailures > 0)
+                {
+                    return CreateItem(
+                        kind,
+                        name,
+                        requested,
+                        "renewal-failed",
+                        "Erneuerung fehlgeschlagen",
+                        RenewalFailureDetail(artifact, logState),
+                        artifact,
+                        renewalWindowStartsAt,
+                        lifecycle);
+                }
+
+                if (applied)
+                {
+                    return CreateItem(
+                        kind,
+                        name,
+                        requested,
+                        "renewal-pending",
+                        "Erneuerung ausstehend",
+                        $"Das Zertifikat ist seit {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC abgelaufen und weiterhin im aktiven Caddy-Stand. Im verfügbaren Log wurde kein laufender Versuch erkannt.",
+                        artifact,
+                        renewalWindowStartsAt,
+                        lifecycle);
+                }
+
+                return CreateItem(
                     kind,
                     name,
-                    true,
+                    requested,
                     "expired",
                     "Abgelaufen",
-                    $"Das gespeicherte Zertifikat ist seit {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC abgelaufen.",
-                    artifact.NotBefore,
-                    artifact.ExpiresAt,
-                    days);
+                    $"Das gespeicherte Zertifikat ist seit {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC abgelaufen und der Zertifikatsname ist nicht im zuletzt angewendeten Stand enthalten.",
+                    artifact,
+                    renewalWindowStartsAt,
+                    lifecycle);
             }
 
-            if (days <= 14)
+            if (logState?.Active == true && logState.RecentEvents.Any(item => item.Operation == "renewal"))
             {
-                return new CertificateStatusItem(
+                return CreateItem(
                     kind,
                     name,
-                    true,
-                    "renewal-due",
-                    "Erneuerung fällig",
-                    $"Noch {Math.Max(days, 0)} Tage gültig. Caddy sollte die Erneuerung automatisch durchführen.",
-                    artifact.NotBefore,
-                    artifact.ExpiresAt,
-                    days);
+                    requested,
+                    "renewing",
+                    "Erneuerung läuft",
+                    $"Das vorhandene Zertifikat ist noch bis {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC gültig. Caddy bearbeitet aktuell die Erneuerung.",
+                    artifact,
+                    renewalWindowStartsAt,
+                    lifecycle);
             }
 
-            return new CertificateStatusItem(
+            if (renewalWindowStartsAt <= now)
+            {
+                return CreateItem(
+                    kind,
+                    name,
+                    requested,
+                    "renewal-due",
+                    "Im Erneuerungsfenster",
+                    $"Noch {Math.Max(days, 0)} Tage gültig. Das geschätzte Standard-Erneuerungsfenster begann am {renewalWindowStartsAt:dd.MM.yyyy HH:mm} UTC; ACME ARI kann einen abweichenden Zeitraum vorgeben.",
+                    artifact,
+                    renewalWindowStartsAt,
+                    lifecycle);
+            }
+
+            return CreateItem(
                 kind,
                 name,
-                true,
+                requested,
                 "active",
                 "Vorhanden",
-                $"Gültig bis {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC ({days} Tage).",
-                artifact.NotBefore,
-                artifact.ExpiresAt,
-                days);
+                $"Gültig bis {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC ({days} Tage). Geschätzter Beginn des Standard-Erneuerungsfensters: {renewalWindowStartsAt:dd.MM.yyyy HH:mm} UTC.",
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
         }
 
-        if (kind == "wildcard")
+        if (logState?.Active == true)
         {
-            var providerProblem = ProviderProblem(provider);
-            if (providerProblem is not null)
-            {
-                return new CertificateStatusItem(
-                    kind,
-                    name,
-                    true,
-                    "blocked",
-                    "Beschaffung blockiert",
-                    providerProblem,
-                    null,
-                    null,
-                    null);
-            }
-        }
-
-        if (appliedNames.Contains(name))
-        {
-            return new CertificateStatusItem(
+            return CreateItem(
                 kind,
                 name,
-                true,
+                requested,
+                "obtaining",
+                "Beschaffung läuft",
+                "Caddy bearbeitet aktuell einen Zertifikatsversuch. Details und DNS-Phase stehen in der Lifecycle-Ansicht.",
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
+        }
+
+        if (nextAttemptScheduled)
+        {
+            return CreateItem(
+                kind,
+                name,
+                requested,
+                "retry-scheduled",
+                "Neuer Versuch geplant",
+                $"Noch kein Zertifikat im Speicher. Der nächste Versuch ist laut Caddy-Log für {logState!.NextAttemptAt:dd.MM.yyyy HH:mm:ss} UTC geplant.",
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
+        }
+
+        if (latestFailed || logState?.ConsecutiveFailures > 0)
+        {
+            return CreateItem(
+                kind,
+                name,
+                requested,
+                "acquisition-failed",
+                "Beschaffung fehlgeschlagen",
+                string.IsNullOrWhiteSpace(logState?.LastError)
+                    ? "Der letzte im Caddy-Log erkannte Beschaffungsversuch ist fehlgeschlagen."
+                    : logState.LastError,
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
+        }
+
+        if (logState?.LastSuccessAt is not null && logState.LastSuccessAt >= now.AddMinutes(-15))
+        {
+            return CreateItem(
+                kind,
+                name,
+                requested,
+                "verifying",
+                "Speicher wird geprüft",
+                $"Caddy meldete am {logState.LastSuccessAt:dd.MM.yyyy HH:mm:ss} UTC einen erfolgreichen Vorgang; die Zertifikatsdatei wurde noch nicht im gemounteten Speicher gefunden.",
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
+        }
+
+        if (applied)
+        {
+            return CreateItem(
+                kind,
+                name,
+                requested,
                 "requested",
                 "Angefordert",
-                "Der Name ist im aktiven Caddy-Stand enthalten, aber noch nicht im Zertifikatsspeicher nachweisbar. Caddy-Logs prüfen, falls der Status bestehen bleibt.",
-                null,
-                null,
-                null);
+                "Der Name ist im aktiven Caddy-Stand enthalten, aber noch nicht im Zertifikatsspeicher nachweisbar. Die Lifecycle-Ansicht zeigt erkannte Versuche und den letzten Fehler.",
+                artifact,
+                renewalWindowStartsAt,
+                lifecycle);
         }
 
         var detail = kind == "wildcard" && provider?.LastTestStatus == "untested"
             ? "Konfiguration ist vollständig, der Provider wurde aber noch nicht getestet. Danach Vorschau und Apply ausführen."
             : "Noch nicht im aktiven Caddy-Stand. Vorschau prüfen und anschließend Apply ausführen.";
-        return new CertificateStatusItem(
+        return CreateItem(
             kind,
             name,
-            true,
+            requested,
             "draft",
             "Bereit für Apply",
             detail,
-            null,
-            null,
-            null);
+            artifact,
+            renewalWindowStartsAt,
+            lifecycle);
+    }
+
+    private CertificateLifecycleStatus BuildLifecycle(
+        string kind,
+        string name,
+        string domainName,
+        bool requested,
+        ProviderStatus? provider,
+        bool applied,
+        CertificateArtifact? artifact,
+        CaddyCertificateLogState? logState,
+        string? providerProblem,
+        DateTimeOffset? renewalWindowStartsAt)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var lifecycleState = "idle";
+        var lifecycleLabel = requested ? "Noch kein Versuch erkannt" : "Nicht angefordert";
+        if (logState?.Active == true)
+        {
+            lifecycleState = "in-progress";
+            lifecycleLabel = logState.CurrentState switch
+            {
+                "challenging" => "DNS-01-Challenge läuft",
+                "propagating" => "DNS-Propagation wird geprüft",
+                _ => artifact?.ExpiresAt <= now ? "Erneuerung läuft" : "Beschaffung läuft",
+            };
+        }
+        else if (logState?.NextAttemptAt > now)
+        {
+            lifecycleState = "retry-scheduled";
+            lifecycleLabel = "Neuer Versuch geplant";
+        }
+        else if (logState?.CurrentState == "failed" || logState?.ConsecutiveFailures > 0)
+        {
+            lifecycleState = "failed";
+            lifecycleLabel = artifact is null ? "Beschaffung fehlgeschlagen" : "Erneuerung fehlgeschlagen";
+        }
+        else if (logState?.CurrentState == "succeeded")
+        {
+            lifecycleState = "succeeded";
+            lifecycleLabel = "Letzter Vorgang erfolgreich";
+        }
+        else if (providerProblem is not null)
+        {
+            lifecycleState = "blocked";
+            lifecycleLabel = "Durch Konfiguration blockiert";
+        }
+        else if (applied)
+        {
+            lifecycleState = "managed";
+            lifecycleLabel = "Automatisch durch Caddy verwaltet";
+        }
+        else if (requested)
+        {
+            lifecycleState = "draft";
+            lifecycleLabel = "Wartet auf Apply";
+        }
+
+        var ttlSeconds = ReadDurationSetting(provider?.ConfigJson, "ttl", "ttl_seconds", "dns_ttl", "dnsTtl");
+        var propagationTimeoutSeconds = ReadDurationSetting(
+            provider?.ConfigJson,
+            "propagation_timeout",
+            "propagationTimeout",
+            "dns_propagation_timeout");
+        var tips = BuildTips(
+            kind,
+            name,
+            requested,
+            applied,
+            artifact,
+            logState,
+            provider,
+            providerProblem,
+            ttlSeconds,
+            propagationTimeoutSeconds,
+            renewalWindowStartsAt);
+        var recentAttempts = logState?.RecentEvents
+            .Select(item => new CertificateAttemptItem(
+                item.Timestamp,
+                item.State,
+                item.Label,
+                item.Detail,
+                item.Attempt,
+                item.NextAttemptAt))
+            .ToArray() ?? [];
+        return new CertificateLifecycleStatus(
+            lifecycleState,
+            lifecycleLabel,
+            applied,
+            now,
+            logState?.LastAttemptAt,
+            logState?.LastSuccessAt,
+            logState?.NextAttemptAt,
+            logState?.AttemptCount ?? 0,
+            logState?.ConsecutiveFailures ?? 0,
+            logState?.LastError ?? string.Empty,
+            provider?.ProviderType ?? string.Empty,
+            provider?.LastTestStatus ?? string.Empty,
+            provider?.LastTestedAt,
+            ttlSeconds,
+            propagationTimeoutSeconds,
+            kind == "wildcard" ? $"_acme-challenge.{domainName}" : string.Empty,
+            tips,
+            recentAttempts);
+    }
+
+    private static IReadOnlyList<string> BuildTips(
+        string kind,
+        string name,
+        bool requested,
+        bool applied,
+        CertificateArtifact? artifact,
+        CaddyCertificateLogState? logState,
+        ProviderStatus? provider,
+        string? providerProblem,
+        int? ttlSeconds,
+        int? propagationTimeoutSeconds,
+        DateTimeOffset? renewalWindowStartsAt)
+    {
+        var tips = new List<string>();
+        if (!requested)
+        {
+            tips.Add("Für diesen Namen ist aktuell kein Zertifikat geplant.");
+            return tips;
+        }
+
+        if (providerProblem is not null)
+        {
+            tips.Add(providerProblem);
+        }
+
+        if (!applied)
+        {
+            tips.Add("Die Domain ist noch nicht im zuletzt angewendeten Caddy-Stand. Erst Preview validieren und Apply ausführen.");
+        }
+
+        if (kind == "wildcard")
+        {
+            tips.Add($"Für DNS-01 muss der TXT-Record _acme-challenge.{name[2..]} auf den autoritativen Nameservern sichtbar sein.");
+            if (ttlSeconds is null)
+            {
+                tips.Add("Im Providerprofil ist keine DNS-TTL hinterlegt. Für die Diagnose den tatsächlichen TXT-TTL beim autoritativen Nameserver prüfen.");
+            }
+            else
+            {
+                tips.Add($"Konfigurierte DNS-TTL: {FormatDuration(ttlSeconds.Value)}. Resolver können alte Antworten ungefähr bis zum Ablauf dieser TTL zwischenspeichern.");
+            }
+
+            if (propagationTimeoutSeconds is null)
+            {
+                tips.Add("Kein eigener Propagation-Timeout im Providerprofil erkannt; Caddys Standardprüfung kann deshalb maßgeblich sein.");
+            }
+            else
+            {
+                tips.Add($"Konfigurierter Propagation-Timeout: {FormatDuration(propagationTimeoutSeconds.Value)}.");
+            }
+
+            if (provider?.LastTestStatus == "untested")
+            {
+                tips.Add("DNS-Provider zuerst in der UI testen, damit Credentials und Schreibzugriff geprüft sind.");
+            }
+        }
+
+        if (artifact?.ExpiresAt <= DateTimeOffset.UtcNow && logState is null)
+        {
+            tips.Add("Das Zertifikat ist abgelaufen, aber im verfügbaren Caddy-Log wurde kein passender Erneuerungsversuch erkannt. Caddy-Containerstatus, aktive Konfiguration und Log-Mount prüfen.");
+        }
+
+        if (logState?.NextAttemptAt is not null &&
+            logState.NextAttemptAt <= DateTimeOffset.UtcNow &&
+            logState.Active == false)
+        {
+            tips.Add("Der zuletzt angekündigte Wiederholungszeitpunkt ist bereits verstrichen. Prüfen, ob Caddy seitdem neu gestartet wurde oder weitere Logs außerhalb der sichtbaren Rotation liegen.");
+        }
+
+        if (logState?.LastError.Contains("propagation", StringComparison.OrdinalIgnoreCase) == true ||
+            logState?.LastError.Contains("dns", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            tips.Add("TXT-Record direkt gegen die autoritativen Nameserver prüfen; öffentliche Resolver können wegen Cache und TTL abweichen.");
+        }
+
+        if (renewalWindowStartsAt is not null && artifact?.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            tips.Add($"Geschätztes Standard-Erneuerungsfenster ab {renewalWindowStartsAt:dd.MM.yyyy HH:mm} UTC. ACME ARI oder eine eigene Caddy-Einstellung kann den tatsächlichen Zeitraum ändern.");
+        }
+
+        if (logState is null)
+        {
+            tips.Add("Keine passenden Lifecycle-Ereignisse in den letzten verfügbaren Caddy-Logdateien gefunden; die Versuchszahl ist dann unbekannt, nicht null.");
+        }
+
+        return tips.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    private static CertificateStatusItem CreateItem(
+        string kind,
+        string name,
+        bool requested,
+        string state,
+        string label,
+        string detail,
+        CertificateArtifact? artifact,
+        DateTimeOffset? renewalWindowStartsAt,
+        CertificateLifecycleStatus lifecycle)
+    {
+        int? days = artifact is null ? null : DaysRemaining(artifact, DateTimeOffset.UtcNow);
+        return new CertificateStatusItem(
+            kind,
+            name,
+            requested,
+            state,
+            label,
+            detail,
+            artifact?.NotBefore,
+            artifact?.ExpiresAt,
+            days,
+            renewalWindowStartsAt,
+            lifecycle);
     }
 
     private string? ProviderProblem(ProviderStatus? provider)
@@ -440,9 +846,145 @@ public sealed class CertificateStatusService
         return (wildcard, baseDomain);
     }
 
+    private static int? ReadDurationSetting(string? json, params string[] keys)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            foreach (var key in keys)
+            {
+                if (!document.RootElement.TryGetProperty(key, out var value))
+                {
+                    continue;
+                }
+
+                if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+                {
+                    return Math.Max(number, 0);
+                }
+
+                if (value.ValueKind == JsonValueKind.String && TryParseSeconds(value.GetString(), out var seconds))
+                {
+                    return seconds;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return null;
+    }
+
+    private static bool TryParseSeconds(string? value, out int seconds)
+    {
+        seconds = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var candidate = value.Trim().ToLowerInvariant();
+        if (int.TryParse(candidate, NumberStyles.Integer, CultureInfo.InvariantCulture, out seconds))
+        {
+            seconds = Math.Max(seconds, 0);
+            return true;
+        }
+
+        var suffix = candidate[^1];
+        if (!double.TryParse(candidate[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var amount))
+        {
+            return false;
+        }
+
+        var calculated = suffix switch
+        {
+            's' => amount,
+            'm' => amount * 60,
+            'h' => amount * 3_600,
+            'd' => amount * 86_400,
+            _ => -1,
+        };
+        if (calculated < 0 || calculated > int.MaxValue)
+        {
+            return false;
+        }
+
+        seconds = (int)Math.Round(calculated, MidpointRounding.AwayFromZero);
+        return true;
+    }
+
+    private static string FormatDuration(int seconds)
+    {
+        if (seconds > 0 && seconds % 86_400 == 0)
+        {
+            return $"{seconds / 86_400} d";
+        }
+
+        if (seconds > 0 && seconds % 3_600 == 0)
+        {
+            return $"{seconds / 3_600} h";
+        }
+
+        if (seconds > 0 && seconds % 60 == 0)
+        {
+            return $"{seconds / 60} min";
+        }
+
+        return $"{seconds} s";
+    }
+
+    private static DateTimeOffset RenewalWindowStartsAt(CertificateArtifact artifact)
+    {
+        var lifetime = artifact.ExpiresAt - artifact.NotBefore;
+        return artifact.NotBefore.AddTicks(lifetime.Ticks * 2 / 3);
+    }
+
+    private static int DaysRemaining(CertificateArtifact artifact, DateTimeOffset now)
+    {
+        return (int)Math.Floor((artifact.ExpiresAt - now).TotalDays);
+    }
+
+    private static string RenewalFailureDetail(CertificateArtifact artifact, CaddyCertificateLogState? logState)
+    {
+        var detail = $"Das Zertifikat ist seit {artifact.ExpiresAt:dd.MM.yyyy HH:mm} UTC abgelaufen.";
+        if (logState?.LastAttemptAt is not null)
+        {
+            detail = $"{detail} Letzter erkannter Versuch: {logState.LastAttemptAt:dd.MM.yyyy HH:mm:ss} UTC.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(logState?.LastError))
+        {
+            detail = $"{detail} {logState.LastError}";
+        }
+
+        return detail;
+    }
+
+    private static DateTimeOffset ReadTimestamp(DbDataReader reader, int ordinal)
+    {
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            DateTimeOffset dateTimeOffset => dateTimeOffset,
+            DateTime dateTime => new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)),
+            _ => DateTimeOffset.Parse(
+                Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal),
+        };
+    }
+
     private sealed record ProviderStatus(
         string ProviderType,
         bool Enabled,
+        string ConfigJson,
+        DateTimeOffset? LastTestedAt,
         string LastTestStatus,
         string LastTestError);
 
