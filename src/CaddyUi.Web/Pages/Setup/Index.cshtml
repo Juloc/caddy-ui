@@ -2,78 +2,86 @@
 @using CaddyUi.Application.Dns
 @model CaddyUi.Web.Pages.Setup.IndexModel
 @{
-    ViewData["Title"] = "Einrichtung";
+    ViewData["Title"] = T["Setup"];
+    var setupLabels = new
+    {
+        Later = T["Configure later"].Value,
+        NotSelected = T["Not selected"].Value,
+        NotSpecified = T["Not specified yet"].Value,
+        NoSelection = T["No selection"].Value,
+        NoRoute = T["No route"].Value,
+    };
 }
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Sicherer Assistent</p>
-        <h1>DNS, Domain und Route einrichten</h1>
-        <p class="page-description">Provider auswählen, Zugangsdaten eingeben und optional direkt die erste Route vorbereiten. Ein Fehler rollt die gesamte Speicherung zurück; Caddy wird erst später über Vorschau und Apply geändert.</p>
+        <p class="eyebrow">@T["Safe wizard"]</p>
+        <h1>@T["Set up DNS, domain, and route"]</h1>
+        <p class="page-description">@T["Select a provider, enter credentials, and optionally prepare the first route. Any error rolls back the complete save; Caddy changes only later through preview and apply."]</p>
     </div>
-    <span class="status-badge status-badge--ok">Atomare Speicherung</span>
+    <span class="status-badge status-badge--ok">@T["Atomic save"]</span>
 </section>
 
 @if (TempData["SetupMessage"] is string setupMessage)
 {
     <div class="notice notice--success">
-        <strong>Einrichtung gespeichert</strong>
+        <strong>@T["Setup saved"]</strong>
         <span>@setupMessage</span>
         <div class="page-actions">
-            <a class="button button--compact button--quiet" asp-page="/Administration/Domains">Domains prüfen</a>
-            <a class="button button--compact button--primary" asp-page="/Routing/Preview">Vorschau öffnen</a>
+            <a class="button button--compact button--quiet" asp-page="/Administration/Domains">@T["Review domains"]</a>
+            <a class="button button--compact button--primary" asp-page="/Routing/Preview">@T["Open preview"]</a>
         </div>
     </div>
 }
 @if (!string.IsNullOrWhiteSpace(Model.LoadError))
 {
-    <div class="notice notice--warning"><strong>Vorhandene Provider konnten nicht geladen werden</strong><span>@Model.LoadError</span></div>
+    <div class="notice notice--warning"><strong>@T["Existing providers could not be loaded"]</strong><span>@Model.LoadError</span></div>
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
 <form method="post" class="setup-wizard" data-setup-wizard>
     <section class="workspace-section setup-step">
         <header class="section-header">
-            <div><p class="setup-step-number">1</p><h2>DNS-Provider</h2><p>Netcup oder einen anderen Provider auswählen. Danach erscheinen nur die benötigten Felder.</p></div>
+            <div><p class="setup-step-number">1</p><h2>@T["DNS provider"]</h2><p>@T["Select Netcup or another provider. Only the required fields are shown."]</p></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field">
-                <span class="field-label">Provider-Konfiguration</span>
+                <span class="field-label">@T["Provider configuration"]</span>
                 <select asp-for="Input.ProviderMode" data-provider-mode>
-                    <option value="new">Neuen Provider anlegen</option>
-                    <option value="existing">Vorhandenen Provider verwenden</option>
-                    <option value="none">Vorerst ohne Provider</option>
+                    <option value="new">@T["Create a new provider"]</option>
+                    <option value="existing">@T["Use an existing provider"]</option>
+                    <option value="none">@T["Continue without a provider"]</option>
                 </select>
-                <small>Ohne Provider kann die Domain gespeichert werden; Wildcard-Zertifikate bleiben bis zur späteren Zuordnung blockiert.</small>
+                <small>@T["A domain can be saved without a provider, but wildcard certificates remain blocked until a provider is assigned."]</small>
             </label>
 
             <label class="field" data-provider-existing>
-                <span class="field-label">Vorhandener Provider</span>
+                <span class="field-label">@T["Existing provider"]</span>
                 <select asp-for="Input.ExistingProviderId">
-                    <option value="">Bitte auswählen</option>
+                    <option value="">@T["Select"]</option>
                     @foreach (var provider in Model.ExistingProviders)
                     {
                         <option value="@provider.Id">@provider.Label · @provider.ProviderType</option>
                     }
                 </select>
-                <small>Nur aktive Provider werden angeboten.</small>
+                <small>@T["Only enabled providers are offered."]</small>
             </label>
 
             <label class="field" data-provider-new>
-                <span class="field-label">Provider</span>
+                <span class="field-label">@T["Provider"]</span>
                 <select asp-for="Input.ProviderType" data-provider-type>
                     @foreach (var definition in Model.ProviderDefinitions)
                     {
                         <option value="@definition.Type">@definition.DisplayName</option>
                     }
                 </select>
-                <small>Die Eingabemaske passt sich sofort an.</small>
+                <small>@T["The form updates immediately."]</small>
             </label>
 
             <label class="field" data-provider-new>
-                <span class="field-label">Anzeigename</span>
-                <input asp-for="Input.ProviderLabel" placeholder="Netcup Produktion" autocomplete="off" />
-                <small>Nur ein interner Name zur Wiedererkennung.</small>
+                <span class="field-label">@T["Display name"]</span>
+                <input asp-for="Input.ProviderLabel" placeholder="Netcup Production" autocomplete="off" />
+                <small>@T["Internal name used to identify this configuration."]</small>
             </label>
         </div>
 
@@ -81,7 +89,7 @@
         {
             <div class="provider-field-panel" data-provider-fields="@definition.Type">
                 <div class="provider-field-heading">
-                    <div><strong>@definition.DisplayName</strong><small>@definition.DocumentationHint</small></div>
+                    <div><strong>@definition.DisplayName</strong><small>@T[definition.DocumentationHint]</small></div>
                     <span class="status-badge status-badge--neutral">@definition.Capabilities</span>
                 </div>
                 <div class="form-grid form-grid--three">
@@ -89,149 +97,149 @@
                     {
                         var fieldName = IndexModel.FieldName(definition.Type, field.Key);
                         <label class="field">
-                            <span class="field-label">@field.Label @(field.Required ? "*" : "")</span>
+                            <span class="field-label">@T[field.Label] @(field.Required ? "*" : "")</span>
                             <input name="Input.ProviderSettings[@fieldName]" value="@Model.Input.ProviderSettings.GetValueOrDefault(fieldName, field.DefaultValue ?? string.Empty)" autocomplete="off" />
-                            <small>@field.HelpText</small>
+                            <small>@T[field.HelpText ?? string.Empty]</small>
                         </label>
                     }
                     @foreach (var field in definition.Secrets)
                     {
                         var fieldName = IndexModel.FieldName(definition.Type, field.Key);
                         <label class="field">
-                            <span class="field-label">@field.Label @(field.Required ? "*" : "")</span>
-                            <input type="password" name="Input.ProviderSecretReferences[@fieldName]" placeholder="Zugangsdaten eingeben" autocomplete="new-password" spellcheck="false" />
-                            <small>Wird verschlüsselt gespeichert und später nicht mehr angezeigt. Experten können <code>secret://env/NAME</code> oder <code>secret://file/PFAD</code> verwenden.</small>
+                            <span class="field-label">@T[field.Label] @(field.Required ? "*" : "")</span>
+                            <input type="password" name="Input.ProviderSecretReferences[@fieldName]" placeholder="@T["Enter credentials"]" autocomplete="new-password" spellcheck="false" />
+                            <small>@T["Stored encrypted and never displayed again. Advanced users can use secret://env/NAME or secret://file/PATH."]</small>
                         </label>
                     }
                     @if (definition.Settings.Count == 0 && definition.Secrets.Count == 0)
                     {
-                        <p class="empty-state">Für diesen Provider sind keine zusätzlichen Felder nötig.</p>
+                        <p class="empty-state">@T["This provider requires no additional fields."]</p>
                     }
                 </div>
             </div>
         }
         <div class="safe-apply-note" data-provider-new>
-            <strong>Secret-Schutz</strong>
-            <span>Eingegebene API-Schlüssel und Passwörter werden mit ASP.NET Data Protection verschlüsselt in PostgreSQL gespeichert und weder im Formular noch in Logs oder Diagnosen ausgegeben.</span>
+            <strong>@T["Secret protection"]</strong>
+            <span>@T["Entered API keys and passwords are encrypted with ASP.NET Data Protection in PostgreSQL and are not included in forms, logs, or diagnostics."]</span>
         </div>
     </section>
 
     <section class="workspace-section setup-step">
         <header class="section-header">
-            <div><p class="setup-step-number">2</p><h2>Domain und Zertifikate</h2><p>Wildcard und Basisdomain werden getrennt geplant, weil <code>*.example.com</code> die Basisdomain nicht abdeckt.</p></div>
+            <div><p class="setup-step-number">2</p><h2>@T["Domain and certificates"]</h2><p>@T["Wildcard and base-domain certificates are planned separately because *.example.com does not cover the base domain."]</p></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field">
-                <span class="field-label">Domain</span>
+                <span class="field-label">@T["Domain"]</span>
                 <input asp-for="Input.DomainName" placeholder="example.com" autocomplete="off" data-domain-name />
                 <span asp-validation-for="Input.DomainName" class="field-error"></span>
             </label>
             <label class="field">
-                <span class="field-label">Anzeigename</span>
+                <span class="field-label">@T["Display name"]</span>
                 <input asp-for="Input.DomainDisplayName" placeholder="Example" autocomplete="off" />
-                <small>Optional; standardmäßig wird der Domainname verwendet.</small>
+                <small>@T["Optional; the domain name is used by default."]</small>
             </label>
             <label class="check">
                 <input asp-for="Input.MakeDefaultDomain" />
-                <span><strong>Als Standarddomain verwenden</strong><small>Neue Routen wählen diese Domain zuerst aus.</small></span>
+                <span><strong>@T["Use as default domain"]</strong><small>@T["New routes select this domain first."]</small></span>
             </label>
             <label class="check certificate-choice">
                 <input asp-for="Input.RequestWildcardCertificate" data-certificate-choice />
-                <span><strong>Wildcard-Zertifikat beschaffen</strong><small><code>*.example.com</code> für direkte Subdomains.</small></span>
+                <span><strong>@T["Request wildcard certificate"]</strong><small><code>*.example.com</code> @T["for direct subdomains."]</small></span>
             </label>
             <label class="check certificate-choice">
                 <input asp-for="Input.RequestBaseCertificate" data-certificate-choice />
-                <span><strong>Basisdomain einschließen</strong><small><code>example.com</code> wird zusätzlich angefordert.</small></span>
+                <span><strong>@T["Include base domain"]</strong><small><code>example.com</code> @T["is requested additionally."]</small></span>
             </label>
         </div>
-        <div class="notice notice--warning" data-certificate-warning hidden>Mindestens eine Zertifikatsart muss ausgewählt sein.</div>
+        <div class="notice notice--warning" data-certificate-warning hidden>@T["Select at least one certificate type."]</div>
     </section>
 
     <section class="workspace-section setup-step">
         <header class="section-header">
-            <div><p class="setup-step-number">3</p><h2>Erste Route</h2><p>Optional direkt eine Route als Entwurf anlegen. Die aktive Caddy-Konfiguration bleibt unverändert.</p></div>
+            <div><p class="setup-step-number">3</p><h2>@T["First route"]</h2><p>@T["Optionally create a route draft now. The active Caddy configuration remains unchanged."]</p></div>
         </header>
         <label class="check setup-toggle">
             <input asp-for="Input.CreateRoute" data-route-toggle />
-            <span><strong>Route jetzt anlegen</strong><small>Erst Vorschau und Apply aktivieren sie.</small></span>
+            <span><strong>@T["Create route now"]</strong><small>@T["Preview and apply activate it later."]</small></span>
         </label>
 
         <div data-route-fields>
             <div class="form-grid form-grid--three">
-                <label class="field"><span class="field-label">Routenname</span><input asp-for="Input.RouteName" placeholder="Mealie" autocomplete="off" /></label>
-                <label class="field"><span class="field-label">Subdomain</span><input asp-for="Input.RouteSubdomain" placeholder="mealie" autocomplete="off" data-route-subdomain /><small>Leer verwendet die Basisdomain.</small></label>
+                <label class="field"><span class="field-label">@T["Route name"]</span><input asp-for="Input.RouteName" placeholder="Mealie" autocomplete="off" /></label>
+                <label class="field"><span class="field-label">@T["Subdomain"]</span><input asp-for="Input.RouteSubdomain" placeholder="mealie" autocomplete="off" data-route-subdomain /><small>@T["Leave empty to use the base domain."]</small></label>
                 <label class="field">
-                    <span class="field-label">Routentyp</span>
+                    <span class="field-label">@T["Route type"]</span>
                     <select asp-for="Input.RouteKind" data-route-kind>
-                        <option value="proxy">Reverse Proxy</option>
-                        <option value="redirect">Weiterleitung</option>
-                        <option value="static">Statische Antwort</option>
+                        <option value="proxy">@T["Reverse proxy"]</option>
+                        <option value="redirect">@T["Redirect"]</option>
+                        <option value="static">@T["Static response"]</option>
                         @if (Model.AllowCustomRoutes)
                         {
-                            <option value="custom">Eigene Caddy-Direktiven</option>
+                            <option value="custom">@T["Custom Caddy directives"]</option>
                         }
                     </select>
                 </label>
-                <label class="field"><span class="field-label">Pfad</span><input asp-for="Input.RoutePathPrefix" placeholder="/" autocomplete="off" /></label>
+                <label class="field"><span class="field-label">@T["Path"]</span><input asp-for="Input.RoutePathPrefix" placeholder="/" autocomplete="off" /></label>
                 <label class="field">
-                    <span class="field-label">Zertifikat</span>
+                    <span class="field-label">@T["Certificate"]</span>
                     <select asp-for="Input.RouteCertificateMode">
-                        <option value="inherit">Domain-Einstellung übernehmen</option>
-                        <option value="wildcard">Wildcard erzwingen</option>
-                        <option value="individual">Einzelzertifikat erzwingen</option>
+                        <option value="inherit">@T["Inherit domain setting"]</option>
+                        <option value="wildcard">@T["Require wildcard"]</option>
+                        <option value="individual">@T["Require individual certificate"]</option>
                     </select>
                 </label>
             </div>
 
             <div class="route-kind-panel" data-kind-panel="proxy">
-                <h3>Reverse Proxy</h3>
+                <h3>@T["Reverse proxy"]</h3>
                 <div class="form-grid form-grid--three">
-                    <label class="field"><span class="field-label">Verbindung</span><select asp-for="Input.UpstreamScheme"><option value="direct">Direkt / Docker-Netz</option><option value="http">HTTP</option><option value="https">HTTPS</option></select></label>
-                    <label class="field"><span class="field-label">Host</span><input asp-for="Input.UpstreamHost" placeholder="mealie oder 192.168.1.20" autocomplete="off" /><small>Docker-Servicename, Hostname oder IP-Adresse.</small></label>
-                    <label class="field"><span class="field-label">Port</span><input asp-for="Input.UpstreamPort" type="number" min="1" max="65535" placeholder="9925" /><small>Interner Zielport; kein Host-Port nötig.</small></label>
+                    <label class="field"><span class="field-label">@T["Connection"]</span><select asp-for="Input.UpstreamScheme"><option value="direct">@T["Direct / Docker network"]</option><option value="http">HTTP</option><option value="https">HTTPS</option></select></label>
+                    <label class="field"><span class="field-label">Host</span><input asp-for="Input.UpstreamHost" placeholder="mealie or 192.168.1.20" autocomplete="off" /><small>@T["Docker service name, hostname, or IP address."]</small></label>
+                    <label class="field"><span class="field-label">@T["Port"]</span><input asp-for="Input.UpstreamPort" type="number" min="1" max="65535" placeholder="9925" /><small>@T["Internal target port; no host port is required."]</small></label>
                 </div>
             </div>
 
             <div class="route-kind-panel" data-kind-panel="redirect">
-                <h3>Weiterleitung</h3>
+                <h3>@T["Redirect"]</h3>
                 <div class="form-grid form-grid--two">
-                    <label class="field"><span class="field-label">Ziel</span><input asp-for="Input.RedirectTarget" placeholder="https://example.com/neu" /></label>
-                    <label class="check"><input asp-for="Input.RedirectPermanent" /><span><strong>Permanent</strong><small>HTTP 308 statt 302.</small></span></label>
+                    <label class="field"><span class="field-label">@T["Target"]</span><input asp-for="Input.RedirectTarget" placeholder="https://example.com/new" /></label>
+                    <label class="check"><input asp-for="Input.RedirectPermanent" /><span><strong>@T["Permanent"]</strong><small>@T["HTTP 308 instead of 302."]</small></span></label>
                 </div>
             </div>
 
             <div class="route-kind-panel" data-kind-panel="static">
-                <h3>Statische Antwort</h3>
+                <h3>@T["Static response"]</h3>
                 <div class="form-grid form-grid--two">
-                    <label class="field"><span class="field-label">HTTP-Status</span><input asp-for="Input.StaticStatusCode" type="number" min="100" max="599" /></label>
-                    <label class="field"><span class="field-label">Antworttext</span><textarea asp-for="Input.StaticBody" rows="4"></textarea></label>
+                    <label class="field"><span class="field-label">@T["HTTP status"]</span><input asp-for="Input.StaticStatusCode" type="number" min="100" max="599" /></label>
+                    <label class="field"><span class="field-label">@T["Response body"]</span><textarea asp-for="Input.StaticBody" rows="4"></textarea></label>
                 </div>
             </div>
 
             @if (Model.AllowCustomRoutes)
             {
                 <div class="route-kind-panel" data-kind-panel="custom">
-                    <h3>Eigene Caddy-Direktiven</h3>
-                    <label class="field"><span class="field-label">Direktiven</span><textarea asp-for="Input.CustomSnippet" rows="10" class="code-editor"></textarea><small>Keine Site-Blöcke oder Secrets. Unsichere Eingaben werden serverseitig blockiert.</small></label>
+                    <h3>@T["Custom Caddy directives"]</h3>
+                    <label class="field"><span class="field-label">@T["Directives"]</span><textarea asp-for="Input.CustomSnippet" rows="10" class="code-editor"></textarea><small>@T["No site blocks or secrets. Unsafe input is blocked on the server."]</small></label>
                 </div>
             }
         </div>
     </section>
 
     <section class="workspace-section setup-review">
-        <header class="section-header"><div><p class="setup-step-number">4</p><h2>Prüfen und speichern</h2><p>Bis zum Klick auf Speichern wurde nichts verändert.</p></div></header>
+        <header class="section-header"><div><p class="setup-step-number">4</p><h2>@T["Review and save"]</h2><p>@T["Nothing has changed until Save is selected."]</p></div></header>
         <dl class="setup-summary">
-            <div><dt>Provider</dt><dd data-summary-provider>–</dd></div>
-            <div><dt>Domain</dt><dd data-summary-domain>–</dd></div>
-            <div><dt>Zertifikate</dt><dd data-summary-certificates>–</dd></div>
-            <div><dt>Route</dt><dd data-summary-route>–</dd></div>
+            <div><dt>@T["Provider"]</dt><dd data-summary-provider>–</dd></div>
+            <div><dt>@T["Domain"]</dt><dd data-summary-domain>–</dd></div>
+            <div><dt>@T["Certificates"]</dt><dd data-summary-certificates>–</dd></div>
+            <div><dt>@T["Route"]</dt><dd data-summary-route>–</dd></div>
         </dl>
-        <div class="safe-apply-note"><strong>Sicherheitsablauf</strong><span>Validieren → verschlüsselt und atomisch speichern → Vorschau → Caddy validieren → Apply mit automatischem Rollback.</span></div>
+        <div class="safe-apply-note"><strong>@T["Safety sequence"]</strong><span>@T["Validate → store encrypted and atomically → preview → validate Caddy → apply with automatic rollback."]</span></div>
     </section>
 
     <footer class="editor-actionbar">
-        <div><strong>Keine Teilstände.</strong><span>Bei jedem Fehler wird die gesamte Einrichtung zurückgerollt.</span></div>
-        <div class="page-actions"><a class="button button--quiet" asp-page="/Index">Abbrechen</a><button class="button button--primary" type="submit">Einrichtung speichern</button></div>
+        <div><strong>@T["No partial state."]</strong><span>@T["Any error rolls back the complete setup."]</span></div>
+        <div class="page-actions"><a class="button button--quiet" asp-page="/Index">@T["Cancel"]</a><button class="button button--primary" type="submit">@T["Save setup"]</button></div>
     </footer>
 </form>
 
@@ -239,6 +247,7 @@
 (() => {
     const wizard = document.querySelector('[data-setup-wizard]');
     if (!wizard) return;
+    const labels = @Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(setupLabels));
     const providerMode = wizard.querySelector('[data-provider-mode]');
     const providerType = wizard.querySelector('[data-provider-type]');
     const routeToggle = wizard.querySelector('[data-route-toggle]');
@@ -275,18 +284,18 @@
         const anyCertificate = certificateChoices.some(item => item.checked);
         wizard.querySelector('[data-certificate-warning]').hidden = anyCertificate;
         const providerText = mode === 'none'
-            ? 'Später einrichten'
+            ? labels.Later
             : mode === 'existing'
-                ? wizard.querySelector('[name="Input.ExistingProviderId"]')?.selectedOptions[0]?.textContent || 'Nicht gewählt'
+                ? wizard.querySelector('[name="Input.ExistingProviderId"]')?.selectedOptions[0]?.textContent || labels.NotSelected
                 : providerType.selectedOptions[0]?.textContent || providerType.value;
-        const domain = wizard.querySelector('[data-domain-name]').value || 'Noch nicht angegeben';
-        const certificates = certificateChoices.filter(item => item.checked).map(item => item.name.endsWith('WildcardCertificate') ? `*.${domain}` : domain).join(' + ') || 'Keine Auswahl';
+        const domain = wizard.querySelector('[data-domain-name]').value || labels.NotSpecified;
+        const certificates = certificateChoices.filter(item => item.checked).map(item => item.name.endsWith('WildcardCertificate') ? `*.${domain}` : domain).join(' + ') || labels.NoSelection;
         const subdomain = wizard.querySelector('[data-route-subdomain]').value.trim();
         const routeHost = subdomain ? `${subdomain}.${domain}` : domain;
         wizard.querySelector('[data-summary-provider]').textContent = providerText.trim();
         wizard.querySelector('[data-summary-domain]').textContent = domain;
         wizard.querySelector('[data-summary-certificates]').textContent = certificates;
-        wizard.querySelector('[data-summary-route]').textContent = hasRoute ? `${routeHost} · ${routeKind.selectedOptions[0]?.textContent || routeKind.value}` : 'Keine Route';
+        wizard.querySelector('[data-summary-route]').textContent = hasRoute ? `${routeHost} · ${routeKind.selectedOptions[0]?.textContent || routeKind.value}` : labels.NoRoute;
     };
 
     wizard.addEventListener('input', update);
