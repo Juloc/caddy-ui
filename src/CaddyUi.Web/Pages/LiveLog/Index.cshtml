@@ -1,20 +1,22 @@
 @page
 @model CaddyUi.Web.Pages.LiveLog.IndexModel
 @{
-    ViewData["Title"] = "Live-Log";
+    ViewData["Title"] = T["Live log"];
+    var liveLabel = T["Live"].Value;
+    var reconnectLabel = T["Connection interrupted — retrying"].Value;
 }
-<section class="page-heading"><div><p class="eyebrow">Server-Sent Events</p><h1>Live-Log</h1><p class="page-description">Neue Requests werden ohne Vollseiten-Neuladung ergänzt. Die Ansicht ist read-only und nutzt dieselben Filter wie die übrige Statistik.</p></div><span id="live-state" class="status-badge @(Model.EventStreamUrl is null ? "status-badge--warning" : "status-badge--neutral")">@(Model.EventStreamUrl is null ? "Nicht verfügbar" : "Verbindung wird aufgebaut")</span></section>
+<section class="page-heading"><div><p class="eyebrow">Server-Sent Events</p><h1>@T["Live log"]</h1><p class="page-description">@T["New requests are added without a full page reload. The view is read-only and uses the same filters as the other analytics pages."]</p></div><span id="live-state" class="status-badge @(Model.EventStreamUrl is null ? "status-badge--warning" : "status-badge--neutral")">@(Model.EventStreamUrl is null ? T["Unavailable"] : T["Connecting"])</span></section>
 @if (!string.IsNullOrWhiteSpace(Model.LoadError))
 {
-    <div class="notice notice--warning"><strong>Live-Log ist momentan nicht verfügbar</strong><span>@Model.LoadError</span><small>Prüfe PostgreSQL-Migrationen, Analytics-Worker und den Mount von <code>/var/log/caddy/access.log</code>.</small></div>
+    <div class="notice notice--warning"><strong>@T["Live log is currently unavailable"]</strong><span>@Model.LoadError</span><small>@T["Check PostgreSQL migrations, the analytics worker, and the mount for"] <code>/var/log/caddy/access.log</code>.</small></div>
 }
 <partial name="Shared/_AnalyticsFilters" model="Model" />
-<section class="panel panel--wide"><div class="panel-body table-wrap"><table class="data-table request-table"><thead><tr><th>Zeit</th><th>Host / Pfad</th><th>Status</th><th>Typ</th><th>Akteur</th><th>Laufzeit</th></tr></thead><tbody id="live-rows">
+<section class="panel panel--wide"><div class="panel-body table-wrap"><table class="data-table request-table"><thead><tr><th>@T["Time"]</th><th>@T["Host / path"]</th><th>@T["Status"]</th><th>@T["Type"]</th><th>@T["Actor"]</th><th>@T["Duration"]</th></tr></thead><tbody id="live-rows">
 @foreach (var request in Model.Requests)
 {
-<tr><td>@request.OccurredAt.ToLocalTime().ToString("G")</td><td><strong>@request.Host</strong><small><code>@request.Method @request.Path</code></small></td><td>@request.Status</td><td>@request.RequestType</td><td>@request.ActorType</td><td>@AnalyticsPageModelBase.FormatDuration(request.DurationMilliseconds)</td></tr>
+<tr><td><time datetime="@request.OccurredAt.ToString("O")" data-local-time>@request.OccurredAt.ToString("u")</time></td><td><strong>@request.Host</strong><small><code>@request.Method @request.Path</code></small></td><td>@request.Status</td><td>@request.RequestType</td><td>@request.ActorType</td><td>@AnalyticsPageModelBase.FormatDuration(request.DurationMilliseconds)</td></tr>
 }
-</tbody></table>@if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)){<p class="empty-state">Noch keine Requests für diesen Filter.</p>}</div></section>
+</tbody></table>@if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)){<p class="empty-state">@T["No requests match this filter yet."]</p>}</div></section>
 @if (Model.EventStreamUrl is not null)
 {
 <script>
@@ -22,21 +24,23 @@
     const rows = document.getElementById('live-rows');
     const state = document.getElementById('live-state');
     const stream = new EventSource(@Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(Model.EventStreamUrl)));
+    const liveLabel = @Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(liveLabel));
+    const reconnectLabel = @Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(reconnectLabel));
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
     stream.onopen = () => {
-        state.textContent = 'Live';
+        state.textContent = liveLabel;
         state.className = 'status-badge status-badge--ok';
     };
     stream.addEventListener('request', event => {
         const item = JSON.parse(event.data);
         const row = document.createElement('tr');
         const duration = Number(item.durationMilliseconds || 0).toFixed(1);
-        row.innerHTML = `<td>${escapeHtml(new Date(item.occurredAt).toLocaleString())}</td><td><strong>${escapeHtml(item.host)}</strong><small><code>${escapeHtml(item.method)} ${escapeHtml(item.path)}</code></small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.requestType)}</td><td>${escapeHtml(item.actorType)}</td><td>${escapeHtml(duration)} ms</td>`;
+        row.innerHTML = `<td>${escapeHtml(new Date(item.occurredAt).toLocaleString(document.documentElement.lang || undefined))}</td><td><strong>${escapeHtml(item.host)}</strong><small><code>${escapeHtml(item.method)} ${escapeHtml(item.path)}</code></small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.requestType)}</td><td>${escapeHtml(item.actorType)}</td><td>${escapeHtml(duration)} ms</td>`;
         rows.prepend(row);
         while (rows.children.length > 100) rows.lastElementChild.remove();
     });
     stream.onerror = () => {
-        state.textContent = 'Verbindung unterbrochen – erneuter Versuch';
+        state.textContent = reconnectLabel;
         state.className = 'status-badge status-badge--warning';
     };
     window.addEventListener('beforeunload', () => stream.close(), { once: true });

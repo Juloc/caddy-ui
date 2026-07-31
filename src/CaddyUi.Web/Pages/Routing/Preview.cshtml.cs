@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Routing;
 
 [Authorize(Policy = "Editor")]
-public sealed class PreviewModel : PageModel
+public sealed class PreviewModel : LocalizedPageModel
 {
     private readonly RouteManagementStore _store;
     private readonly CaddyApplyService _applyService;

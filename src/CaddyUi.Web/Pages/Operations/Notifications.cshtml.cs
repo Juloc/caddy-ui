@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Operations;
 
 [Authorize(Policy = "Administrator")]
-public sealed class NotificationsModel : PageModel
+public sealed class NotificationsModel : LocalizedPageModel
 {
     private readonly OperationsStore _store;
     private readonly NotificationDispatcher _notifications;

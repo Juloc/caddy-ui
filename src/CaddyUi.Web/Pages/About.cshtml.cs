@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages;
 
 [Authorize(Policy = "Viewer")]
-public sealed class AboutModel : PageModel
+public sealed class AboutModel : LocalizedPageModel
 {
     private readonly FoundationStatusService _foundationStatusService;
     private readonly IHostEnvironment _hostEnvironment;

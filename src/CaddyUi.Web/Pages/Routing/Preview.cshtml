@@ -3,16 +3,16 @@
 @using CaddyUi.Application.Routing
 @using CaddyUi.Infrastructure.Routing
 @{
-    ViewData["Title"] = "Preview & Apply";
+    ViewData["Title"] = T["Preview and apply"];
 }
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">Kontrollierter Schreibpfad</p>
-        <h1>Preview &amp; Apply</h1>
-        <p class="page-description">Generieren, Diff prüfen, validieren, atomisch schreiben, Caddy neu laden und verifizieren. Bei Fehlern wird automatisch zurückgerollt.</p>
+        <p class="eyebrow">@T["Controlled write path"]</p>
+        <h1>@T["Preview and apply"]</h1>
+        <p class="page-description">@T["Generate, inspect the diff, validate, write atomically, reload Caddy, and verify. Failures trigger an automatic rollback."]</p>
     </div>
-    <a class="button button--quiet" asp-page="/Routing/Index">Zurück zu Routen</a>
+    <a class="button button--quiet" asp-page="/Routing/Index">@T["Back to routes"]</a>
 </section>
 
 @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
@@ -21,9 +21,9 @@
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
-<section class="workspace-toolbar" aria-label="Apply-Modus">
+<section class="workspace-toolbar" aria-label="@T["Apply mode"]">
     <div class="toolbar-group">
-        <span class="toolbar-label">Modus</span>
+        <span class="toolbar-label">@T["Mode"]</span>
         <span class="status-badge @(Model.RoutingOptions.WriteMode == RouteWriteMode.Active ? "status-badge--warning" : "status-badge--neutral")">@Model.RoutingOptions.WriteMode.ToString().ToLowerInvariant()</span>
         <span class="toolbar-separator"></span>
         <code>@(Model.RoutingOptions.WriteMode == RouteWriteMode.Active ? Model.RoutingOptions.ManagedFragmentPath : Model.RoutingOptions.ShadowFragmentPath)</code>
@@ -31,14 +31,14 @@
 </section>
 
 <section class="workspace-section">
-    <header class="section-header"><div><h2>Neue Revision erzeugen</h2><p>Eine Revision ist unveränderlich und enthält den vollständigen generierten Routenstand.</p></div></header>
+    <header class="section-header"><div><h2>@T["Create a new revision"]</h2><p>@T["A revision is immutable and contains the complete generated route state."]</p></div></header>
     <form method="post" asp-page-handler="Preview" class="inline-form inline-form--reason">
         <label class="field">
-            <span class="field-label">Grund</span>
+            <span class="field-label">@T["Reason"]</span>
             <input asp-for="Input.Reason" autocomplete="off" />
             <span asp-validation-for="Input.Reason" class="field-error"></span>
         </label>
-        <button class="button button--primary" type="submit">Preview erstellen</button>
+        <button class="button button--primary" type="submit">@T["Create preview"]</button>
     </form>
 </section>
 
@@ -48,21 +48,21 @@
     <section class="workspace-section feature-config-preview">
         <header class="section-header">
             <div>
-                <h2>Revision @revisionLabel</h2>
+                <h2>@T["Revision"] @revisionLabel</h2>
                 <p><code>@Model.Preview.Revision.Digest</code></p>
             </div>
             <div class="page-actions">
-                <span class="status-badge status-badge--neutral">@Model.Preview.Diff.Count(line => line.Kind == DiffLineKind.Added) hinzugefügt</span>
-                <span class="status-badge status-badge--neutral">@Model.Preview.Diff.Count(line => line.Kind == DiffLineKind.Removed) entfernt</span>
+                <span class="status-badge status-badge--neutral">@T["{0} added", Model.Preview.Diff.Count(line => line.Kind == DiffLineKind.Added)]</span>
+                <span class="status-badge status-badge--neutral">@T["{0} removed", Model.Preview.Diff.Count(line => line.Kind == DiffLineKind.Removed)]</span>
                 <form method="post" asp-page-handler="Apply">
                     <input type="hidden" name="revisionId" value="@Model.Preview.Revision.Id" />
                     @if (Model.RoutingOptions.WriteMode == RouteWriteMode.Disabled)
                     {
-                        <button class="button button--primary" type="submit" disabled>Apply deaktiviert</button>
+                        <button class="button button--primary" type="submit" disabled>@T["Apply disabled"]</button>
                     }
                     else
                     {
-                        <button class="button button--primary" type="submit">@(Model.RoutingOptions.WriteMode == RouteWriteMode.Shadow ? "In Shadow schreiben" : "Validieren & anwenden")</button>
+                        <button class="button button--primary" type="submit">@(Model.RoutingOptions.WriteMode == RouteWriteMode.Shadow ? T["Write to shadow"] : T["Validate and apply"])</button>
                     }
                 </form>
             </div>
@@ -73,9 +73,9 @@
         }
         @if (Model.RoutingOptions.WriteMode == RouteWriteMode.Disabled)
         {
-            <div class="notice notice--neutral">Schreibzugriffe sind deaktiviert. Die Vorschau kann vollständig geprüft werden, aber Apply bleibt gesperrt.</div>
+            <div class="notice notice--neutral">@T["Writes are disabled. The preview can be inspected completely, but apply remains locked."]</div>
         }
-        <div class="diff-view" role="region" aria-label="Konfigurations-Diff" tabindex="0">
+        <div class="diff-view" role="region" aria-label="@T["Configuration diff"]" tabindex="0">
             @foreach (var line in Model.Preview.Diff)
             {
                 <div class="diff-line diff-line--@line.Kind.ToString().ToLowerInvariant()">
@@ -91,31 +91,31 @@
 
 <section class="workspace-split">
     <article class="workspace-section">
-        <header class="section-header"><div><h2>Revisionen</h2><p>Unveränderliche generierte Stände.</p></div></header>
+        <header class="section-header"><div><h2>@T["Revisions"]</h2><p>@T["Immutable generated states."]</p></div></header>
         <div class="compact-list">
             @foreach (var revision in Model.Revisions)
             {
                 var digestLabel = revision.Digest.Length > 8 ? revision.Digest[..8] : revision.Digest;
                 <a class="compact-list-row" asp-page="/Routing/Preview" asp-route-revision="@revision.Id">
-                    <span><strong>@revision.Reason</strong><small>@revision.CreatedAt.ToLocalTime().ToString("g") · @revision.ActorUsername</small></span>
-                    <span class="status-badge @(revision.Applied ? "status-badge--ok" : "status-badge--neutral")">@(revision.Applied ? "Aktiv" : digestLabel)</span>
+                    <span><strong>@revision.Reason</strong><small><time datetime="@revision.CreatedAt.ToString("O")" data-local-time>@revision.CreatedAt.ToString("u")</time> · @revision.ActorUsername</small></span>
+                    <span class="status-badge @(revision.Applied ? "status-badge--ok" : "status-badge--neutral")">@(revision.Applied ? T["Active"] : digestLabel)</span>
                 </a>
             }
-            @if (Model.Revisions.Count == 0) { <p class="empty-state">Noch keine Revision.</p> }
+            @if (Model.Revisions.Count == 0) { <p class="empty-state">@T["No revision exists yet."]</p> }
         </div>
     </article>
     <article class="workspace-section">
-        <header class="section-header"><div><h2>Apply-Verlauf</h2><p>Jeder Versuch bleibt auditierbar.</p></div></header>
+        <header class="section-header"><div><h2>@T["Apply history"]</h2><p>@T["Every attempt remains auditable."]</p></div></header>
         <div class="compact-list">
             @foreach (var operation in Model.Operations)
             {
                 var correlationLabel = operation.CorrelationId.Length > 8 ? operation.CorrelationId[..8] : operation.CorrelationId;
                 <div class="compact-list-row">
-                    <span><strong>@operation.State</strong><small>@operation.StartedAt.ToLocalTime().ToString("g") · @correlationLabel</small></span>
-                    <span class="status-badge @(operation.State == "applied" ? "status-badge--ok" : operation.State == "failed" ? "status-badge--warning" : "status-badge--neutral")">@(operation.CompletedAt is null ? "läuft" : operation.State)</span>
+                    <span><strong>@operation.State</strong><small><time datetime="@operation.StartedAt.ToString("O")" data-local-time>@operation.StartedAt.ToString("u")</time> · @correlationLabel</small></span>
+                    <span class="status-badge @(operation.State == "applied" ? "status-badge--ok" : operation.State == "failed" ? "status-badge--warning" : "status-badge--neutral")">@(operation.CompletedAt is null ? T["running"] : operation.State)</span>
                 </div>
             }
-            @if (Model.Operations.Count == 0) { <p class="empty-state">Noch kein Apply-Versuch.</p> }
+            @if (Model.Operations.Count == 0) { <p class="empty-state">@T["No apply attempt exists yet."]</p> }
         </div>
     </article>
 </section>
@@ -123,10 +123,10 @@
 @if (Model.RoutingOptions.WriteMode == RouteWriteMode.Active)
 {
     <section class="workspace-section danger-zone">
-        <header class="section-header"><div><h2>Rollback</h2><p>Stellt den Snapshot vor dem letzten erfolgreichen Apply wieder her und lädt Caddy erneut.</p></div></header>
-        <form method="post" asp-page-handler="Rollback" class="inline-form inline-form--reason" onsubmit="return confirm('Letzte aktive Routenänderung zurückrollen?');">
-            <label class="field"><span class="field-label">Rollback-Grund</span><input asp-for="Input.Reason" /></label>
-            <button class="button button--danger" type="submit">Letzten Apply zurückrollen</button>
+        <header class="section-header"><div><h2>@T["Rollback"]</h2><p>@T["Restores the snapshot before the last successful apply and reloads Caddy."]</p></div></header>
+        <form method="post" asp-page-handler="Rollback" class="inline-form inline-form--reason" data-confirm="@T["Roll back the last active route change?"]">
+            <label class="field"><span class="field-label">@T["Rollback reason"]</span><input asp-for="Input.Reason" /></label>
+            <button class="button button--danger" type="submit">@T["Roll back last apply"]</button>
         </form>
     </section>
 }

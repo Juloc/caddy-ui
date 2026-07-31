@@ -48,11 +48,51 @@
     function applyCollapsedState(collapsed, persist) {
         shell.dataset.sidebarCollapsed = String(collapsed);
         collapseButton?.setAttribute("aria-pressed", String(collapsed));
-        collapseButton?.setAttribute("aria-label", collapsed ? "Seitenleiste ausklappen" : "Seitenleiste einklappen");
+        const label = collapsed
+            ? collapseButton?.dataset.labelExpand ?? "Expand sidebar"
+            : collapseButton?.dataset.labelCollapse ?? "Collapse sidebar";
+        collapseButton?.setAttribute("aria-label", label);
 
         if (persist) {
             writePreference(sidebarStorageKey, String(collapsed));
         }
+    }
+
+    function applyLocalTimes(root = document) {
+        const locale = document.documentElement.lang || undefined;
+        root.querySelectorAll("time[data-local-time]").forEach(element => {
+            const value = element.getAttribute("datetime");
+            if (!value) {
+                return;
+            }
+
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return;
+            }
+
+            element.textContent = new Intl.DateTimeFormat(locale, {
+                dateStyle: "medium",
+                timeStyle: "medium"
+            }).format(date);
+            element.title = date.toISOString();
+        });
+    }
+
+    function attachConfirmationHandlers(root = document) {
+        root.querySelectorAll("form[data-confirm]").forEach(form => {
+            if (form.dataset.confirmAttached === "true") {
+                return;
+            }
+
+            form.dataset.confirmAttached = "true";
+            form.addEventListener("submit", event => {
+                const message = form.dataset.confirm;
+                if (message && !window.confirm(message)) {
+                    event.preventDefault();
+                }
+            });
+        });
     }
 
     function openMobileNavigation() {
@@ -82,6 +122,8 @@
 
     applyTheme(readPreference(themeStorageKey, "system"), false);
     applyCollapsedState(readPreference(sidebarStorageKey, "false") === "true", false);
+    applyLocalTimes();
+    attachConfirmationHandlers();
 
     themeButtons.forEach(button => {
         button.addEventListener("click", () => applyTheme(button.dataset.themeOption, true));

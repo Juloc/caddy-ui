@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Setup;
 
 [Authorize(Policy = "Administrator")]
-public sealed class IndexModel : PageModel
+public sealed class IndexModel : LocalizedPageModel
 {
     private readonly GuidedSetupService _setupService;
     private readonly DomainProviderStore _domainProviderStore;

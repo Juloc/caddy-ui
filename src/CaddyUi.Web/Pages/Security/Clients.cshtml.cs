@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Security;
 
 [Authorize(Policy = "Viewer")]
-public sealed class ClientsModel : PageModel
+public sealed class ClientsModel : LocalizedPageModel
 {
     private readonly ClientSecurityQueryStore _store;
 

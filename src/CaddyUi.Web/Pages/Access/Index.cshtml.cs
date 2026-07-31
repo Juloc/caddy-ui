@@ -5,21 +5,25 @@ using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace CaddyUi.Web.Pages.Access;
 
 [Authorize(Policy = "Administrator")]
-public sealed class IndexModel : PageModel
+public sealed class IndexModel : LocalizedPageModel
 {
     private readonly RouteManagementStore _store;
     private readonly PasswordHashService _passwordHashService;
+    private readonly IStringLocalizer<SharedResource> _localizer;
 
     public IndexModel(
         RouteManagementStore store,
-        PasswordHashService passwordHashService)
+        PasswordHashService passwordHashService,
+        IStringLocalizer<SharedResource> localizer)
     {
         _store = store;
         _passwordHashService = passwordHashService;
+        _localizer = localizer;
     }
 
     public IReadOnlyList<AccessGroupRecord> Groups { get; private set; } =
@@ -60,7 +64,7 @@ public sealed class IndexModel : PageModel
                 NewGroup.Description,
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
-            StatusMessage = "Zugriffsgruppe angelegt.";
+            StatusMessage = _localizer["Access group created."];
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -76,7 +80,9 @@ public sealed class IndexModel : PageModel
         try
         {
             await _store.SetAccessGroupEnabledAsync(id, enabled, HttpContext.RequestAborted);
-            StatusMessage = enabled ? "Zugriffsgruppe aktiviert." : "Zugriffsgruppe deaktiviert.";
+            StatusMessage = enabled
+                ? _localizer["Access group enabled."]
+                : _localizer["Access group disabled."];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -104,7 +110,8 @@ public sealed class IndexModel : PageModel
                 passwordHash,
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
-            StatusMessage = "Portal-Zugang angelegt. Das Kennwort wird nicht erneut angezeigt.";
+            StatusMessage = _localizer[
+                "Portal credential created. The password is not displayed again."];
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -121,7 +128,9 @@ public sealed class IndexModel : PageModel
         try
         {
             await _store.SetCredentialEnabledAsync(id, enabled, HttpContext.RequestAborted);
-            StatusMessage = enabled ? "Portal-Zugang aktiviert." : "Portal-Zugang deaktiviert.";
+            StatusMessage = enabled
+                ? _localizer["Portal credential enabled."]
+                : _localizer["Portal credential disabled."];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -143,7 +152,7 @@ public sealed class IndexModel : PageModel
         {
             Groups = Array.Empty<AccessGroupRecord>();
             Credentials = Array.Empty<AccessCredentialRecord>();
-            LoadError = $"Zugriffsgruppen konnten nicht geladen werden: {exception.Message}";
+            LoadError = _localizer["Access groups could not be loaded: {0}", exception.Message];
         }
     }
 

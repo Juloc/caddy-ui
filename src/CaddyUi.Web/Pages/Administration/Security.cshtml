@@ -1,17 +1,17 @@
 @page
 @model CaddyUi.Web.Pages.Administration.SecurityModel
 @{
-    ViewData["Title"] = "Sicherheit";
+    ViewData["Title"] = T["Security"];
 }
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Konto</p>
-        <h1>TOTP und Recovery-Codes</h1>
-        <p class="page-description">TOTP bleibt optional, solange <code>CADDY_UI_REQUIRE_TOTP=false</code> gesetzt ist. Öffentliche Installationen erhalten eine sichtbare Warnung.</p>
+        <p class="eyebrow">@T["Account"]</p>
+        <h1>@T["TOTP and recovery codes"]</h1>
+        <p class="page-description">@T["TOTP remains optional while CADDY_UI_REQUIRE_TOTP=false is configured. Public installations display a warning."]</p>
     </div>
     <span class="status-badge @(Model.TotpEnabled ? "status-badge--ok" : "status-badge--warning")">
-        @(Model.TotpEnabled ? "TOTP aktiv" : "TOTP aus")
+        @(Model.TotpEnabled ? T["TOTP enabled"] : T["TOTP disabled"])
     </span>
 </section>
 
@@ -25,12 +25,12 @@
     <section class="panel">
         <header class="panel-header">
             <div>
-                <p class="eyebrow">Einmalig anzeigen</p>
-                <h2>Recovery-Codes</h2>
+                <p class="eyebrow">@T["Shown once"]</p>
+                <h2>@T["Recovery codes"]</h2>
             </div>
         </header>
         <div class="panel-body">
-            <p>Diese Codes werden nur jetzt angezeigt. Jeder Code kann genau einmal verwendet werden.</p>
+            <p>@T["These codes are shown only now. Each code can be used exactly once."]</p>
             <div class="code-grid">
                 @foreach (var code in Model.RecoveryCodes)
                 {
@@ -46,14 +46,14 @@
         <header class="panel-header">
             <div>
                 <p class="eyebrow">Authenticator</p>
-                <h2>Neues TOTP einrichten</h2>
+                <h2>@T["Set up new TOTP"]</h2>
             </div>
         </header>
         <div class="panel-body">
             @if (string.IsNullOrWhiteSpace(Model.SetupSecret))
             {
                 <form method="post" asp-page-handler="Begin">
-                    <button class="button button--primary" type="submit">Setup starten</button>
+                    <button class="button button--primary" type="submit">@T["Start setup"]</button>
                 </form>
             }
             else
@@ -70,10 +70,10 @@
                     <form method="post" asp-page-handler="Enable" class="form-stack">
                         <input type="hidden" asp-for="SetupSecret" />
                         <label>
-                            <span>Sechsstelligen Code bestätigen</span>
+                            <span>@T["Confirm six-digit code"]</span>
                             <input asp-for="VerificationCode" inputmode="numeric" autocomplete="one-time-code" />
                         </label>
-                        <button class="button button--primary" type="submit">TOTP aktivieren</button>
+                        <button class="button button--primary" type="submit">@T["Enable TOTP"]</button>
                     </form>
                 </div>
             }
@@ -83,20 +83,20 @@
     <aside class="panel">
         <header class="panel-header">
             <div>
-                <p class="eyebrow">Zurücksetzen</p>
-                <h2>TOTP deaktivieren</h2>
+                <p class="eyebrow">@T["Reset"]</p>
+                <h2>@T["Disable TOTP"]</h2>
             </div>
         </header>
         <div class="panel-body">
-            <p>Alle vorhandenen Recovery-Codes werden dabei ungültig.</p>
+            <p>@T["All existing recovery codes become invalid."]</p>
             <form method="post" asp-page-handler="Disable">
                 @if (Model.TotpEnabled)
                 {
-                    <button class="button button--danger" type="submit">Deaktivieren</button>
+                    <button class="button button--danger" type="submit">@T["Disable"]</button>
                 }
                 else
                 {
-                    <button class="button button--danger" type="button" disabled>Deaktivieren</button>
+                    <button class="button button--danger" type="button" disabled>@T["Disable"]</button>
                 }
             </form>
         </div>

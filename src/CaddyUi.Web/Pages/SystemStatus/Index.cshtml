@@ -1,48 +1,48 @@
 @page "/System"
 @model CaddyUi.Web.Pages.SystemStatus.IndexModel
 @{
-    ViewData["Title"] = "System";
+    ViewData["Title"] = T["System"];
 }
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Betriebsstatus</p>
-        <h1>System</h1>
-        <p class="page-description">Zustand von PostgreSQL, Log-Verarbeitung, Checkpoints, Aufbewahrung und Sicherheitsdiensten.</p>
+        <p class="eyebrow">@T["Operational status"]</p>
+        <h1>@T["System"]</h1>
+        <p class="page-description">@T["Status of PostgreSQL, log processing, checkpoints, retention, and security services."]</p>
     </div>
-    <span class="status-badge @(Model.Status.DatabaseAvailable ? "status-badge--ok" : "status-badge--warning")">@(Model.Status.DatabaseAvailable ? "PostgreSQL erreichbar" : "PostgreSQL nicht erreichbar")</span>
+    <span class="status-badge @(Model.Status.DatabaseAvailable ? "status-badge--ok" : "status-badge--warning")">@(Model.Status.DatabaseAvailable ? T["PostgreSQL reachable"] : T["PostgreSQL unreachable"])</span>
 </section>
 
 @if (!Model.Status.DatabaseAvailable)
 {
-    <div class="notice notice--warning"><strong>Datenbankfehler:</strong> @Model.Status.DatabaseError</div>
+    <div class="notice notice--warning"><strong>@T["Database error"]:</strong> @Model.Status.DatabaseError</div>
 }
 
 <section class="metric-grid">
-    <article class="metric-card"><span class="metric-label">Request-Zeilen</span><strong class="metric-value">@Model.Status.RequestRows.ToString("N0")</strong><span class="metric-detail">Aufbewahrung @Model.Status.RawRequestRetentionDays Tage</span></article>
-    <article class="metric-card"><span class="metric-label">Pageviews</span><strong class="metric-value">@Model.Status.PageViewRows.ToString("N0")</strong><span class="metric-detail">Aufbewahrung @Model.Status.PageViewRetentionDays Tage</span></article>
-    <article class="metric-card"><span class="metric-label">Clients</span><strong class="metric-value">@Model.Status.ClientRows.ToString("N0")</strong><span class="metric-detail">pseudonymisiert oder geschätzt</span></article>
-    <article class="metric-card"><span class="metric-label">Offene Verarbeitungsfehler</span><strong class="metric-value">@Model.Status.UnresolvedFailures.ToString("N0")</strong><span class="metric-detail">separat protokolliert</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Request rows"]</span><strong class="metric-value">@Model.Status.RequestRows.ToString("N0")</strong><span class="metric-detail">@T["Retention {0} days", Model.Status.RawRequestRetentionDays]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Page views"]</span><strong class="metric-value">@Model.Status.PageViewRows.ToString("N0")</strong><span class="metric-detail">@T["Retention {0} days", Model.Status.PageViewRetentionDays]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Clients"]</span><strong class="metric-value">@Model.Status.ClientRows.ToString("N0")</strong><span class="metric-detail">@T["pseudonymous or estimated"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Unresolved processing failures"]</span><strong class="metric-value">@Model.Status.UnresolvedFailures.ToString("N0")</strong><span class="metric-detail">@T["logged separately"]</span></article>
 </section>
 
 <section class="analytics-columns analytics-columns--two">
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Verarbeitung</p><h2>Log-Verarbeitung</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Processing"]</p><h2>@T["Log processing"]</h2></div></header>
         <div class="panel-body definition-list">
-            <div><span>Aktiv</span><strong>@(Model.Status.IngestionEnabled ? "Ja" : "Nein")</strong></div>
-            <div><span>Logpfade</span><strong>@Model.Status.ConfiguredLogPaths</strong></div>
-            <div><span>Checkpoints</span><strong>@Model.Status.CheckpointCount</strong></div>
-            <div><span>Letzter Request</span><strong>@(Model.Status.LatestRequestAt?.ToLocalTime().ToString("G") ?? "–")</strong></div>
-            <div><span>Letzter Checkpoint</span><strong>@(Model.Status.LatestCheckpointAt?.ToLocalTime().ToString("G") ?? "–")</strong></div>
+            <div><span>@T["Enabled"]</span><strong>@(Model.Status.IngestionEnabled ? T["Yes"] : T["No"])</strong></div>
+            <div><span>@T["Log paths"]</span><strong>@Model.Status.ConfiguredLogPaths</strong></div>
+            <div><span>@T["Checkpoints"]</span><strong>@Model.Status.CheckpointCount</strong></div>
+            <div><span>@T["Latest request"]</span><strong>@if (Model.Status.LatestRequestAt is not null) { <time datetime="@Model.Status.LatestRequestAt.Value.ToString("O")" data-local-time>@Model.Status.LatestRequestAt.Value.ToString("u")</time> } else { <span>–</span> }</strong></div>
+            <div><span>@T["Latest checkpoint"]</span><strong>@if (Model.Status.LatestCheckpointAt is not null) { <time datetime="@Model.Status.LatestCheckpointAt.Value.ToString("O")" data-local-time>@Model.Status.LatestCheckpointAt.Value.ToString("u")</time> } else { <span>–</span> }</strong></div>
         </div>
     </article>
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Sicherheit</p><h2>Dienste</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Security"]</p><h2>@T["Services"]</h2></div></header>
         <div class="panel-body definition-list">
-            <div><span>IP Intelligence</span><strong>@(Model.Status.IpIntelligenceEnabled ? "Aktiv" : "Deaktiviert")</strong></div>
-            <div><span>Risikobewertung</span><strong>@(Model.Status.RiskAssessmentEnabled ? "Aktiv" : "Deaktiviert")</strong></div>
-            <div><span>Blocklist-Modus</span><strong>@Model.Status.BlockWriteMode</strong></div>
-            <div><span>Anwendung</span><strong>.NET / PostgreSQL</strong></div>
+            <div><span>IP Intelligence</span><strong>@(Model.Status.IpIntelligenceEnabled ? T["Enabled"] : T["Disabled"])</strong></div>
+            <div><span>@T["Risk assessment"]</span><strong>@(Model.Status.RiskAssessmentEnabled ? T["Enabled"] : T["Disabled"])</strong></div>
+            <div><span>@T["Blocklist mode"]</span><strong>@Model.Status.BlockWriteMode</strong></div>
+            <div><span>@T["Application"]</span><strong>.NET / PostgreSQL</strong></div>
         </div>
     </article>
 </section>

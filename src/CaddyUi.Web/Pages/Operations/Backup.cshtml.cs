@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Operations;
 
 [Authorize(Policy = "Administrator")]
-public sealed class BackupModel : PageModel
+public sealed class BackupModel : LocalizedPageModel
 {
     private readonly OperationsStore _store;
     private readonly BackupDiagnosticsService _backups;

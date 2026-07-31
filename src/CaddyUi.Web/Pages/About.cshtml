@@ -1,56 +1,56 @@
 @page "/About"
 @model AboutModel
 @{
-    ViewData["Title"] = "Über Caddy UI";
+    ViewData["Title"] = T["About Caddy UI"];
 }
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Anwendung</p>
-        <h1>Über Caddy UI</h1>
-        <p class="page-description">Produkt-, Laufzeit- und Betriebsinformationen an einem zentralen Ort.</p>
+        <p class="eyebrow">@T["Application"]</p>
+        <h1>@T["About Caddy UI"]</h1>
+        <p class="page-description">@T["Product, runtime, and operational information in one place."]</p>
     </div>
-    <span class="status-badge status-badge--ok">Version @Model.Product.Version</span>
+    <span class="status-badge status-badge--ok">@T["Version"] @Model.Product.Version</span>
 </section>
 
 <section class="workspace-grid about-grid">
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Produkt</p><h2>@Model.Product.Product</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Product"]</p><h2>@Model.Product.Product</h2></div></header>
         <div class="panel-body definition-list">
-            <div><span>Version</span><strong>@Model.Product.Version</strong></div>
-            <div><span>Laufzeit</span><strong>@Model.Product.Runtime</strong></div>
-            <div><span>Umgebung</span><strong>@Model.EnvironmentName</strong></div>
-            <div><span>Datenbank</span><strong>PostgreSQL</strong></div>
+            <div><span>@T["Version"]</span><strong>@Model.Product.Version</strong></div>
+            <div><span>@T["Runtime"]</span><strong>@Model.Product.Runtime</strong></div>
+            <div><span>@T["Environment"]</span><strong>@Model.EnvironmentName</strong></div>
+            <div><span>@T["Database"]</span><strong>PostgreSQL</strong></div>
         </div>
     </article>
 
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Betrieb</p><h2>Aktive Modi</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Operations"]</p><h2>@T["Active modes"]</h2></div></header>
         <div class="panel-body definition-list">
-            <div><span>Routen schreiben</span><strong>@Model.Routing.WriteMode</strong></div>
-            <div><span>DNS schreiben</span><strong>@Model.Operations.DnsWriteMode</strong></div>
-            <div><span>Hintergrundjobs</span><strong>@(Model.Operations.WorkerEnabled ? "Aktiv" : "Deaktiviert")</strong></div>
-            <div><span>Eigene Routen</span><strong>@(Model.Routing.AllowCustomRoutes ? "Erlaubt" : "Deaktiviert")</strong></div>
+            <div><span>@T["Route writes"]</span><strong>@Model.Routing.WriteMode</strong></div>
+            <div><span>@T["DNS writes"]</span><strong>@Model.Operations.DnsWriteMode</strong></div>
+            <div><span>@T["Background jobs"]</span><strong>@(Model.Operations.WorkerEnabled ? T["Enabled"] : T["Disabled"])</strong></div>
+            <div><span>@T["Custom routes"]</span><strong>@(Model.Routing.AllowCustomRoutes ? T["Allowed"] : T["Disabled"])</strong></div>
         </div>
     </article>
 
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Caddy</p><h2>Integration</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">Caddy</p><h2>@T["Integration"]</h2></div></header>
         <div class="panel-body definition-list">
-            <div><span>Portal-Upstream</span><strong><code>@Model.Routing.PortalUpstream</code></strong></div>
-            <div><span>DNS-Module</span><strong>@string.Join(", ", Model.Operations.InstalledCaddyDnsModules.OrderBy(module => module))</strong></div>
-            <div><span>Provider-Secrets</span><strong><code>@Model.Operations.ProviderSecretDirectory</code></strong></div>
-            <div><span>Zertifikatsdaten</span><strong><code>@Model.Operations.CertificateDirectory</code></strong></div>
+            <div><span>@T["Portal upstream"]</span><strong><code>@Model.Routing.PortalUpstream</code></strong></div>
+            <div><span>@T["DNS modules"]</span><strong>@string.Join(", ", Model.Operations.InstalledCaddyDnsModules.OrderBy(module => module))</strong></div>
+            <div><span>@T["Provider secrets"]</span><strong><code>@Model.Operations.ProviderSecretDirectory</code></strong></div>
+            <div><span>@T["Certificate data"]</span><strong><code>@Model.Operations.CertificateDirectory</code></strong></div>
         </div>
     </article>
 
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Sicherheit</p><h2>Migration und Rückfall</h2></div></header>
+        <header class="panel-header"><div><p class="eyebrow">@T["Security"]</p><h2>@T["Migration and rollback"]</h2></div></header>
         <div class="panel-body definition-list">
-            <div><span>Umschaltung</span><strong>@(Model.Cutover.Enabled ? "Freigegeben" : "Gesperrt")</strong></div>
-            <div><span>Admin-Port</span><strong>@Model.Cutover.AdminPort</strong></div>
-            <div><span>Portal-Port</span><strong>@Model.Cutover.PortalPort</strong></div>
-            <div><span>Manifest-Verzeichnis</span><strong><code>@Model.Cutover.ManifestDirectory</code></strong></div>
+            <div><span>@T["Cutover"]</span><strong>@(Model.Cutover.Enabled ? T["Approved"] : T["Locked"])</strong></div>
+            <div><span>@T["Admin port"]</span><strong>@Model.Cutover.AdminPort</strong></div>
+            <div><span>@T["Portal port"]</span><strong>@Model.Cutover.PortalPort</strong></div>
+            <div><span>@T["Manifest directory"]</span><strong><code>@Model.Cutover.ManifestDirectory</code></strong></div>
         </div>
     </article>
 </section>

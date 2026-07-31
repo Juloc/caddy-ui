@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Operations;
 
 [Authorize(Policy = "Administrator")]
-public sealed class CutoverModel : PageModel
+public sealed class CutoverModel : LocalizedPageModel
 {
     private static readonly TimeSpan InteractiveTimeout = TimeSpan.FromSeconds(30);
     private readonly CutoverReadinessService _service;

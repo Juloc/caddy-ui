@@ -1,28 +1,28 @@
 @page
 @model CaddyUi.Web.Pages.Security.OverviewModel
 @{
-    ViewData["Title"] = "Bots & Sicherheit";
+    ViewData["Title"] = T["Bots and security"];
 }
-<section class="page-heading"><div><p class="eyebrow">Security Analytics</p><h1>Bots &amp; Sicherheit</h1><p class="page-description">Risikowerte sind deterministische Hinweise mit nachvollziehbaren Gründen. Sie sind keine sichere Identifikation einer Person.</p></div><a class="button button--quiet" asp-page="/Security/Clients">Alle Clients</a></section>
+<section class="page-heading"><div><p class="eyebrow">Security Analytics</p><h1>@T["Bots and security"]</h1><p class="page-description">@T["Risk values are deterministic indicators with traceable reasons. They are not a reliable identification of a person."]</p></div><a class="button button--quiet" asp-page="/Security/Clients">@T["All clients"]</a></section>
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="metric-grid">
-<article class="metric-card"><span class="metric-label">Clients</span><strong class="metric-value">@Model.Security.Clients.ToString("N0")</strong><span class="metric-detail">geschätzte technische Identitäten</span></article>
-<article class="metric-card"><span class="metric-label">Bot-Requests</span><strong class="metric-value">@Model.Security.BotRequests.ToString("N0")</strong><span class="metric-detail">Requestklassifikation</span></article>
-<article class="metric-card"><span class="metric-label">Hohes Risiko</span><strong class="metric-value">@Model.Security.HighRiskClients.ToString("N0")</strong><span class="metric-detail">aktuelle Auswahl</span></article>
-<article class="metric-card"><span class="metric-label">Aktive Sperren</span><strong class="metric-value">@Model.Security.ActiveBlocks.ToString("N0")</strong><span class="metric-detail">manuell und nicht abgelaufen</span></article>
+<article class="metric-card"><span class="metric-label">@T["Clients"]</span><strong class="metric-value">@Model.Security.Clients.ToString("N0")</strong><span class="metric-detail">@T["estimated technical identities"]</span></article>
+<article class="metric-card"><span class="metric-label">@T["Bot requests"]</span><strong class="metric-value">@Model.Security.BotRequests.ToString("N0")</strong><span class="metric-detail">@T["request classification"]</span></article>
+<article class="metric-card"><span class="metric-label">@T["High risk"]</span><strong class="metric-value">@Model.Security.HighRiskClients.ToString("N0")</strong><span class="metric-detail">@T["current selection"]</span></article>
+<article class="metric-card"><span class="metric-label">@T["Active blocks"]</span><strong class="metric-value">@Model.Security.ActiveBlocks.ToString("N0")</strong><span class="metric-detail">@T["manual and not expired"]</span></article>
 </section>
 <section class="workspace-grid workspace-grid--analytics">
-<article class="panel panel--wide"><header class="panel-header"><div><p class="eyebrow">Priorisiert</p><h2>Auffällige Clients</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>Client</th><th>IP</th><th>Klassifikation</th><th>Score</th><th>Bewertet</th></tr></thead><tbody>
+<article class="panel panel--wide"><header class="panel-header"><div><p class="eyebrow">@T["Prioritized"]</p><h2>@T["Suspicious clients"]</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>@T["Client"]</th><th>IP</th><th>@T["Classification"]</th><th>@T["Score"]</th><th>@T["Assessed"]</th></tr></thead><tbody>
 @foreach (var client in Model.Security.SuspiciousClients)
 {
-<tr><td><a asp-page="/Security/Client" asp-route-id="@client.ClientId"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? "geschätzt" : "First-Party-ID")</small></td><td><code>@(client.RemoteAddress.Length == 0 ? "–" : client.RemoteAddress)</code></td><td>@client.Classification</td><td><span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">@client.AutomationScore · @client.RiskLevel</span></td><td>@(client.AssessedAt?.ToLocalTime().ToString("g") ?? "–")</td></tr>
+<tr><td><a asp-page="/Security/Client" asp-route-id="@client.ClientId"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? T["estimated"] : T["First-party ID"])</small></td><td><code>@(client.RemoteAddress.Length == 0 ? "–" : client.RemoteAddress)</code></td><td>@client.Classification</td><td><span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">@client.AutomationScore · @client.RiskLevel</span></td><td>@if (client.AssessedAt is not null) { <time datetime="@client.AssessedAt.Value.ToString("O")" data-local-time>@client.AssessedAt.Value.ToString("u")</time> } else { <span>–</span> }</td></tr>
 }
 </tbody></table></div></article>
-<aside class="panel"><header class="panel-header"><div><p class="eyebrow">Einordnung</p><h2>Dimensionen</h2></div></header><div class="panel-body"><ul class="check-list"><li>Akteur und Requesttyp bleiben getrennt</li><li>Client ist keine sichere Person</li><li>Score enthält einzelne Reasons</li><li>Automatische Sperren bleiben aus</li></ul></div></aside>
+<aside class="panel"><header class="panel-header"><div><p class="eyebrow">@T["Interpretation"]</p><h2>@T["Dimensions"]</h2></div></header><div class="panel-body"><ul class="check-list"><li>@T["Actor and request type remain separate"]</li><li>@T["A client is not a confirmed person"]</li><li>@T["The score contains individual reasons"]</li><li>@T["Automatic blocks remain disabled"]</li></ul></div></aside>
 </section>
-<section class="panel panel--wide analytics-section"><header class="panel-header"><div><p class="eyebrow">Auditierbar</p><h2>Security Events</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>Zeit</th><th>Art</th><th>Grund</th><th>IP</th><th>Host / Pfad</th></tr></thead><tbody>
+<section class="panel panel--wide analytics-section"><header class="panel-header"><div><p class="eyebrow">@T["Auditable"]</p><h2>@T["Security events"]</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>@T["Time"]</th><th>@T["Type"]</th><th>@T["Reason"]</th><th>IP</th><th>@T["Host / path"]</th></tr></thead><tbody>
 @foreach (var item in Model.Security.RecentEvents)
 {
-<tr><td>@item.OccurredAt.ToLocalTime().ToString("G")</td><td>@item.Kind</td><td>@item.Reason</td><td><code>@item.RemoteAddress</code></td><td>@item.Host<small><code>@item.Path</code></small></td></tr>
+<tr><td><time datetime="@item.OccurredAt.ToString("O")" data-local-time>@item.OccurredAt.ToString("u")</time></td><td>@item.Kind</td><td>@item.Reason</td><td><code>@item.RemoteAddress</code></td><td>@item.Host<small><code>@item.Path</code></small></td></tr>
 }
 </tbody></table></div></section>

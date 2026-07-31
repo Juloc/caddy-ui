@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages;
 
 [Authorize]
-public sealed class LogoutModel : PageModel
+public sealed class LogoutModel : LocalizedPageModel
 {
     private readonly AuthenticationStore _store;
 

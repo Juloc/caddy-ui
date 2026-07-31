@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace CaddyUi.Web.Pages;
 
-public abstract class AnalyticsPageModelBase : PageModel
+public abstract class AnalyticsPageModelBase : LocalizedPageModel
 {
     protected AnalyticsPageModelBase(
         AnalyticsReadStore store,

@@ -2,97 +2,101 @@
 @using CaddyUi.Application.Dns
 @model CaddyUi.Web.Pages.Administration.ProvidersModel
 @{
-    ViewData["Title"] = "DNS-Provider";
+    ViewData["Title"] = T["DNS providers"];
 }
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">DNS und Zertifikate</p>
-        <h1>DNS-Provider</h1>
-        <p class="page-description">Provider auswählen und nur die dafür benötigten Angaben eintragen. Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt.</p>
+        <p class="eyebrow">@T["DNS and certificates"]</p>
+        <h1>@T["DNS providers"]</h1>
+        <p class="page-description">@T["Select a provider and enter only the required values. Credentials are encrypted and are never displayed again."]</p>
     </div>
     <div class="page-actions">
-        <span class="status-badge status-badge--neutral">@DnsProviderCatalog.All.Count Provider-Typen</span>
-        <a class="button button--primary" asp-page="/Setup/Index">Domain mit Provider einrichten</a>
+        <span class="status-badge status-badge--neutral">@T["{0} provider types", DnsProviderCatalog.All.Count]</span>
+        <a class="button button--primary" asp-page="/Setup/Index">@T["Set up domain with provider"]</a>
     </div>
 </section>
 
 @if (TempData["Message"] is string message)
 {
-    <div class="notice notice--success">@message</div>
+    <div class="notice notice--success" role="status">@message</div>
 }
 @if (TempData["Error"] is string error)
 {
-    <div class="notice notice--warning">@error</div>
+    <div class="notice notice--warning" role="alert">@error</div>
 }
 @if (!string.IsNullOrWhiteSpace(Model.LoadError))
 {
-    <div class="notice notice--warning"><strong>Laden fehlgeschlagen</strong><span>@Model.LoadError</span></div>
+    <div class="notice notice--warning" role="alert"><strong>@T["Loading failed"]</strong><span>@Model.LoadError</span></div>
 }
-<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+<div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
 
 <section class="operations-grid operations-grid--sidebar">
     <article class="workbench">
         <header class="workbench-header">
-            <div><p class="eyebrow">Konfiguriert</p><h2>@Model.Providers.Count Provider</h2></div>
+            <div><p class="eyebrow">@T["Configured"]</p><h2>@T["{0} providers", Model.Providers.Count]</h2></div>
         </header>
         <div class="workbench-body table-wrap provider-table-wrap">
             <table class="data-table provider-table">
-                <thead><tr><th>Name</th><th>Typ</th><th>DNS-API</th><th>Wildcard</th><th>Verbindung</th><th class="provider-actions-heading">Aktionen</th></tr></thead>
+                <thead><tr><th>@T["Name"]</th><th>@T["Type"]</th><th>@T["DNS API"]</th><th>@T["Wildcard"]</th><th>@T["Connection"]</th><th class="provider-actions-heading">@T["Actions"]</th></tr></thead>
                 <tbody>
                 @foreach (var provider in Model.Providers)
                 {
                     var domains = Model.Domains.Where(domain => domain.DnsProviderId == provider.Id && domain.Enabled).ToArray();
                     <tr>
-                        <td data-label="Name"><strong>@provider.Label</strong><small>@(provider.Enabled ? "aktiv" : "deaktiviert") · @domains.Length Domain(s)</small></td>
-                        <td data-label="Typ"><code>@provider.ProviderType</code></td>
-                        <td data-label="DNS-API"><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? "verfügbar" : "nur Zertifikate")</span></td>
-                        <td data-label="Wildcard"><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--warning")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? "Modul vorhanden" : "Modul fehlt")</span></td>
-                        <td data-label="Verbindung">
-                            <span class="status-badge @(provider.LastTestStatus == "ok" ? "status-badge--ok" : provider.LastTestStatus == "failed" ? "status-badge--danger" : "status-badge--neutral")">@(provider.LastTestStatus == "ok" ? "getestet" : provider.LastTestStatus == "failed" ? "Test fehlgeschlagen" : "nicht getestet")</span>
+                        <td data-label="@T["Name"]"><strong>@provider.Label</strong><small>@(provider.Enabled ? T["enabled"] : T["disabled"]) · @T["{0} domains", domains.Length]</small></td>
+                        <td data-label="@T["Type"]"><code>@provider.ProviderType</code></td>
+                        <td data-label="@T["DNS API"]"><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? T["available"] : T["certificates only"])</span></td>
+                        <td data-label="@T["Wildcard"]"><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--warning")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? T["module installed"] : T["module missing"])</span></td>
+                        <td data-label="@T["Connection"]">
+                            <span class="status-badge @(provider.LastTestStatus == "ok" ? "status-badge--ok" : provider.LastTestStatus == "failed" ? "status-badge--danger" : "status-badge--neutral")">@(provider.LastTestStatus == "ok" ? T["tested"] : provider.LastTestStatus == "failed" ? T["test failed"] : T["not tested"])</span>
                             @if (!string.IsNullOrWhiteSpace(provider.LastTestError))
                             {
                                 <small>@provider.LastTestError</small>
                             }
                         </td>
-                        <td class="provider-actions-cell" data-label="Aktionen">
+                        <td class="provider-actions-cell" data-label="@T["Actions"]">
                             <div class="provider-actions">
+                                @if (domains.Length > 0 && Model.CanListRecords(provider.ProviderType))
+                                {
+                                    <a class="button button--compact button--quiet" asp-page="/Administration/ProviderDns" asp-route-providerId="@provider.Id">@T["DNS"]</a>
+                                }
                                 @if (domains.Length > 0 && Model.SupportsDirectApi(provider.ProviderType))
                                 {
                                     <form method="post" asp-page-handler="Test" class="provider-test-form">
                                         <input type="hidden" name="providerId" value="@provider.Id" />
-                                        <select name="domainId" aria-label="Testdomain">
+                                        <select name="domainId" aria-label="@T["Test domain"]">
                                             @foreach (var domain in domains)
                                             {
                                                 <option value="@domain.Id">@domain.Name</option>
                                             }
                                         </select>
-                                        <button class="button button--compact button--primary" type="submit" disabled="@(!provider.Enabled)">Testen</button>
+                                        <button class="button button--compact button--primary" type="submit" disabled="@(!provider.Enabled)">@T["Test"]</button>
                                     </form>
                                 }
                                 <form method="post" asp-page-handler="Toggle" class="provider-toggle-form">
                                     <input type="hidden" name="providerId" value="@provider.Id" />
                                     <input type="hidden" name="enabled" value="@(!provider.Enabled)" />
-                                    <button class="button button--compact button--quiet" type="submit">@(provider.Enabled ? "Deaktivieren" : "Aktivieren")</button>
+                                    <button class="button button--compact button--quiet" type="submit">@(provider.Enabled ? T["Disable"] : T["Enable"])</button>
                                 </form>
                                 @if (ProvidersModel.SupportsManagedDnsChallengeTiming(provider.ProviderType))
                                 {
                                     <details class="provider-dns-timing">
-                                        <summary class="button button--compact button--quiet">DNS-01-Zeiten</summary>
+                                        <summary class="button button--compact button--quiet">@T["DNS-01 timing"]</summary>
                                         <form method="post" asp-page-handler="DnsChallengeTiming" class="form-stack">
                                             <input type="hidden" name="providerId" value="@provider.Id" />
                                             <label class="field">
-                                                <span class="field-label">Propagation-Delay</span>
+                                                <span class="field-label">@T["Propagation delay"]</span>
                                                 <input name="propagationDelay" value="@ProvidersModel.ProviderSetting(provider, DnsChallengeTiming.PropagationDelayKey)" placeholder="600s" autocomplete="off" />
-                                                <small>Wartezeit vor der ersten DNS-Prüfung. Leer verwendet Caddys Standard von 0 Sekunden.</small>
+                                                <small>@T["Wait before the first DNS check. Empty uses Caddy's default of 0 seconds."]</small>
                                             </label>
                                             <label class="field">
-                                                <span class="field-label">Propagation-Timeout</span>
+                                                <span class="field-label">@T["Propagation timeout"]</span>
                                                 <input name="propagationTimeout" value="@ProvidersModel.ProviderSetting(provider, DnsChallengeTiming.PropagationTimeoutKey)" placeholder="900s" autocomplete="off" />
-                                                <small>Maximale Wartezeit auf den TXT-Record. Leer verwendet Caddys Standard von 2 Minuten.</small>
+                                                <small>@T["Maximum time to wait for the TXT record. Empty uses Caddy's default of 2 minutes."]</small>
                                             </label>
-                                            <small>Erlaubt sind Sekunden oder Zeitangaben wie <code>600s</code>, <code>15m</code> oder <code>1h</code>.</small>
-                                            <button class="button button--compact button--primary" type="submit">Zeiten speichern</button>
+                                            <small>@T["Use seconds or durations such as 600s, 15m, or 1h."]</small>
+                                            <button class="button button--compact button--primary" type="submit">@T["Save timing"]</button>
                                         </form>
                                     </details>
                                 }
@@ -102,7 +106,7 @@
                 }
                 @if (Model.Providers.Count == 0)
                 {
-                    <tr class="provider-table-empty"><td colspan="6" class="empty-state">Noch kein DNS-Provider konfiguriert.</td></tr>
+                    <tr class="provider-table-empty"><td colspan="6" class="empty-state">@T["No DNS provider has been configured."]</td></tr>
                 }
                 </tbody>
             </table>
@@ -111,49 +115,49 @@
 
     <aside class="workbench">
         <header class="workbench-header">
-            <div><p class="eyebrow">Neu</p><h2>Provider hinzufügen</h2></div>
+            <div><p class="eyebrow">@T["New"]</p><h2>@T["Add provider"]</h2></div>
         </header>
         <div class="workbench-body">
             <form method="post" asp-page-handler="Create" class="form-stack" data-provider-form>
                 <label class="field">
-                    <span class="field-label">Provider</span>
+                    <span class="field-label">@T["Provider"]</span>
                     <select asp-for="Input.ProviderType" data-provider-type>
                         @foreach (var definition in DnsProviderCatalog.All)
                         {
                             <option value="@definition.Type">@definition.DisplayName</option>
                         }
                     </select>
-                    <small>Nach der Auswahl erscheinen nur die benötigten Felder.</small>
+                    <small>@T["Only fields required by the selected provider are shown."]</small>
                 </label>
                 <label class="field">
-                    <span class="field-label">Anzeigename</span>
-                    <input asp-for="Input.Label" placeholder="Netcup Produktion" autocomplete="off" />
-                    <small>Nur ein interner Name zur Wiedererkennung.</small>
+                    <span class="field-label">@T["Display name"]</span>
+                    <input asp-for="Input.Label" placeholder="Netcup Production" autocomplete="off" />
+                    <small>@T["Internal name used to identify this configuration."]</small>
                 </label>
 
                 @foreach (var definition in DnsProviderCatalog.All)
                 {
                     <div class="provider-field-panel" data-provider-fields="@definition.Type">
                         <div class="provider-field-heading">
-                            <div><strong>@definition.DisplayName</strong><small>@definition.DocumentationHint</small></div>
+                            <div><strong>@definition.DisplayName</strong><small>@T[definition.DocumentationHint]</small></div>
                         </div>
                         <div class="form-stack">
                             @foreach (var field in definition.Settings)
                             {
                                 var fieldName = ProvidersModel.FieldName(definition.Type, field.Key);
                                 <label class="field">
-                                    <span class="field-label">@field.Label @(field.Required ? "*" : "")</span>
+                                    <span class="field-label">@T[field.Label] @(field.Required ? "*" : "")</span>
                                     <input name="Input.Settings[@fieldName]" value="@Model.Input.Settings.GetValueOrDefault(fieldName, field.DefaultValue ?? string.Empty)" autocomplete="off" />
-                                    <small>@field.HelpText</small>
+                                    <small>@T[field.HelpText ?? string.Empty]</small>
                                 </label>
                             }
                             @foreach (var field in definition.Secrets)
                             {
                                 var fieldName = ProvidersModel.FieldName(definition.Type, field.Key);
                                 <label class="field">
-                                    <span class="field-label">@field.Label *</span>
-                                    <input type="password" name="Input.Secrets[@fieldName]" placeholder="Zugangsdaten eingeben" autocomplete="new-password" spellcheck="false" />
-                                    <small>Wird mit ASP.NET Data Protection verschlüsselt gespeichert. Experten können stattdessen <code>secret://env/NAME</code> oder <code>secret://file/PFAD</code> eintragen.</small>
+                                    <span class="field-label">@T[field.Label] *</span>
+                                    <input type="password" name="Input.Secrets[@fieldName]" placeholder="@T["Enter credentials"]" autocomplete="new-password" spellcheck="false" />
+                                    <small>@T["Stored encrypted with ASP.NET Data Protection. Advanced users can enter secret://env/NAME or secret://file/PATH instead."]</small>
                                 </label>
                             }
                         </div>
@@ -161,28 +165,28 @@
                 }
 
                 <div class="safe-apply-note">
-                    <strong>Verschlüsselte Speicherung</strong>
-                    <span>Secret-Werte werden nicht in Logs, Tabellen, Diagnosepaketen oder späteren Formularen angezeigt.</span>
+                    <strong>@T["Encrypted storage"]</strong>
+                    <span>@T["Secret values are never displayed in logs, tables, diagnostic packages, or later forms."]</span>
                 </div>
-                <button class="button button--primary" type="submit">Provider speichern</button>
+                <button class="button button--primary" type="submit">@T["Save provider"]</button>
             </form>
         </div>
     </aside>
 </section>
 
 <section class="workbench operations-section">
-    <header class="workbench-header"><div><p class="eyebrow">Unterstützung</p><h2>Provider-Funktionen</h2></div></header>
+    <header class="workbench-header"><div><p class="eyebrow">@T["Support"]</p><h2>@T["Provider capabilities"]</h2></div></header>
     <div class="workbench-body table-wrap">
         <table class="data-table">
-            <thead><tr><th>Provider</th><th>Funktionen</th><th>Benötigte Angaben</th><th>Zugangsdaten</th></tr></thead>
+            <thead><tr><th>@T["Provider"]</th><th>@T["Capabilities"]</th><th>@T["Required settings"]</th><th>@T["Credentials"]</th></tr></thead>
             <tbody>
             @foreach (var definition in DnsProviderCatalog.All)
             {
                 <tr>
-                    <td><strong>@definition.DisplayName</strong><small>@definition.DocumentationHint</small></td>
+                    <td><strong>@definition.DisplayName</strong><small>@T[definition.DocumentationHint]</small></td>
                     <td>@definition.Capabilities</td>
-                    <td>@(definition.Settings.Count == 0 ? "Keine" : string.Join(", ", definition.Settings.Select(field => field.Label)))</td>
-                    <td>@(definition.Secrets.Count == 0 ? "Keine" : string.Join(", ", definition.Secrets.Select(field => field.Label)))</td>
+                    <td>@(definition.Settings.Count == 0 ? T["None"] : string.Join(", ", definition.Settings.Select(field => T[field.Label].Value)))</td>
+                    <td>@(definition.Secrets.Count == 0 ? T["None"] : string.Join(", ", definition.Secrets.Select(field => T[field.Label].Value)))</td>
                 </tr>
             }
             </tbody>

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace CaddyUi.Web.Pages.Portal;
 
 [AllowAnonymous]
-public sealed class AuthorizeModel : PageModel
+public sealed class AuthorizeModel : LocalizedPageModel
 {
     private readonly AuthenticationStore _store;
     private readonly AccessGroupStateStore _groupState;

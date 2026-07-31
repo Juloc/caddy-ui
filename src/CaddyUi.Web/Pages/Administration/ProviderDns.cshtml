@@ -1,0 +1,108 @@
+@page
+@model CaddyUi.Web.Pages.Administration.ProviderDnsModel
+@{
+    ViewData["Title"] = T["Provider DNS"];
+}
+
+<section class="page-heading page-heading--compact">
+    <div>
+        <p class="eyebrow">@T["DNS provider"]</p>
+        <h1>@T["Provider DNS"]</h1>
+        <p class="page-description">@T["Read the current DNS records directly from the selected provider. This view is read-only and never exposes provider credentials."]</p>
+    </div>
+    <a class="button button--quiet" asp-page="/Administration/Providers">@T["Back to providers"]</a>
+</section>
+
+<form method="get" class="workspace-toolbar provider-dns-toolbar">
+    <div class="toolbar-group toolbar-group--grow">
+        <label class="field field--compact">
+            <span class="field-label">@T["Provider"]</span>
+            <select asp-for="ProviderId" onchange="this.form.submit()">
+                @foreach (var provider in Model.Providers)
+                {
+                    <option value="@provider.Id">@provider.Label · @provider.ProviderType</option>
+                }
+            </select>
+        </label>
+        <label class="field field--compact">
+            <span class="field-label">@T["Domain"]</span>
+            <select asp-for="DomainId">
+                @foreach (var domain in Model.Domains)
+                {
+                    <option value="@domain.Id">@domain.DisplayName · @domain.Name</option>
+                }
+            </select>
+        </label>
+        <button class="button button--primary" type="submit">@T["Load records"]</button>
+    </div>
+</form>
+
+@if (!string.IsNullOrWhiteSpace(Model.LoadError))
+{
+    <div class="notice notice--danger" role="alert">@Model.LoadError</div>
+}
+
+<section class="workspace-section">
+    <header class="section-header">
+        <div>
+            <h2>@T["DNS records"]</h2>
+            @if (Model.SelectedProvider is not null && Model.SelectedDomain is not null)
+            {
+                <p>@Model.SelectedProvider.Label · <code>@Model.SelectedDomain.Name</code></p>
+            }
+        </div>
+        @if (Model.LoadedAt is not null)
+        {
+            <span class="status-badge status-badge--ok">
+                @T["Loaded"] <time datetime="@Model.LoadedAt.Value.ToString("O")" data-local-time>@Model.LoadedAt.Value.ToString("u")</time>
+            </span>
+        }
+    </header>
+
+    @if (Model.SelectedProvider is null)
+    {
+        <div class="empty-state">@T["No enabled DNS provider is configured."]</div>
+    }
+    else if (Model.Domains.Count == 0)
+    {
+        <div class="empty-state">@T["No enabled domain is assigned to this provider."]</div>
+    }
+    else if (Model.LoadError is null)
+    {
+        <div class="table-wrap">
+            <table class="data-table data-table--comfortable">
+                <thead>
+                    <tr>
+                        <th>@T["Name"]</th>
+                        <th>@T["Type"]</th>
+                        <th>@T["Value"]</th>
+                        <th>@T["TTL"]</th>
+                        <th>@T["Priority"]</th>
+                        <th>@T["Status"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var record in Model.DnsRecords)
+                    {
+                        <tr class="@(record.Enabled ? string.Empty : "is-muted")">
+                            <td><code>@record.DisplayName</code></td>
+                            <td><span class="status-badge status-badge--neutral">@record.RecordType</span></td>
+                            <td class="dns-record-value"><code>@record.Value</code></td>
+                            <td>@(record.Ttl?.ToString() ?? "—")</td>
+                            <td>@(record.Priority?.ToString() ?? "—")</td>
+                            <td>
+                                <span class="status-badge @(record.Enabled ? "status-badge--ok" : "status-badge--neutral")">
+                                    @(record.Enabled ? T["Enabled"] : T["Disabled"])
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.DnsRecords.Count == 0)
+                    {
+                        <tr><td colspan="6" class="empty-state">@T["The provider returned no DNS records."]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

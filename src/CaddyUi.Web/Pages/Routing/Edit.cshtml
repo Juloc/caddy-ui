@@ -1,35 +1,43 @@
 @page
 @model CaddyUi.Web.Pages.Routing.EditModel
 @{
-    ViewData["Title"] = Model.IsEdit ? "Route bearbeiten" : "Neue Route";
+    ViewData["Title"] = Model.IsEdit ? T["Edit route"] : T["New route"];
 }
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">Routing-Editor</p>
+        <p class="eyebrow">@T["Routing editor"]</p>
         <h1>@ViewData["Title"]</h1>
-        <p class="page-description">Klare Felder, keine direkte Caddy-Änderung. Speichern erzeugt erst einen verwalteten Entwurf.</p>
+        <p class="page-description">@T["Save a managed draft, or save and apply it to the active Caddy configuration in one validated operation."]</p>
     </div>
-    <a class="button button--quiet" asp-page="/Routing/Index">Zurück zu Routen</a>
+    <a class="button button--quiet" asp-page="/Routing/Index">@T["Back to routes"]</a>
 </section>
 
-<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="notice notice--danger" role="alert">@Model.ErrorMessage</div>
+}
+<div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
 
 <form method="post" class="feature-route-editor" data-route-editor>
     <input asp-for="Input.Id" type="hidden" />
 
     <section class="workspace-section">
         <header class="section-header">
-            <div><h2>Adresse und Verhalten</h2><p>Domain, Pfad und Routentyp legen fest, wann diese Regel greift.</p></div>
+            <div><h2>@T["Address and behavior"]</h2><p>@T["Domain, path, and route type determine when this rule is used."]</p></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field field--wide">
-                <span class="field-label">Name</span>
+                <span class="field-label">@T["Name"]</span>
                 <input asp-for="Input.Name" autocomplete="off" placeholder="Mealie" />
                 <span asp-validation-for="Input.Name" class="field-error"></span>
             </label>
             <label class="field">
-                <span class="field-label">Domain</span>
+                <span class="field-label">@T["Domain"]</span>
                 <select asp-for="Input.DomainId">
                     @foreach (var domain in Model.Domains.Where(item => item.Enabled))
                     {
@@ -39,83 +47,83 @@
                 <span asp-validation-for="Input.DomainId" class="field-error"></span>
             </label>
             <label class="field">
-                <span class="field-label">Subdomain</span>
+                <span class="field-label">@T["Subdomain"]</span>
                 <input asp-for="Input.Subdomain" autocomplete="off" placeholder="mealie" />
-                <small>Leer verwendet die Domain direkt.</small>
+                <small>@T["Leave empty to use the base domain."]</small>
             </label>
             <label class="field">
-                <span class="field-label">Pfadpräfix</span>
+                <span class="field-label">@T["Path prefix"]</span>
                 <input asp-for="Input.PathPrefix" autocomplete="off" placeholder="/" />
                 <span asp-validation-for="Input.PathPrefix" class="field-error"></span>
             </label>
             <label class="field">
-                <span class="field-label">Routentyp</span>
+                <span class="field-label">@T["Route type"]</span>
                 <select asp-for="Input.Kind" data-route-kind>
-                    <option value="proxy">Reverse Proxy</option>
-                    <option value="redirect">Weiterleitung</option>
-                    <option value="static">Statische Antwort</option>
+                    <option value="proxy">@T["Reverse proxy"]</option>
+                    <option value="redirect">@T["Redirect"]</option>
+                    <option value="static">@T["Static response"]</option>
                     @if (Model.AllowCustomRoutes)
                     {
-                        <option value="custom">Custom Caddyfile</option>
+                        <option value="custom">@T["Custom Caddyfile"]</option>
                     }
                 </select>
             </label>
             <label class="field">
-                <span class="field-label">Reihenfolge</span>
+                <span class="field-label">@T["Order"]</span>
                 <input asp-for="Input.SortOrder" type="number" />
-                <small>Kleinere Werte werden zuerst generiert.</small>
+                <small>@T["Lower values are generated first."]</small>
             </label>
         </div>
     </section>
 
     <section class="workspace-section route-kind-panel" data-kind-panel="proxy">
         <header class="section-header">
-            <div><h2>Reverse Proxy</h2><p>Ziel und optionale aktive Healthchecks.</p></div>
+            <div><h2>@T["Reverse proxy"]</h2><p>@T["Target and optional active health checks."]</p></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field field--wide">
-                <span class="field-label">Upstream</span>
+                <span class="field-label">@T["Upstream"]</span>
                 <input asp-for="Input.Upstream" autocomplete="off" placeholder="192.168.1.20:9925" />
-                <small>Erlaubt: <code>host:port</code>, <code>http://host:port</code> oder <code>https://host:port</code>.</small>
+                <small>@T["Allowed: host:port, http://host:port, or https://host:port."]</small>
             </label>
             <label class="field">
-                <span class="field-label">Health-Pfad</span>
+                <span class="field-label">@T["Health path"]</span>
                 <input asp-for="Input.HealthPath" autocomplete="off" placeholder="/health" />
             </label>
             <label class="field">
-                <span class="field-label">Health-Intervall</span>
-                <div class="input-with-suffix"><input asp-for="Input.HealthIntervalSeconds" type="number" min="5" max="3600" /><span>Sek.</span></div>
+                <span class="field-label">@T["Health interval"]</span>
+                <div class="input-with-suffix"><input asp-for="Input.HealthIntervalSeconds" type="number" min="5" max="3600" /><span>@T["sec."]</span></div>
             </label>
             <label class="check field--wide">
                 <input asp-for="Input.PreserveHost" />
-                <span><strong>Originalen Host-Header beibehalten</strong><small>Nur aktivieren, wenn der Upstream den öffentlichen Host erwartet.</small></span>
+                <span><strong>@T["Preserve original Host header"]</strong><small>@T["Enable only when the upstream expects the public host."]</small></span>
             </label>
         </div>
     </section>
 
     <section class="workspace-section route-kind-panel" data-kind-panel="redirect">
-        <header class="section-header"><div><h2>Weiterleitung</h2><p>Lokaler Pfad oder vollständige HTTP(S)-Adresse.</p></div></header>
+        <header class="section-header"><div><h2>@T["Redirect"]</h2><p>@T["Use a local path or a complete HTTP(S) address."]</p></div></header>
         <div class="form-grid form-grid--two">
             <label class="field">
-                <span class="field-label">Ziel</span>
+                <span class="field-label">@T["Target"]</span>
                 <input asp-for="Input.RedirectTarget" autocomplete="off" placeholder="https://example.com/new" />
             </label>
             <label class="check">
                 <input asp-for="Input.RedirectPermanent" />
-                <span><strong>Permanent (HTTP 308)</strong><small>Deaktiviert verwendet HTTP 302.</small></span>
+                <span><strong>@T["Permanent (HTTP 308)"]</strong><small>@T["Disabled uses HTTP 302."]</small></span>
             </label>
         </div>
     </section>
 
     <section class="workspace-section route-kind-panel" data-kind-panel="static">
-        <header class="section-header"><div><h2>Statische Antwort</h2><p>Für Wartungshinweise, feste Statuscodes oder einfache Endpunkte.</p></div></header>
+        <header class="section-header"><div><h2>@T["Static response"]</h2><p>@T["For maintenance notices, fixed status codes, or simple endpoints."]</p></div></header>
         <div class="form-grid form-grid--two">
             <label class="field">
-                <span class="field-label">HTTP-Status</span>
+                <span class="field-label">@T["HTTP status"]</span>
                 <input asp-for="Input.StaticStatusCode" type="number" min="100" max="599" />
             </label>
             <label class="field field--wide">
-                <span class="field-label">Antworttext</span>
+                <span class="field-label">@T["Response body"]</span>
                 <textarea asp-for="Input.StaticBody" rows="5" placeholder="Service temporarily unavailable"></textarea>
             </label>
         </div>
@@ -124,21 +132,21 @@
     @if (Model.AllowCustomRoutes)
     {
         <section class="workspace-section route-kind-panel" data-kind-panel="custom">
-            <header class="section-header"><div><h2>Custom Caddyfile</h2><p>Nur für Direktiven innerhalb eines bereits generierten <code>handle</code>-Blocks. Keine Site-Blöcke oder Secrets.</p></div></header>
+            <header class="section-header"><div><h2>@T["Custom Caddyfile"]</h2><p>@T["Only directives inside an already generated handle block are allowed. Do not enter site blocks or secrets."]</p></div></header>
             <label class="field">
-                <span class="field-label">Direktiven</span>
+                <span class="field-label">@T["Directives"]</span>
                 <textarea asp-for="Input.CustomSnippet" rows="12" class="code-editor" spellcheck="false"></textarea>
             </label>
         </section>
     }
 
     <section class="workspace-section">
-        <header class="section-header"><div><h2>Zugriff und Zertifikat</h2><p>Öffentliche Route oder Anmeldung über das interne Access Portal.</p></div></header>
+        <header class="section-header"><div><h2>@T["Access and certificate"]</h2><p>@T["Use a public route or authentication through the internal access portal."]</p></div></header>
         <div class="form-grid form-grid--three">
             <label class="field">
-                <span class="field-label">Zugriff</span>
+                <span class="field-label">@T["Access"]</span>
                 <select asp-for="Input.AccessGroupId">
-                    <option value="">Öffentlich</option>
+                    <option value="">@T["Public"]</option>
                     @foreach (var group in Model.AccessGroups)
                     {
                         <option value="@group.Id">@group.Name</option>
@@ -146,25 +154,28 @@
                 </select>
             </label>
             <label class="field">
-                <span class="field-label">Zertifikat</span>
+                <span class="field-label">@T["Certificate"]</span>
                 <select asp-for="Input.CertificateMode">
-                    <option value="inherit">Von Domain erben</option>
-                    <option value="wildcard">Wildcard</option>
-                    <option value="individual">Einzelzertifikat</option>
+                    <option value="inherit">@T["Inherit from domain"]</option>
+                    <option value="wildcard">@T["Wildcard"]</option>
+                    <option value="individual">@T["Individual certificate"]</option>
                 </select>
             </label>
             <label class="check">
                 <input asp-for="Input.Enabled" />
-                <span><strong>In nächste Revision aufnehmen</strong><small>Aktiviert nicht sofort die laufende Caddy-Konfiguration.</small></span>
+                <span><strong>@T["Include in the next revision"]</strong><small>@T["The save-and-activate action enables the route automatically."]</small></span>
             </label>
         </div>
     </section>
 
     <footer class="editor-actionbar">
-        <div><strong>Speichern ist sicher.</strong><span>Preview und Apply bleiben ein separater, geprüfter Schritt.</span></div>
+        <div><strong>@T["Changes are validated before they are applied."]</strong><span>@T["Save keeps Caddy unchanged. Save and activate creates a revision, validates it, writes it, and reloads Caddy."]</span></div>
         <div class="page-actions">
-            <a class="button button--quiet" asp-page="/Routing/Index">Abbrechen</a>
-            <button class="button button--primary" type="submit">Route speichern</button>
+            <a class="button button--quiet" asp-page="/Routing/Index">@T["Cancel"]</a>
+            <button class="button button--quiet" type="submit" asp-page-handler="Save">@T["Save"]</button>
+            <button class="button button--primary" type="submit" asp-page-handler="SaveApply">
+                @(Model.IsEdit ? T["Save and update"] : T["Save and activate"])
+            </button>
         </div>
     </footer>
 </form>
