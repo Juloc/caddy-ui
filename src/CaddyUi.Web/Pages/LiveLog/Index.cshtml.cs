@@ -24,10 +24,7 @@ public sealed class IndexModel : AnalyticsPageModelBase
         {
             Limit = Math.Clamp(Limit, 1, 100);
             var filter = await PrepareFilterAsync(HttpContext.RequestAborted);
-            Requests = await Store.GetRequestsAsync(
-                filter,
-                InitialCursor(filter),
-                HttpContext.RequestAborted);
+            Requests = await Store.GetRequestsAsync(filter, cancellationToken: HttpContext.RequestAborted);
             var query = QueryString.Create(
                 new Dictionary<string, string?>
                 {
@@ -47,12 +44,5 @@ public sealed class IndexModel : AnalyticsPageModelBase
             EventStreamUrl = null;
             LoadError = $"Live-Log konnte nicht gestartet werden: {exception.Message}";
         }
-    }
-
-    private static DateTimeOffset InitialCursor(AnalyticsReadFilter filter)
-    {
-        return filter.From == DateTimeOffset.MinValue
-            ? filter.From
-            : filter.From.AddTicks(-1);
     }
 }
