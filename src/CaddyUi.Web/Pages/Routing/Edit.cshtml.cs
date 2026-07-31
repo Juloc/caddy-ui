@@ -5,6 +5,7 @@ using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace CaddyUi.Web.Pages.Routing;
 
@@ -13,11 +14,16 @@ public sealed class EditModel : PageModel
 {
     private readonly RouteManagementStore _store;
     private readonly CaddyApplyService _applyService;
+    private readonly IStringLocalizer<SharedResource> _localizer;
 
-    public EditModel(RouteManagementStore store, CaddyApplyService applyService)
+    public EditModel(
+        RouteManagementStore store,
+        CaddyApplyService applyService,
+        IStringLocalizer<SharedResource> localizer)
     {
         _store = store;
         _applyService = applyService;
+        _localizer = localizer;
     }
 
     [BindProperty]
@@ -28,6 +34,12 @@ public sealed class EditModel : PageModel
 
     public IReadOnlyList<AccessGroupRecord> AccessGroups { get; private set; } =
         Array.Empty<AccessGroupRecord>();
+
+    [TempData]
+    public string? StatusMessage { get; set; }
+
+    [TempData]
+    public string? ErrorMessage { get; set; }
 
     public bool IsEdit => Input.Id is not null;
 
@@ -54,7 +66,22 @@ public sealed class EditModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostAsync()
+    public Task<IActionResult> OnPostAsync()
+    {
+        return OnPostSaveAsync();
+    }
+
+    public Task<IActionResult> OnPostSaveAsync()
+    {
+        return SaveAsync(applyAfterSave: false);
+    }
+
+    public Task<IActionResult> OnPostSaveApplyAsync()
+    {
+        return SaveAsync(applyAfterSave: true);
+    }
+
+    private async Task<IActionResult> SaveAsync(bool applyAfterSave)
     {
         await LoadOptionsAsync();
         if (!ModelState.IsValid)
@@ -62,14 +89,16 @@ public sealed class EditModel : PageModel
             return Page();
         }
 
+        var routeWasSaved = false;
+        Guid? savedRouteId = null;
         try
         {
             var domain = Domains.FirstOrDefault(item => item.Id == Input.DomainId && item.Enabled) ??
-                throw new InvalidOperationException("Die ausgewählte Domain existiert nicht oder ist deaktiviert.");
+                throw new InvalidOperationException(_localizer["The selected domain does not exist or is disabled."]);
             var kind = ManagedRouteDefinition.ParseKind(Input.Kind);
             if (kind == ManagedRouteKind.Custom && !AllowCustomRoutes)
             {
-                throw new InvalidOperationException("Benutzerdefinierte Caddy-Routen sind in der Konfiguration deaktiviert.");
+                throw new InvalidOperationException(_localizer["Custom Caddy routes are disabled in configuration."]);
             }
 
             var configuration = new RouteConfigurationDocument(
@@ -84,20 +113,22 @@ public sealed class EditModel : PageModel
                 Input.StaticStatusCode,
                 Input.StaticBody,
                 Input.CustomSnippet);
+            var routeId = Input.Id ?? Guid.NewGuid();
             var definition = ManagedRouteDefinition.Create(
-                Input.Id ?? Guid.NewGuid(),
+                routeId,
                 Input.Name,
                 domain.Id,
                 domain.Name,
                 Input.Subdomain,
                 kind,
-                Input.Enabled,
+                applyAfterSave || Input.Enabled,
                 Input.SortOrder,
                 ManagedRouteDefinition.ParseCertificateMode(Input.CertificateMode),
                 Input.AccessGroupId,
                 configuration);
             var actor = User.ToManagementActor(HttpContext);
-            if (Input.Id is null)
+            var isNew = Input.Id is null;
+            if (isNew)
             {
                 await _store.CreateRouteAsync(definition, actor, HttpContext.RequestAborted);
             }
@@ -106,13 +137,46 @@ public sealed class EditModel : PageModel
                 await _store.UpdateRouteAsync(definition, actor, HttpContext.RequestAborted);
             }
 
-            TempData["StatusMessage"] = Input.Id is null
-                ? "Route angelegt. Vor einer Aktivierung muss eine Vorschau erstellt und angewendet werden."
-                : "Route gespeichert. Die aktive Caddy-Konfiguration bleibt bis zum Apply unverändert.";
+            routeWasSaved = true;
+            savedRouteId = routeId;
+            Input.Id = routeId;
+
+            if (!applyAfterSave)
+            {
+                StatusMessage = isNew
+                    ? _localizer["Route created. The active Caddy configuration is unchanged."]
+                    : _localizer["Route saved. The active Caddy configuration is unchanged."];
+                return RedirectToPage(new { id = routeId });
+            }
+
+            var preview = await _applyService.CreatePreviewAsync(
+                isNew
+                    ? $"Create and activate route {definition.Name}"
+                    : $"Update and activate route {definition.Name}",
+                actor,
+                HttpContext.RequestAborted);
+            var result = await _applyService.ApplyAsync(
+                preview.Revision.Id,
+                actor,
+                HttpContext.RequestAborted);
+            StatusMessage = _localizer[
+                isNew
+                    ? "Route created and activated: {0}"
+                    : "Route updated and activated: {0}",
+                result.Message];
             return RedirectToPage("/Routing/Index");
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        catch (Exception exception) when (
+            exception is ArgumentException or InvalidOperationException or IOException)
         {
+            if (routeWasSaved && savedRouteId is not null)
+            {
+                ErrorMessage = _localizer[
+                    "The route was saved, but activation failed: {0}",
+                    exception.Message];
+                return RedirectToPage(new { id = savedRouteId.Value });
+            }
+
             ModelState.AddModelError(string.Empty, exception.Message);
             return Page();
         }
