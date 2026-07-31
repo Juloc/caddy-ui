@@ -4,6 +4,7 @@ using CaddyUi.Infrastructure.Operations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace CaddyUi.Web.Pages.Operations;
 
@@ -14,17 +15,20 @@ public sealed class DnsModel : PageModel
     private readonly DomainProviderStore _management;
     private readonly DnsProviderRuntimeService _providers;
     private readonly DdnsService _ddns;
+    private readonly IStringLocalizer<SharedResource> _localizer;
 
     public DnsModel(
         OperationsStore store,
         DomainProviderStore management,
         DnsProviderRuntimeService providers,
-        DdnsService ddns)
+        DdnsService ddns,
+        IStringLocalizer<SharedResource> localizer)
     {
         _store = store;
         _management = management;
         _providers = providers;
         _ddns = ddns;
+        _localizer = localizer;
     }
 
     public IReadOnlyList<ManagedDnsRecord> Records { get; private set; } = Array.Empty<ManagedDnsRecord>();
@@ -63,7 +67,7 @@ public sealed class DnsModel : PageModel
                 RecordInput.Ttl,
                 RecordInput.Priority,
                 HttpContext.RequestAborted);
-            TempData["Message"] = "DNS-Eintrag wurde als verwalteter Entwurf angelegt.";
+            TempData["Message"] = _localizer["DNS record created as a managed draft."];
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -77,6 +81,9 @@ public sealed class DnsModel : PageModel
     public async Task<IActionResult> OnPostToggleRecordAsync(Guid recordId, bool enabled)
     {
         await _store.SetDnsRecordEnabledAsync(recordId, enabled, HttpContext.RequestAborted);
+        TempData["Message"] = enabled
+            ? _localizer["DNS record enabled."]
+            : _localizer["DNS record disabled."];
         return RedirectToPage();
     }
 
@@ -84,7 +91,7 @@ public sealed class DnsModel : PageModel
     {
         var record = (await _store.ListDnsRecordsAsync(HttpContext.RequestAborted))
             .FirstOrDefault(item => item.Id == recordId) ??
-            throw new InvalidOperationException("Der DNS-Eintrag existiert nicht mehr.");
+            throw new InvalidOperationException(_localizer["The DNS record no longer exists."]);
         ProviderOperationResult result;
         try
         {
@@ -129,7 +136,7 @@ public sealed class DnsModel : PageModel
                 DynamicInput.AddressSource,
                 DynamicInput.StaticValue,
                 HttpContext.RequestAborted);
-            TempData["Message"] = "DDNS-Ziel wurde angelegt.";
+            TempData["Message"] = _localizer["DDNS target created."];
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -143,6 +150,9 @@ public sealed class DnsModel : PageModel
     public async Task<IActionResult> OnPostToggleDdnsAsync(Guid targetId, bool enabled)
     {
         await _store.SetDdnsTargetEnabledAsync(targetId, enabled, HttpContext.RequestAborted);
+        TempData["Message"] = enabled
+            ? _localizer["DDNS target enabled."]
+            : _localizer["DDNS target disabled."];
         return RedirectToPage();
     }
 
@@ -150,7 +160,7 @@ public sealed class DnsModel : PageModel
     {
         var target = (await _store.ListDdnsTargetsAsync(HttpContext.RequestAborted))
             .FirstOrDefault(item => item.Id == targetId) ??
-            throw new InvalidOperationException("Das DDNS-Ziel existiert nicht mehr.");
+            throw new InvalidOperationException(_localizer["The DDNS target no longer exists."]);
         var result = await _ddns.RunAsync(target, HttpContext.RequestAborted);
         TempData[result.Succeeded ? "Message" : "Error"] = result.Message;
         return RedirectToPage();
