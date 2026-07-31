@@ -4,6 +4,7 @@ using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure;
 using CaddyUi.Infrastructure.Analytics;
 using CaddyUi.Infrastructure.Persistence;
+using CaddyUi.Web.Localization;
 using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +20,12 @@ builder.Logging.AddJsonConsole(options =>
 });
 
 var securityOptions = SecurityRuntimeOptions.FromConfiguration(builder.Configuration);
-builder.Services.AddRazorPages();
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+builder.Services.AddSingleton<UiCultureCatalog>();
+builder.Services
+    .AddRazorPages()
+    .AddViewLocalization()
+    .AddDataAnnotationsLocalization();
 builder.Services.AddCaddyUiInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<PasswordHashService>();
 builder.Services.AddSingleton<TotpService>();
@@ -55,6 +61,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseMiddleware<OriginValidationMiddleware>();
 app.UseAuthentication();
+app.UseMiddleware<UserCultureMiddleware>();
 app.UseAuthorization();
 
 app.MapHealthChecks(
