@@ -75,6 +75,27 @@
                                     <input type="hidden" name="enabled" value="@(!provider.Enabled)" />
                                     <button class="button button--compact button--quiet" type="submit">@(provider.Enabled ? "Deaktivieren" : "Aktivieren")</button>
                                 </form>
+                                @if (ProvidersModel.SupportsManagedDnsChallengeTiming(provider.ProviderType))
+                                {
+                                    <details class="provider-dns-timing">
+                                        <summary class="button button--compact button--quiet">DNS-01-Zeiten</summary>
+                                        <form method="post" asp-page-handler="DnsChallengeTiming" class="form-stack">
+                                            <input type="hidden" name="providerId" value="@provider.Id" />
+                                            <label class="field">
+                                                <span class="field-label">Propagation-Delay</span>
+                                                <input name="propagationDelay" value="@ProvidersModel.ProviderSetting(provider, DnsChallengeTiming.PropagationDelayKey)" placeholder="600s" autocomplete="off" />
+                                                <small>Wartezeit vor der ersten DNS-Prüfung. Leer verwendet Caddys Standard von 0 Sekunden.</small>
+                                            </label>
+                                            <label class="field">
+                                                <span class="field-label">Propagation-Timeout</span>
+                                                <input name="propagationTimeout" value="@ProvidersModel.ProviderSetting(provider, DnsChallengeTiming.PropagationTimeoutKey)" placeholder="900s" autocomplete="off" />
+                                                <small>Maximale Wartezeit auf den TXT-Record. Leer verwendet Caddys Standard von 2 Minuten.</small>
+                                            </label>
+                                            <small>Erlaubt sind Sekunden oder Zeitangaben wie <code>600s</code>, <code>15m</code> oder <code>1h</code>.</small>
+                                            <button class="button button--compact button--primary" type="submit">Zeiten speichern</button>
+                                        </form>
+                                    </details>
+                                }
                             </div>
                         </td>
                     </tr>
