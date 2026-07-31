@@ -224,7 +224,17 @@ internal static partial class CaddyCertificateLogReader
 
     private static bool ContainsCertificateContext(string text)
     {
-        return ContainsAny(text, "certificate", "acme", "dns-01", "challenge", "authorization");
+        return ContainsAny(
+            text,
+            "certificate",
+            "acme",
+            "tls.obtain",
+            "tls.renew",
+            "dns-01",
+            "dns propagation",
+            "waiting for dns",
+            "challenge",
+            "authorization");
     }
 
     private static bool ContainsAny(string value, params string[] candidates)
