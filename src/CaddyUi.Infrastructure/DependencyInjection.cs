@@ -51,6 +51,7 @@ public static class DependencyInjection
         }
 
         services.AddSingleton<AuthenticationStore>();
+        services.AddSingleton<UserPreferenceStore>();
         services.AddSingleton<LoginProtectionService>();
         services.AddSingleton<DomainProviderStore>();
         services.AddSingleton<CertificateStatusService>();
