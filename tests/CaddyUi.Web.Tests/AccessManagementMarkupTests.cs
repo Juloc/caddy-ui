@@ -10,10 +10,15 @@ public sealed class AccessManagementMarkupTests
 
         Assert.Contains("asp-page-handler=\"UpdateGroup\"", markup, StringComparison.Ordinal);
         Assert.Contains("asp-page-handler=\"DeleteGroup\"", markup, StringComparison.Ordinal);
+        Assert.Contains("EnableGroup", markup, StringComparison.Ordinal);
+        Assert.Contains("DisableGroup", markup, StringComparison.Ordinal);
         Assert.Contains("asp-page-handler=\"UpdateCredential\"", markup, StringComparison.Ordinal);
         Assert.Contains("asp-page-handler=\"DeleteCredential\"", markup, StringComparison.Ordinal);
-        Assert.Contains("asp-page-handler=\"ToggleGroup\"", markup, StringComparison.Ordinal);
-        Assert.Contains("asp-page-handler=\"ToggleCredential\"", markup, StringComparison.Ordinal);
+        Assert.Contains("EnableCredential", markup, StringComparison.Ordinal);
+        Assert.Contains("DisableCredential", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ToggleGroup", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ToggleCredential", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("name=\"enabled\"", markup, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryFile(string relativePath)
