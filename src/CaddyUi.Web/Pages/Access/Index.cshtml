@@ -48,6 +48,7 @@
             @foreach (var group in Model.Groups)
             {
                 var deleteBlocked = group.CredentialCount > 0 || group.RouteCount > 0;
+                var stateHandler = group.Enabled ? "DisableGroup" : "EnableGroup";
                 <tr class="@(group.Enabled ? string.Empty : "is-muted")">
                     <td><strong>@group.Name</strong><small>@group.Description</small></td>
                     <td>@group.CredentialCount</td>
@@ -56,9 +57,8 @@
                     <td class="table-actions">
                         <div class="row-actions">
                             <a class="button button--compact button--quiet" asp-page="./Index" asp-route-editGroup="@group.Id">@T["Edit"]</a>
-                            <form method="post" asp-page-handler="ToggleGroup">
+                            <form method="post" asp-page-handler="@stateHandler">
                                 <input type="hidden" name="id" value="@group.Id" />
-                                <input type="hidden" name="enabled" value="@(!group.Enabled)" />
                                 <button class="button button--compact button--quiet" type="submit">@(group.Enabled ? T["Disable"] : T["Enable"])</button>
                             </form>
                             <form method="post" asp-page-handler="DeleteGroup" data-confirm="@T["Delete this access group permanently?"]">
@@ -87,6 +87,7 @@
             @foreach (var credential in Model.Credentials)
             {
                 var group = Model.Groups.FirstOrDefault(item => item.Id == credential.GroupId);
+                var stateHandler = credential.Enabled ? "DisableCredential" : "EnableCredential";
                 <tr class="@(credential.Enabled ? string.Empty : "is-muted")">
                     <td><strong>@credential.Username</strong></td>
                     <td>@(group?.Name ?? T["Unknown"])</td>
@@ -95,9 +96,8 @@
                     <td class="table-actions">
                         <div class="row-actions">
                             <a class="button button--compact button--quiet" asp-page="./Index" asp-route-editCredential="@credential.Id">@T["Edit"]</a>
-                            <form method="post" asp-page-handler="ToggleCredential">
+                            <form method="post" asp-page-handler="@stateHandler">
                                 <input type="hidden" name="id" value="@credential.Id" />
-                                <input type="hidden" name="enabled" value="@(!credential.Enabled)" />
                                 <button class="button button--compact button--quiet" type="submit">@(credential.Enabled ? T["Disable"] : T["Enable"])</button>
                             </form>
                             <form method="post" asp-page-handler="DeleteCredential" data-confirm="@T["Delete this portal credential permanently?"]">

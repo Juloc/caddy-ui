@@ -138,21 +138,14 @@ public sealed class IndexModel : LocalizedPageModel
         }
     }
 
-    public async Task<IActionResult> OnPostToggleGroupAsync(Guid id, bool enabled)
+    public Task<IActionResult> OnPostEnableGroupAsync(Guid id)
     {
-        try
-        {
-            await _store.SetAccessGroupEnabledAsync(id, enabled, HttpContext.RequestAborted);
-            StatusMessage = enabled
-                ? _localizer["Access group enabled."]
-                : _localizer["Access group disabled."];
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            TempData["Error"] = exception.Message;
-        }
+        return SetGroupEnabledAsync(id, true);
+    }
 
-        return RedirectToPage();
+    public Task<IActionResult> OnPostDisableGroupAsync(Guid id)
+    {
+        return SetGroupEnabledAsync(id, false);
     }
 
     public async Task<IActionResult> OnPostDeleteGroupAsync(Guid id)
@@ -245,21 +238,14 @@ public sealed class IndexModel : LocalizedPageModel
         }
     }
 
-    public async Task<IActionResult> OnPostToggleCredentialAsync(Guid id, bool enabled)
+    public Task<IActionResult> OnPostEnableCredentialAsync(Guid id)
     {
-        try
-        {
-            await _store.SetCredentialEnabledAsync(id, enabled, HttpContext.RequestAborted);
-            StatusMessage = enabled
-                ? _localizer["Portal credential enabled."]
-                : _localizer["Portal credential disabled."];
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            TempData["Error"] = exception.Message;
-        }
+        return SetCredentialEnabledAsync(id, true);
+    }
 
-        return RedirectToPage();
+    public Task<IActionResult> OnPostDisableCredentialAsync(Guid id)
+    {
+        return SetCredentialEnabledAsync(id, false);
     }
 
     public async Task<IActionResult> OnPostDeleteCredentialAsync(Guid id)
@@ -271,6 +257,40 @@ public sealed class IndexModel : LocalizedPageModel
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
             StatusMessage = _localizer["Portal credential deleted."];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
+        return RedirectToPage();
+    }
+
+    private async Task<IActionResult> SetGroupEnabledAsync(Guid id, bool enabled)
+    {
+        try
+        {
+            await _store.SetAccessGroupEnabledAsync(id, enabled, HttpContext.RequestAborted);
+            StatusMessage = enabled
+                ? _localizer["Access group enabled."]
+                : _localizer["Access group disabled."];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
+        return RedirectToPage();
+    }
+
+    private async Task<IActionResult> SetCredentialEnabledAsync(Guid id, bool enabled)
+    {
+        try
+        {
+            await _store.SetCredentialEnabledAsync(id, enabled, HttpContext.RequestAborted);
+            StatusMessage = enabled
+                ? _localizer["Portal credential enabled."]
+                : _localizer["Portal credential disabled."];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
