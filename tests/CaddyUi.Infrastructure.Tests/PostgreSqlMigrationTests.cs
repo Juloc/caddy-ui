@@ -1,5 +1,6 @@
 using CaddyUi.Infrastructure.Persistence;
 using CaddyUi.Infrastructure.Routing;
+using CaddyUi.Infrastructure.Security;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
@@ -48,6 +49,9 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         Assert.Contains("20260728240000_PhaseFourAnalyticsRuntime", appliedMigrations);
         Assert.Contains("20260728250000_PhaseFiveIpSecurity", appliedMigrations);
         Assert.Contains("20260728270000_PhaseSevenRouteManagement", appliedMigrations);
+        Assert.Contains(
+            "20260801190000_AccessPortalPresentationAndLoginScope",
+            appliedMigrations);
 
         var routeStore = new RouteManagementStore(
             new RuntimeDbContextFactory(_postgres.GetConnectionString()));
@@ -120,6 +124,28 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
                 """)
             .SingleAsync();
         Assert.True(accessGroupColumnsExist);
+
+        var loginScopeColumnsAreText = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT COUNT(*) = 2 AS "Value"
+                FROM information_schema.columns
+                WHERE table_schema = 'caddy_ui'
+                  AND table_name IN ('login_attempts', 'login_blocks')
+                  AND column_name = 'scope'
+                  AND data_type = 'text'
+                """)
+            .SingleAsync();
+        Assert.True(loginScopeColumnsAreText);
+
+        var authenticationStore = new AuthenticationStore(
+            new RuntimeDbContextFactory(_postgres.GetConnectionString()));
+        await authenticationStore.RecordLoginAttemptAsync(
+            $"portal:{Guid.NewGuid():D}",
+            "portal-test",
+            "127.0.0.1",
+            succeeded: true,
+            reason: string.Empty);
 
         var routeAccessGroupForeignKeyExists = await database.Database
             .SqlQueryRaw<bool>(

@@ -65,6 +65,8 @@ public sealed class IndexModel : LocalizedPageModel
                     Id = group.Id,
                     Name = group.Name,
                     Description = group.Description,
+                    AccentColor = group.AccentColor,
+                    IconUrl = group.IconUrl,
                 };
             }
         }
@@ -97,6 +99,8 @@ public sealed class IndexModel : LocalizedPageModel
             await _store.CreateAccessGroupAsync(
                 NewGroup.Name,
                 NewGroup.Description,
+                NewGroup.AccentColor,
+                NewGroup.IconUrl,
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
             StatusMessage = _localizer["Access group created."];
@@ -125,6 +129,8 @@ public sealed class IndexModel : LocalizedPageModel
                 EditGroup.Id,
                 EditGroup.Name,
                 EditGroup.Description,
+                EditGroup.AccentColor,
+                EditGroup.IconUrl,
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
             StatusMessage = _localizer["Access group updated."];
@@ -324,6 +330,16 @@ public sealed class IndexModel : LocalizedPageModel
 
         [MaxLength(500)]
         public string Description { get; set; } = string.Empty;
+
+        [MaxLength(7)]
+        [RegularExpression(
+            @"^$|^#[0-9A-Fa-f]{6}$",
+            ErrorMessage = "Use the hexadecimal format #RRGGBB.")]
+        public string AccentColor { get; set; } = string.Empty;
+
+        [MaxLength(2048)]
+        [Url]
+        public string IconUrl { get; set; } = string.Empty;
     }
 
     public sealed class CredentialInput
@@ -353,6 +369,16 @@ public sealed class IndexModel : LocalizedPageModel
 
         [MaxLength(500)]
         public string Description { get; set; } = string.Empty;
+
+        [MaxLength(7)]
+        [RegularExpression(
+            @"^$|^#[0-9A-Fa-f]{6}$",
+            ErrorMessage = "Use the hexadecimal format #RRGGBB.")]
+        public string AccentColor { get; set; } = string.Empty;
+
+        [MaxLength(2048)]
+        [Url]
+        public string IconUrl { get; set; } = string.Empty;
     }
 
     public sealed class CredentialEditInput

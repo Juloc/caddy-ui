@@ -128,6 +128,8 @@
                 <fieldset disabled="@(!string.IsNullOrWhiteSpace(Model.LoadError))">
                     <label class="field"><span class="field-label">@T["Name"]</span><input asp-for="NewGroup.Name" /><span asp-validation-for="NewGroup.Name" class="field-error"></span></label>
                     <label class="field"><span class="field-label">@T["Description"]</span><textarea asp-for="NewGroup.Description" rows="4"></textarea></label>
+                    <label class="field"><span class="field-label">@T["Accent color"]</span><input asp-for="NewGroup.AccentColor" placeholder="#0F6CBD" autocomplete="off" /><span asp-validation-for="NewGroup.AccentColor" class="field-error"></span><small>@T["Optional hexadecimal color in the format #RRGGBB."]</small></label>
+                    <label class="field"><span class="field-label">@T["Icon URL"]</span><input asp-for="NewGroup.IconUrl" type="url" placeholder="https://…" autocomplete="off" /><span asp-validation-for="NewGroup.IconUrl" class="field-error"></span><small>@T["Optional HTTPS image URL for the access portal."]</small></label>
                 </fieldset>
             </form>
         </div>
@@ -149,6 +151,8 @@
                 <input asp-for="EditGroup.Id" type="hidden" />
                 <label class="field"><span class="field-label">@T["Name"]</span><input asp-for="EditGroup.Name" /><span asp-validation-for="EditGroup.Name" class="field-error"></span></label>
                 <label class="field"><span class="field-label">@T["Description"]</span><textarea asp-for="EditGroup.Description" rows="4"></textarea></label>
+                <label class="field"><span class="field-label">@T["Accent color"]</span><input asp-for="EditGroup.AccentColor" placeholder="#0F6CBD" autocomplete="off" /><span asp-validation-for="EditGroup.AccentColor" class="field-error"></span><small>@T["Optional hexadecimal color in the format #RRGGBB."]</small></label>
+                <label class="field"><span class="field-label">@T["Icon URL"]</span><input asp-for="EditGroup.IconUrl" type="url" placeholder="https://…" autocomplete="off" /><span asp-validation-for="EditGroup.IconUrl" class="field-error"></span><small>@T["Optional HTTPS image URL for the access portal."]</small></label>
             </form>
         </div>
         <footer class="dialog-footer">

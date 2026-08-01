@@ -16,10 +16,29 @@ public sealed class AccessAdministrationStore
         _contextFactory = contextFactory;
     }
 
+    public Task UpdateGroupAsync(
+        Guid groupId,
+        string name,
+        string description,
+        ManagementActor actor,
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateGroupAsync(
+            groupId,
+            name,
+            description,
+            accentColor: null,
+            iconUrl: null,
+            actor,
+            cancellationToken);
+    }
+
     public async Task UpdateGroupAsync(
         Guid groupId,
         string name,
         string description,
+        string? accentColor,
+        string? iconUrl,
         ManagementActor actor,
         CancellationToken cancellationToken = default)
     {
@@ -33,6 +52,9 @@ public sealed class AccessAdministrationStore
         {
             var previous = await ReadGroupAsync(connection, transaction, groupId, cancellationToken) ??
                 throw new InvalidOperationException("The selected access group no longer exists.");
+            var presentation = accentColor is null && iconUrl is null
+                ? AccessGroupPresentation.FromJson(previous.ConfigJson)
+                : AccessGroupPresentation.Create(accentColor, iconUrl);
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText =
@@ -40,11 +62,13 @@ public sealed class AccessAdministrationStore
                 UPDATE caddy_ui.access_groups
                 SET name = @name,
                     description = @description,
+                    config_json = CAST(@config_json AS jsonb),
                     updated_at = @now
                 WHERE id = @id
                 """;
             AddParameter(command, "name", normalizedName);
             AddParameter(command, "description", normalizedDescription);
+            AddParameter(command, "config_json", presentation.ToJson());
             AddParameter(command, "now", DateTimeOffset.UtcNow);
             AddParameter(command, "id", groupId);
             if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
@@ -65,6 +89,8 @@ public sealed class AccessAdministrationStore
                     {
                         name = normalizedName,
                         description = normalizedDescription,
+                        presentation.AccentColor,
+                        presentation.IconUrl,
                         previous.Enabled,
                     },
                     JsonOptions),
@@ -252,6 +278,7 @@ public sealed class AccessAdministrationStore
             SELECT groups.name,
                    groups.description,
                    groups.enabled,
+                   groups.config_json::text,
                    (SELECT COUNT(*)::integer
                     FROM caddy_ui.access_credentials AS credentials
                     WHERE credentials.group_id = groups.id),
@@ -269,8 +296,9 @@ public sealed class AccessAdministrationStore
                 reader.GetString(0),
                 reader.GetString(1),
                 reader.GetBoolean(2),
-                reader.GetInt32(3),
-                reader.GetInt32(4))
+                reader.GetString(3),
+                reader.GetInt32(4),
+                reader.GetInt32(5))
             : null;
     }
 
@@ -378,6 +406,7 @@ public sealed class AccessAdministrationStore
         string Name,
         string Description,
         bool Enabled,
+        string ConfigJson,
         int CredentialCount,
         int RouteCount);
 
