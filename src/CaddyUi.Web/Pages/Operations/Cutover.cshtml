@@ -46,7 +46,7 @@ else
         <article class="metric-card"><span class="metric-label">@T["Readiness"]</span><strong class="metric-value">@(Model.Report.IsReady ? T["Ready"] : T["Blocked"])</strong><span class="metric-detail">@T["{0} blockers · {1} warnings", Model.Report.BlockedCount, Model.Report.WarningCount]</span></article>
         <article class="metric-card"><span class="metric-label">@T["Data"]</span><strong class="metric-value">@Model.Report.Inventory.Requests</strong><span class="metric-detail">@T["{0} requests · {1} page views", Model.Report.Inventory.Requests, Model.Report.Inventory.PageViews]</span></article>
         <article class="metric-card"><span class="metric-label">@T["Configuration"]</span><strong class="metric-value">@Model.Report.Inventory.Routes</strong><span class="metric-detail">@T["{0} routes · {1} domains", Model.Report.Inventory.Routes, Model.Report.Inventory.Domains]</span></article>
-        <article class="metric-card"><span class="metric-label">@T["Legacy source"]</span><strong class="metric-value metric-value--small">@(string.IsNullOrWhiteSpace(Model.Report.Inventory.LegacySourceDigest) ? T["unavailable"] : Model.Report.Inventory.LegacySourceDigest[..12])</strong><span class="metric-detail">SHA-256 · @Model.Report.Inventory.LegacySourceSizeBytes @T["bytes"]</span></article>
+        <article class="metric-card"><span class="metric-label">@T["Legacy source"]</span><strong class="metric-value metric-value--small">@(string.IsNullOrWhiteSpace(Model.Report.Inventory.LegacySourceDigest) ? T["Unavailable"] : Model.Report.Inventory.LegacySourceDigest[..12])</strong><span class="metric-detail">SHA-256 · @Model.Report.Inventory.LegacySourceSizeBytes @T["Bytes"]</span></article>
     </section>
     <section class="workbench operations-section">
         <header class="workbench-header"><div><p class="eyebrow">Gate</p><h2>@T["Production readiness"]</h2></div><span class="status-badge @(Model.Report.IsReady ? "status-badge--ok" : "status-badge--danger")">@(Model.Report.IsReady ? T["Ready"] : T["Blocked"])</span></header>
@@ -91,7 +91,7 @@ else
     <aside class="workbench operations-section">
         <header class="workbench-header"><div><p class="eyebrow">@T["Operations"]</p><h2>@T["Maintenance window"]</h2></div></header>
         <div class="workbench-body definition-list">
-            <div><span>@T["Cutover approved"]</span><strong>@(Model.Options.Enabled ? T["yes"] : T["no"])</strong></div>
+            <div><span>@T["Cutover approved"]</span><strong>@(Model.Options.Enabled ? T["Yes"] : T["No"])</strong></div>
             <div><span>@T["Minimum observation time"]</span><strong>@Model.Options.MinimumShadowHours h</strong></div>
             <div><span>@T["Maximum difference"]</span><strong>@Model.Options.MaximumMetricDifferencePercent.ToString("F1") %</strong></div>
             <div><span>@T["Admin port"]</span><strong>:@Model.Options.AdminPort</strong></div>

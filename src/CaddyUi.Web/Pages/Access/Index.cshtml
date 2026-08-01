@@ -2,6 +2,10 @@
 @model CaddyUi.Web.Pages.Access.IndexModel
 @{
     ViewData["Title"] = T["Access groups"];
+    var createGroupOpen = ViewContext.HttpContext.Request.Query.ContainsKey("create-group") ||
+        ViewData.ModelState.Any(entry => entry.Key.StartsWith("NewGroup.", StringComparison.Ordinal) && entry.Value?.Errors.Count > 0);
+    var createCredentialOpen = ViewContext.HttpContext.Request.Query.ContainsKey("create-credential") ||
+        ViewData.ModelState.Any(entry => entry.Key.StartsWith("NewCredential.", StringComparison.Ordinal) && entry.Value?.Errors.Count > 0);
 }
 
 <section class="page-heading page-heading--compact">
@@ -10,7 +14,11 @@
         <h1>@T["Access groups"]</h1>
         <p class="page-description">@T["Groups protect individual routes. Passwords are stored only as hashes and existing passwords are never displayed."]</p>
     </div>
-    <a class="button button--quiet" asp-page="/Routing/Index">@T["Go to routes"]</a>
+    <div class="page-actions">
+        <a class="button button--quiet" asp-page="/Routing/Index">@T["Go to routes"]</a>
+        <a class="button button--primary" href="?create-group=1" data-dialog-open="create-group-dialog">@T["Create group"]</a>
+        <a class="button" href="?create-credential=1" data-dialog-open="create-credential-dialog">@T["Create credential"]</a>
+    </div>
 </section>
 
 @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
@@ -27,8 +35,7 @@
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
-<section class="workspace-split workspace-split--wide-left">
-    <article class="workspace-section">
+<article class="workspace-section">
         <header class="section-header"><div><h2>@T["Groups"]</h2><p>@T["{0} access groups", Model.Groups.Count]</p></div></header>
         <div class="table-wrap">
             <table class="data-table">
@@ -51,21 +58,9 @@
                 </tbody>
             </table>
         </div>
-    </article>
-    <aside class="workspace-section">
-        <header class="section-header"><div><h2>@T["Create group"]</h2><p>@T["Use a clear name and an optional purpose."]</p></div></header>
-        <form method="post" asp-page-handler="CreateGroup" class="form-stack">
-            <fieldset disabled="@(!string.IsNullOrWhiteSpace(Model.LoadError))">
-                <label class="field"><span class="field-label">@T["Name"]</span><input asp-for="NewGroup.Name" /><span asp-validation-for="NewGroup.Name" class="field-error"></span></label>
-                <label class="field"><span class="field-label">@T["Description"]</span><textarea asp-for="NewGroup.Description" rows="4"></textarea></label>
-                <button class="button button--primary" type="submit">@T["Create group"]</button>
-            </fieldset>
-        </form>
-    </aside>
-</section>
+</article>
 
-<section class="workspace-split workspace-split--wide-left">
-    <article class="workspace-section">
+<article class="workspace-section">
         <header class="section-header"><div><h2>@T["Portal credentials"]</h2><p>@T["User accounts for protected routes."]</p></div></header>
         <div class="table-wrap">
             <table class="data-table">
@@ -89,16 +84,47 @@
                 </tbody>
             </table>
         </div>
-    </article>
-    <aside class="workspace-section">
-        <header class="section-header"><div><h2>@T["Create credential"]</h2><p>@T["Use at least twelve characters. The password is not displayed again."]</p></div></header>
-        <form method="post" asp-page-handler="CreateCredential" class="form-stack">
-            <fieldset disabled="@(!string.IsNullOrWhiteSpace(Model.LoadError))">
-                <label class="field"><span class="field-label">@T["Group"]</span><select asp-for="NewCredential.GroupId"><option value="">@T["Select"]</option>@foreach (var group in Model.Groups.Where(item => item.Enabled)){<option value="@group.Id">@group.Name</option>}</select><span asp-validation-for="NewCredential.GroupId" class="field-error"></span></label>
-                <label class="field"><span class="field-label">@T["Username"]</span><input asp-for="NewCredential.Username" autocomplete="off" /><span asp-validation-for="NewCredential.Username" class="field-error"></span></label>
-                <label class="field"><span class="field-label">@T["Password"]</span><input asp-for="NewCredential.Password" autocomplete="new-password" /><span asp-validation-for="NewCredential.Password" class="field-error"></span></label>
-                <button class="button button--primary" type="submit">@T["Create credential"]</button>
-            </fieldset>
-        </form>
-    </aside>
-</section>
+</article>
+
+<dialog id="create-group-dialog" class="dialog-surface dialog-surface--compact" data-dialog aria-labelledby="create-group-dialog-title" open="@(createGroupOpen ? "open" : null)">
+    <div class="dialog-layout">
+        <header class="dialog-header">
+            <div><h2 id="create-group-dialog-title">@T["Create group"]</h2><p>@T["Use a clear name and an optional purpose."]</p></div>
+            <a class="button button--compact button--quiet" asp-page="./Index" data-dialog-close>@T["Close"]</a>
+        </header>
+        <div class="dialog-body">
+            <form id="create-group-form" method="post" asp-page-handler="CreateGroup" class="form-stack">
+                <fieldset disabled="@(!string.IsNullOrWhiteSpace(Model.LoadError))">
+                    <label class="field"><span class="field-label">@T["Name"]</span><input asp-for="NewGroup.Name" /><span asp-validation-for="NewGroup.Name" class="field-error"></span></label>
+                    <label class="field"><span class="field-label">@T["Description"]</span><textarea asp-for="NewGroup.Description" rows="4"></textarea></label>
+                </fieldset>
+            </form>
+        </div>
+        <footer class="dialog-footer">
+            <a class="button button--quiet" asp-page="./Index" data-dialog-close>@T["Cancel"]</a>
+            <button class="button button--primary" type="submit" form="create-group-form" disabled="@(!string.IsNullOrWhiteSpace(Model.LoadError))">@T["Create group"]</button>
+        </footer>
+    </div>
+</dialog>
+
+<dialog id="create-credential-dialog" class="dialog-surface dialog-surface--compact" data-dialog aria-labelledby="create-credential-dialog-title" open="@(createCredentialOpen ? "open" : null)">
+    <div class="dialog-layout">
+        <header class="dialog-header">
+            <div><h2 id="create-credential-dialog-title">@T["Create credential"]</h2><p>@T["Use at least twelve characters. The password is not displayed again."]</p></div>
+            <a class="button button--compact button--quiet" asp-page="./Index" data-dialog-close>@T["Close"]</a>
+        </header>
+        <div class="dialog-body">
+            <form id="create-credential-form" method="post" asp-page-handler="CreateCredential" class="form-stack">
+                <fieldset disabled="@(!string.IsNullOrWhiteSpace(Model.LoadError))">
+                    <label class="field"><span class="field-label">@T["Group"]</span><select asp-for="NewCredential.GroupId"><option value="">@T["Select"]</option>@foreach (var group in Model.Groups.Where(item => item.Enabled)){<option value="@group.Id">@group.Name</option>}</select><span asp-validation-for="NewCredential.GroupId" class="field-error"></span></label>
+                    <label class="field"><span class="field-label">@T["Username"]</span><input asp-for="NewCredential.Username" autocomplete="off" /><span asp-validation-for="NewCredential.Username" class="field-error"></span></label>
+                    <label class="field"><span class="field-label">@T["Password"]</span><input asp-for="NewCredential.Password" autocomplete="new-password" /><span asp-validation-for="NewCredential.Password" class="field-error"></span></label>
+                </fieldset>
+            </form>
+        </div>
+        <footer class="dialog-footer">
+            <a class="button button--quiet" asp-page="./Index" data-dialog-close>@T["Cancel"]</a>
+            <button class="button button--primary" type="submit" form="create-credential-form" disabled="@(!string.IsNullOrWhiteSpace(Model.LoadError))">@T["Create credential"]</button>
+        </footer>
+    </div>
+</dialog>

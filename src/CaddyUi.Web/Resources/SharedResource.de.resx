@@ -26,6 +26,7 @@
   <data name="DNS and DDNS" xml:space="preserve"><value>DNS und DDNS</value></data>
   <data name="Operations" xml:space="preserve"><value>Betrieb</value></data>
   <data name="Bots and security" xml:space="preserve"><value>Bots und Sicherheit</value></data>
+  <data name="Security analytics" xml:space="preserve"><value>Sicherheitsanalyse</value></data>
   <data name="Errors and performance" xml:space="preserve"><value>Fehler und Performance</value></data>
   <data name="Live log" xml:space="preserve"><value>Live-Log</value></data>
   <data name="Health checks" xml:space="preserve"><value>Healthchecks</value></data>
@@ -327,7 +328,6 @@
   <data name="No revision exists yet." xml:space="preserve"><value>Noch keine Revision vorhanden.</value></data>
   <data name="Apply history" xml:space="preserve"><value>Anwendungsverlauf</value></data>
   <data name="Every attempt remains auditable." xml:space="preserve"><value>Jeder Versuch bleibt nachvollziehbar.</value></data>
-  <data name="running" xml:space="preserve"><value>läuft</value></data>
   <data name="No apply attempt exists yet." xml:space="preserve"><value>Noch kein Anwendungsversuch vorhanden.</value></data>
   <data name="Rollback" xml:space="preserve"><value>Rückfall</value></data>
   <data name="Restores the snapshot before the last successful apply and reloads Caddy." xml:space="preserve"><value>Stellt den Snapshot vor dem letzten erfolgreichen Anwenden wieder her und lädt Caddy neu.</value></data>
@@ -411,7 +411,6 @@
   <data name="Attempt running" xml:space="preserve"><value>Versuch läuft</value></data>
   <data name="Start again now" xml:space="preserve"><value>Jetzt erneut anstoßen</value></data>
   <data name="Checks and guidance" xml:space="preserve"><value>Prüfschritte und Hinweise</value></data>
-  <data name="managed routes" xml:space="preserve"><value>verwaltete Routen</value></data>
   <data name="Set as default" xml:space="preserve"><value>Als Standard festlegen</value></data>
   <data name="No domain has been created yet." xml:space="preserve"><value>Noch keine Domain angelegt.</value></data>
   <data name="New" xml:space="preserve"><value>Neu</value></data>
@@ -436,7 +435,7 @@
   <data name="Draft only." xml:space="preserve"><value>Nur im Entwurf.</value></data>
   <data name="Running or scheduled" xml:space="preserve"><value>Läuft oder geplant</value></data>
   <data name="Caddy is working or has scheduled another attempt." xml:space="preserve"><value>Caddy arbeitet oder hat einen weiteren Versuch geplant.</value></data>
-  <data name="Available" xml:space="preserve"><value>Vorhanden</value></data>
+  <data name="Available" xml:space="preserve"><value>Verfügbar</value></data>
   <data name="A valid certificate was found in Caddy storage." xml:space="preserve"><value>Ein gültiges Zertifikat wurde im Caddy-Speicher gefunden.</value></data>
   <data name="Failed or blocked" xml:space="preserve"><value>Fehler oder blockiert</value></data>
   <data name="The latest attempt, provider, or configuration prevents success." xml:space="preserve"><value>Der letzte Versuch, Provider oder die Konfiguration verhindert den Erfolg.</value></data>
@@ -517,7 +516,6 @@
   <data name="{0} hours" xml:space="preserve"><value>{0} Stunden</value></data>
   <data name="{0} minutes" xml:space="preserve"><value>{0} Minuten</value></data>
   <data name="{0} seconds" xml:space="preserve"><value>{0} Sekunden</value></data>
-  <data name="DNS provider" xml:space="preserve"><value>DNS-Provider</value></data>
   <data name="Provider DNS" xml:space="preserve"><value>Provider-DNS</value></data>
   <data name="Read the current DNS records directly from the selected provider. This view is read-only and never exposes provider credentials." xml:space="preserve"><value>Lädt die aktuellen DNS-Einträge direkt vom ausgewählten Provider. Die Ansicht ist schreibgeschützt und zeigt niemals Zugangsdaten.</value></data>
   <data name="Back to providers" xml:space="preserve"><value>Zurück zu Providern</value></data>
@@ -532,16 +530,12 @@
   <data name="The provider returned no DNS records." xml:space="preserve"><value>Der Provider hat keine DNS-Einträge zurückgegeben.</value></data>
   <data name="This provider can be configured and tested, but its API does not support record listing in this build." xml:space="preserve"><value>Dieser Provider kann konfiguriert und getestet werden, aber seine API unterstützt in diesem Build kein Laden der Einträge.</value></data>
   <data name="DNS records could not be loaded: {0}" xml:space="preserve"><value>DNS-Einträge konnten nicht geladen werden: {0}</value></data>
-  <data name="DNS and certificates" xml:space="preserve"><value>DNS und Zertifikate</value></data>
   <data name="Select a provider and enter only the required values. Credentials are encrypted and are never displayed again." xml:space="preserve"><value>Wähle einen Provider und gib nur die benötigten Werte ein. Zugangsdaten werden verschlüsselt und nie wieder angezeigt.</value></data>
   <data name="Set up domain with provider" xml:space="preserve"><value>Domain mit Provider einrichten</value></data>
   <data name="Loading failed" xml:space="preserve"><value>Laden fehlgeschlagen</value></data>
   <data name="Configured" xml:space="preserve"><value>Konfiguriert</value></data>
   <data name="DNS API" xml:space="preserve"><value>DNS-API</value></data>
   <data name="Connection" xml:space="preserve"><value>Verbindung</value></data>
-  <data name="enabled" xml:space="preserve"><value>aktiv</value></data>
-  <data name="disabled" xml:space="preserve"><value>deaktiviert</value></data>
-  <data name="available" xml:space="preserve"><value>verfügbar</value></data>
   <data name="certificates only" xml:space="preserve"><value>nur Zertifikate</value></data>
   <data name="module installed" xml:space="preserve"><value>Modul vorhanden</value></data>
   <data name="module missing" xml:space="preserve"><value>Modul fehlt</value></data>
@@ -624,7 +618,6 @@
   <data name="Interval in seconds" xml:space="preserve"><value>Intervall in Sekunden</value></data>
   <data name="Dynamic targets" xml:space="preserve"><value>Dynamische Ziele</value></data>
   <data name="Source" xml:space="preserve"><value>Quelle</value></data>
-  <data name="Interval" xml:space="preserve"><value>Intervall</value></data>
   <data name="Latest value" xml:space="preserve"><value>Letzter Wert</value></data>
   <data name="Run now" xml:space="preserve"><value>Jetzt ausführen</value></data>
   <data name="No DDNS targets exist yet." xml:space="preserve"><value>Noch keine DDNS-Ziele vorhanden.</value></data>
@@ -661,7 +654,6 @@
   <data name="Other types use" xml:space="preserve"><value>Andere Typen verwenden</value></data>
   <data name="Run history" xml:space="preserve"><value>Laufhistorie</value></data>
   <data name="Latest runs" xml:space="preserve"><value>Letzte Läufe</value></data>
-  <data name="Started" xml:space="preserve"><value>Gestartet</value></data>
   <data name="Job" xml:space="preserve"><value>Job</value></data>
   <data name="Message" xml:space="preserve"><value>Meldung</value></data>
   <data name="Correlation ID" xml:space="preserve"><value>Correlation-ID</value></data>
@@ -708,11 +700,8 @@
   <data name="Readiness" xml:space="preserve"><value>Bereitschaft</value></data>
   <data name="Data" xml:space="preserve"><value>Daten</value></data>
   <data name="Legacy source" xml:space="preserve"><value>Legacy-Quelle</value></data>
-  <data name="unavailable" xml:space="preserve"><value>nicht verfügbar</value></data>
-  <data name="bytes" xml:space="preserve"><value>Bytes</value></data>
   <data name="Passed" xml:space="preserve"><value>Bestanden</value></data>
   <data name="Warning" xml:space="preserve"><value>Warnung</value></data>
-  <data name="Check" xml:space="preserve"><value>Prüfung</value></data>
   <data name="Result" xml:space="preserve"><value>Ergebnis</value></data>
   <data name="Remediation" xml:space="preserve"><value>Behebung</value></data>
   <data name="Same UTC window" xml:space="preserve"><value>Gleiches UTC-Zeitfenster</value></data>
@@ -723,11 +712,8 @@
   <data name="Review" xml:space="preserve"><value>Prüfen</value></data>
   <data name="Maintenance window" xml:space="preserve"><value>Wartungsfenster</value></data>
   <data name="Cutover approved" xml:space="preserve"><value>Cutover freigegeben</value></data>
-  <data name="yes" xml:space="preserve"><value>ja</value></data>
-  <data name="no" xml:space="preserve"><value>nein</value></data>
   <data name="Minimum observation time" xml:space="preserve"><value>Minimale Beobachtungszeit</value></data>
   <data name="Maximum difference" xml:space="preserve"><value>Maximale Abweichung</value></data>
-  <data name="Order" xml:space="preserve"><value>Reihenfolge</value></data>
   <data name="Controlled cutover" xml:space="preserve"><value>Kontrollierter Cutover</value></data>
   <data name="Pause writes briefly and create a consistent backup of the old SQLite file." xml:space="preserve"><value>Schreibzugriffe kurz pausieren und ein konsistentes Backup der alten SQLite-Datei erstellen.</value></data>
   <data name="Run the final import and verification against exactly that backup." xml:space="preserve"><value>Finalen Import und Verifikation exakt gegen dieses Backup ausführen.</value></data>
@@ -862,7 +848,6 @@
   <data name="Groups protect individual routes. Passwords are stored only as hashes and existing passwords are never displayed." xml:space="preserve"><value>Gruppen schützen einzelne Routen. Passwörter werden nur als Hash gespeichert und vorhandene Passwörter nie angezeigt.</value></data>
   <data name="Access groups are currently unavailable" xml:space="preserve"><value>Zugriffsgruppen sind momentan nicht verfügbar</value></data>
   <data name="Check that all PostgreSQL migrations have been applied." xml:space="preserve"><value>Prüfe, ob alle PostgreSQL-Migrationen angewendet wurden.</value></data>
-  <data name="Credentials" xml:space="preserve"><value>Zugangsdaten</value></data>
   <data name="Create group" xml:space="preserve"><value>Gruppe erstellen</value></data>
   <data name="Use a clear name and an optional purpose." xml:space="preserve"><value>Verwende einen klaren Namen und optional einen Zweck.</value></data>
   <data name="Description" xml:space="preserve"><value>Beschreibung</value></data>
@@ -879,4 +864,39 @@
   <data name="Portal credential enabled." xml:space="preserve"><value>Portal-Zugang aktiviert.</value></data>
   <data name="Portal credential disabled." xml:space="preserve"><value>Portal-Zugang deaktiviert.</value></data>
   <data name="Access groups could not be loaded: {0}" xml:space="preserve"><value>Zugriffsgruppen konnten nicht geladen werden: {0}</value></data>
+  <data name="Please confirm" xml:space="preserve"><value>Bitte bestätigen</value></data>
+  <data name="Confirm" xml:space="preserve"><value>Bestätigen</value></data>
+  <data name="{0} access groups" xml:space="preserve"><value>{0} Zugriffsgruppen</value></data>
+  <data name="{0} blockers · {1} warnings" xml:space="preserve"><value>{0} Blockaden · {1} Warnungen</value></data>
+  <data name="{0} channels" xml:space="preserve"><value>{0} Kanäle</value></data>
+  <data name="{0} checks must be resolved before a maintenance window." xml:space="preserve"><value>{0} Prüfungen müssen vor einem Wartungsfenster gelöst werden.</value></data>
+  <data name="{0} clients" xml:space="preserve"><value>{0} Clients</value></data>
+  <data name="{0} DDNS targets" xml:space="preserve"><value>{0} DDNS-Ziele</value></data>
+  <data name="{0} DNS records" xml:space="preserve"><value>{0} DNS-Einträge</value></data>
+  <data name="{0} domains" xml:space="preserve"><value>{0} Domains</value></data>
+  <data name="{0} entries" xml:space="preserve"><value>{0} Einträge</value></data>
+  <data name="{0} groups" xml:space="preserve"><value>{0} Gruppen</value></data>
+  <data name="{0} intervals" xml:space="preserve"><value>{0} Intervalle</value></data>
+  <data name="{0} jobs" xml:space="preserve"><value>{0} Jobs</value></data>
+  <data name="{0} provider types" xml:space="preserve"><value>{0} Provider-Typen</value></data>
+  <data name="{0} providers" xml:space="preserve"><value>{0} Provider</value></data>
+  <data name="{0} requests · {1} page views" xml:space="preserve"><value>{0} Anfragen · {1} Seitenaufrufe</value></data>
+  <data name="{0} routes · {1} domains" xml:space="preserve"><value>{0} Routen · {1} Domains</value></data>
+  <data name="{0} routes · {1} enabled" xml:space="preserve"><value>{0} Routen · {1} aktiviert</value></data>
+  <data name="{0} routes in schema" xml:space="preserve"><value>{0} Routen im Schema</value></data>
+  <data name="{0} targets" xml:space="preserve"><value>{0} Ziele</value></data>
+  <data name="Analytics filters" xml:space="preserve"><value>Analysefilter</value></data>
+  <data name="Close" xml:space="preserve"><value>Schließen</value></data>
+  <data name="Create a protected draft before configuring Caddy." xml:space="preserve"><value>Erstelle einen geschützten Entwurf, bevor Caddy konfiguriert wird.</value></data>
+  <data name="Group" xml:space="preserve"><value>Gruppe</value></data>
+  <data name="HTTP(S) URL" xml:space="preserve"><value>HTTP(S)-URL</value></data>
+  <data name="Import and export routes" xml:space="preserve"><value>Routen importieren und exportieren</value></data>
+  <data name="IP" xml:space="preserve"><value>IP</value></data>
+  <data name="No DNS provider has been configured." xml:space="preserve"><value>Es wurde noch kein DNS-Provider konfiguriert.</value></data>
+  <data name="Select a provider and enter only the required values." xml:space="preserve"><value>Wähle einen Provider und gib nur die erforderlichen Werte ein.</value></data>
+  <data name="Select Netcup or another provider. Only the required fields are shown." xml:space="preserve"><value>Wähle Netcup oder einen anderen Provider. Es werden nur die erforderlichen Felder angezeigt.</value></data>
+  <data name="Switch the admin and portal upstreams to ports {0} and {1} in a controlled operation." xml:space="preserve"><value>Stelle die Admin- und Portal-Upstreams kontrolliert auf die Ports {0} und {1} um.</value></data>
+  <data name="The comparison runs only after an explicit action. Required legacy snapshot:" xml:space="preserve"><value>Der Vergleich läuft nur nach einer ausdrücklichen Aktion. Erforderlicher Legacy-Snapshot:</value></data>
+  <data name="TTL" xml:space="preserve"><value>TTL</value></data>
+  <data name="User" xml:space="preserve"><value>Benutzer</value></data>
 </root>

@@ -57,7 +57,7 @@ public sealed class LoginModel : LocalizedPageModel
     public LoginInput Input { get; set; } = new();
 
     [BindProperty(SupportsGet = true)]
-    public string ReturnUrl { get; set; } = "/";
+    public string? ReturnUrl { get; set; }
 
     public bool ShowPublicWarning =>
         _surfaceResolver.GetResolved(HttpContext) == RequestSurface.PublicAdmin &&
@@ -65,15 +65,17 @@ public sealed class LoginModel : LocalizedPageModel
 
     public IActionResult OnGet()
     {
-        ReturnUrl = SafeReturnUrl(ReturnUrl);
+        var returnUrl = SafeReturnUrl(ReturnUrl);
+        ReturnUrl = returnUrl;
         return User.Identity?.IsAuthenticated == true
-            ? LocalRedirect(ReturnUrl)
+            ? LocalRedirect(returnUrl)
             : Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        ReturnUrl = SafeReturnUrl(ReturnUrl);
+        var returnUrl = SafeReturnUrl(ReturnUrl);
+        ReturnUrl = returnUrl;
         if (!ModelState.IsValid)
         {
             return Page();
@@ -165,7 +167,7 @@ public sealed class LoginModel : LocalizedPageModel
                 ExpiresUtc = DateTimeOffset.UtcNow.Add(SessionLifetime),
             });
 
-        return LocalRedirect(ReturnUrl);
+        return LocalRedirect(returnUrl);
     }
 
     private async Task<bool> VerifySecondFactorAsync(

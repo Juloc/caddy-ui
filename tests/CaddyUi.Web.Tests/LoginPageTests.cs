@@ -36,6 +36,7 @@ public sealed class LoginPageTests :
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("validation-summary-errors", html, StringComparison.Ordinal);
         Assert.Contains("data-valmsg-summary=\"true\"", html, StringComparison.Ordinal);
         Assert.Contains("role=\"alert\"", html, StringComparison.Ordinal);
         Assert.Contains("data-valmsg-for=\"Input.Username\"", html, StringComparison.Ordinal);

@@ -3,6 +3,8 @@
 @model CaddyUi.Web.Pages.Administration.ProvidersModel
 @{
     ViewData["Title"] = T["DNS providers"];
+    var createProviderOpen = ViewContext.HttpContext.Request.Query.ContainsKey("create-provider") ||
+        ViewData.ModelState.Any(entry => entry.Key.StartsWith("Input.", StringComparison.Ordinal) && entry.Value?.Errors.Count > 0);
 }
 
 <section class="page-heading">
@@ -13,7 +15,8 @@
     </div>
     <div class="page-actions">
         <span class="status-badge status-badge--neutral">@T["{0} provider types", DnsProviderCatalog.All.Count]</span>
-        <a class="button button--primary" asp-page="/Setup/Index">@T["Set up domain with provider"]</a>
+        <a class="button button--quiet" asp-page="/Setup/Index">@T["Set up domain with provider"]</a>
+        <a class="button button--primary" href="?create-provider=1" data-dialog-open="create-provider-dialog">@T["Add provider"]</a>
     </div>
 </section>
 
@@ -31,22 +34,21 @@
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
 
-<section class="operations-grid operations-grid--sidebar">
-    <article class="workbench">
+<article class="workbench operations-section">
         <header class="workbench-header">
             <div><p class="eyebrow">@T["Configured"]</p><h2>@T["{0} providers", Model.Providers.Count]</h2></div>
         </header>
-        <div class="workbench-body table-wrap provider-table-wrap">
-            <table class="data-table provider-table">
+        <div class="workbench-body table-wrap">
+            <table class="data-table">
                 <thead><tr><th>@T["Name"]</th><th>@T["Type"]</th><th>@T["DNS API"]</th><th>@T["Wildcard"]</th><th>@T["Connection"]</th><th class="provider-actions-heading">@T["Actions"]</th></tr></thead>
                 <tbody>
                 @foreach (var provider in Model.Providers)
                 {
                     var domains = Model.Domains.Where(domain => domain.DnsProviderId == provider.Id && domain.Enabled).ToArray();
                     <tr>
-                        <td data-label="@T["Name"]"><strong>@provider.Label</strong><small>@(provider.Enabled ? T["enabled"] : T["disabled"]) · @T["{0} domains", domains.Length]</small></td>
+                        <td data-label="@T["Name"]"><strong>@provider.Label</strong><small>@(provider.Enabled ? T["Enabled"] : T["Disabled"]) · @T["{0} domains", domains.Length]</small></td>
                         <td data-label="@T["Type"]"><code>@provider.ProviderType</code></td>
-                        <td data-label="@T["DNS API"]"><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? T["available"] : T["certificates only"])</span></td>
+                        <td data-label="@T["DNS API"]"><span class="status-badge @(Model.SupportsDirectApi(provider.ProviderType) ? "status-badge--ok" : "status-badge--neutral")">@(Model.SupportsDirectApi(provider.ProviderType) ? T["Available"] : T["certificates only"])</span></td>
                         <td data-label="@T["Wildcard"]"><span class="status-badge @(Model.HasCaddyDnsModule(provider.ProviderType) ? "status-badge--ok" : "status-badge--warning")">@(Model.HasCaddyDnsModule(provider.ProviderType) ? T["module installed"] : T["module missing"])</span></td>
                         <td data-label="@T["Connection"]">
                             <span class="status-badge @(provider.LastTestStatus == "ok" ? "status-badge--ok" : provider.LastTestStatus == "failed" ? "status-badge--danger" : "status-badge--neutral")">@(provider.LastTestStatus == "ok" ? T["tested"] : provider.LastTestStatus == "failed" ? T["test failed"] : T["not tested"])</span>
@@ -106,19 +108,21 @@
                 }
                 @if (Model.Providers.Count == 0)
                 {
-                    <tr class="provider-table-empty"><td colspan="6" class="empty-state">@T["No DNS provider has been configured."]</td></tr>
+                    <tr><td colspan="6" class="empty-state">@T["No DNS provider has been configured."]</td></tr>
                 }
                 </tbody>
             </table>
         </div>
-    </article>
+ </article>
 
-    <aside class="workbench">
-        <header class="workbench-header">
-            <div><p class="eyebrow">@T["New"]</p><h2>@T["Add provider"]</h2></div>
+<dialog id="create-provider-dialog" class="dialog-surface dialog-surface--wide" data-dialog aria-labelledby="create-provider-dialog-title" open="@(createProviderOpen ? "open" : null)">
+    <div class="dialog-layout">
+        <header class="dialog-header">
+            <div><h2 id="create-provider-dialog-title">@T["Add provider"]</h2><p>@T["Select a provider and enter only the required values."]</p></div>
+            <a class="button button--compact button--quiet" asp-page="./Providers" data-dialog-close>@T["Close"]</a>
         </header>
-        <div class="workbench-body">
-            <form method="post" asp-page-handler="Create" class="form-stack" data-provider-form>
+        <div class="dialog-body">
+            <form id="create-provider-form" method="post" asp-page-handler="Create" class="form-stack" data-provider-form>
                 <label class="field">
                     <span class="field-label">@T["Provider"]</span>
                     <select asp-for="Input.ProviderType" data-provider-type>
@@ -168,11 +172,14 @@
                     <strong>@T["Encrypted storage"]</strong>
                     <span>@T["Secret values are never displayed in logs, tables, diagnostic packages, or later forms."]</span>
                 </div>
-                <button class="button button--primary" type="submit">@T["Save provider"]</button>
             </form>
         </div>
-    </aside>
-</section>
+        <footer class="dialog-footer">
+            <a class="button button--quiet" asp-page="./Providers" data-dialog-close>@T["Cancel"]</a>
+            <button class="button button--primary" type="submit" form="create-provider-form">@T["Save provider"]</button>
+        </footer>
+    </div>
+</dialog>
 
 <section class="workbench operations-section">
     <header class="workbench-header"><div><p class="eyebrow">@T["Support"]</p><h2>@T["Provider capabilities"]</h2></div></header>

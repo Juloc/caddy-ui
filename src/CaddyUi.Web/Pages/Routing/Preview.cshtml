@@ -112,7 +112,7 @@
                 var correlationLabel = operation.CorrelationId.Length > 8 ? operation.CorrelationId[..8] : operation.CorrelationId;
                 <div class="compact-list-row">
                     <span><strong>@operation.State</strong><small><time datetime="@operation.StartedAt.ToString("O")" data-local-time>@operation.StartedAt.ToString("u")</time> · @correlationLabel</small></span>
-                    <span class="status-badge @(operation.State == "applied" ? "status-badge--ok" : operation.State == "failed" ? "status-badge--warning" : "status-badge--neutral")">@(operation.CompletedAt is null ? T["running"] : operation.State)</span>
+                    <span class="status-badge @(operation.State == "applied" ? "status-badge--ok" : operation.State == "failed" ? "status-badge--warning" : "status-badge--neutral")">@(operation.CompletedAt is null ? T["Running"] : operation.State)</span>
                 </div>
             }
             @if (Model.Operations.Count == 0) { <p class="empty-state">@T["No apply attempt exists yet."]</p> }

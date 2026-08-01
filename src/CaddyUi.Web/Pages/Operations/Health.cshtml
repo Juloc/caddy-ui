@@ -2,11 +2,146 @@
 @model CaddyUi.Web.Pages.Operations.HealthModel
 @{
     ViewData["Title"] = T["Health checks"];
+    var shouldOpenCreateDialog = ViewContext.HttpContext.Request.Query.ContainsKey("create") || !ViewData.ModelState.IsValid;
 }
-<section class="page-heading"><div><p class="eyebrow">@T["Reachability"]</p><h1>@T["Health checks"]</h1><p class="page-description">@T["Public URLs and internal upstreams are checked separately. Expected status range, timeout, and history remain traceable for each target."]</p></div><span class="status-badge status-badge--neutral">@T["{0} targets", Model.Targets.Count]</span></section>
-@if (TempData["Message"] is string message) { <div class="notice notice--success">@message</div> }@if (TempData["Error"] is string error) { <div class="notice notice--warning">@error</div> }
-<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
-<section class="operations-grid operations-grid--sidebar"><article class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["Targets"]</p><h2>@T["Current status"]</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>@T["Name"]</th><th>URL</th><th>@T["Expected"]</th><th>@T["Latest check"]</th><th>@T["Status"]</th><th class="table-actions">@T["Actions"]</th></tr></thead><tbody>
-@foreach (var target in Model.Targets) { <tr><td><strong>@target.Name</strong><small>@target.TargetType</small></td><td class="value-cell"><code>@target.Url</code></td><td>@target.ExpectedStatusMin–@target.ExpectedStatusMax · @target.TimeoutSeconds @T["sec."]</td><td>@if (target.LastCheckedAt is not null) { <time datetime="@target.LastCheckedAt.Value.ToString("O")" data-local-time>@target.LastCheckedAt.Value.ToString("u")</time> } else { <span>–</span> }<small>@(target.LastDurationMilliseconds is double duration ? $"{duration:N0} ms" : "")</small></td><td><span class="status-badge @(target.LastStatus == "healthy" ? "status-badge--ok" : target.LastStatus == "unhealthy" ? "status-badge--warning" : "status-badge--neutral")">@target.LastStatus</span>@if (!string.IsNullOrWhiteSpace(target.LastError)) { <small>@target.LastError</small> }</td><td class="table-actions"><form method="post" asp-page-handler="Run"><input type="hidden" name="targetId" value="@target.Id" /><button class="button button--compact button--primary" type="submit" disabled="@(!target.Enabled)">@T["Check"]</button></form><form method="post" asp-page-handler="Toggle"><input type="hidden" name="targetId" value="@target.Id" /><input type="hidden" name="enabled" value="@(!target.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(target.Enabled ? T["Disable"] : T["Enable"])</button></form></td></tr> }
-@if (Model.Targets.Count == 0) { <tr><td colspan="6" class="empty-state">@T["No health targets exist yet."]</td></tr> }
-</tbody></table></div></article><aside class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["New"]</p><h2>@T["Add target"]</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="Create" class="form-stack"><label><span>@T["Name"]</span><input asp-for="Input.Name" /></label><label><span>@T["Type"]</span><select asp-for="Input.TargetType"><option value="public">@T["Public"]</option><option value="upstream">@T["Internal upstream"]</option></select></label><label><span>@T["HTTP(S) URL"]</span><input asp-for="Input.Url" placeholder="https://app.example.com/health" /></label><div class="form-grid form-grid--two"><label><span>@T["Status from"]</span><input asp-for="Input.ExpectedStatusMin" type="number" /></label><label><span>@T["Status to"]</span><input asp-for="Input.ExpectedStatusMax" type="number" /></label></div><label><span>@T["Timeout in seconds"]</span><input asp-for="Input.TimeoutSeconds" type="number" min="1" max="120" /></label><button class="button button--primary" type="submit">@T["Create target"]</button></form></div></aside></section>
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">@T["Reachability"]</p>
+        <h1>@T["Health checks"]</h1>
+        <p class="page-description">@T["Public URLs and internal upstreams are checked separately. Expected status range, timeout, and history remain traceable for each target."]</p>
+    </div>
+    <div class="page-actions">
+        <span class="status-badge status-badge--neutral">@T["{0} targets", Model.Targets.Count]</span>
+        <a class="button button--primary" href="?create=1" data-dialog-open="create-health-target-dialog">@T["Add target"]</a>
+    </div>
+</section>
+
+@if (TempData["Message"] is string message)
+{
+    <div class="notice notice--success">@message</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="notice notice--warning">@error</div>
+}
+
+<section class="operations-grid">
+    <article class="workbench">
+        <header class="workbench-header">
+            <div>
+                <p class="eyebrow">@T["Targets"]</p>
+                <h2>@T["Current status"]</h2>
+            </div>
+        </header>
+        <div class="workbench-body table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>@T["Name"]</th>
+                        <th>URL</th>
+                        <th>@T["Expected"]</th>
+                        <th>@T["Latest check"]</th>
+                        <th>@T["Status"]</th>
+                        <th class="table-actions">@T["Actions"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var target in Model.Targets)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@target.Name</strong>
+                                <small>@target.TargetType</small>
+                            </td>
+                            <td class="value-cell"><code>@target.Url</code></td>
+                            <td>@target.ExpectedStatusMin–@target.ExpectedStatusMax · @target.TimeoutSeconds @T["sec."]</td>
+                            <td>
+                                @if (target.LastCheckedAt is not null)
+                                {
+                                    <time datetime="@target.LastCheckedAt.Value.ToString("O")" data-local-time>@target.LastCheckedAt.Value.ToString("u")</time>
+                                }
+                                else
+                                {
+                                    <span>–</span>
+                                }
+                                <small>@(target.LastDurationMilliseconds is double duration ? $"{duration:N0} ms" : "")</small>
+                            </td>
+                            <td>
+                                <span class="status-badge @(target.LastStatus == "healthy" ? "status-badge--ok" : target.LastStatus == "unhealthy" ? "status-badge--warning" : "status-badge--neutral")">@target.LastStatus</span>
+                                @if (!string.IsNullOrWhiteSpace(target.LastError))
+                                {
+                                    <small>@target.LastError</small>
+                                }
+                            </td>
+                            <td class="table-actions">
+                                <form method="post" asp-page-handler="Run">
+                                    <input type="hidden" name="targetId" value="@target.Id" />
+                                    <button class="button button--compact button--primary" type="submit" disabled="@(!target.Enabled)">@T["Check"]</button>
+                                </form>
+                                <form method="post" asp-page-handler="Toggle">
+                                    <input type="hidden" name="targetId" value="@target.Id" />
+                                    <input type="hidden" name="enabled" value="@(!target.Enabled)" />
+                                    <button class="button button--compact button--quiet" type="submit">@(target.Enabled ? T["Disable"] : T["Enable"])</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Targets.Count == 0)
+                    {
+                        <tr><td colspan="6" class="empty-state">@T["No health targets exist yet."]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+
+<dialog id="create-health-target-dialog" class="dialog-surface" data-dialog aria-labelledby="create-health-target-dialog-title" open="@(shouldOpenCreateDialog ? "open" : null)">
+    <div class="dialog-layout">
+        <header class="dialog-header">
+            <div>
+                <p class="eyebrow">@T["New"]</p>
+                <h2 id="create-health-target-dialog-title">@T["Add target"]</h2>
+            </div>
+        </header>
+        <div class="dialog-body">
+            <form id="create-health-target-form" method="post" asp-page-handler="Create" class="form-stack">
+                <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+                <label>
+                    <span>@T["Name"]</span>
+                    <input asp-for="Input.Name" />
+                </label>
+                <label>
+                    <span>@T["Type"]</span>
+                    <select asp-for="Input.TargetType">
+                        <option value="public">@T["Public"]</option>
+                        <option value="upstream">@T["Internal upstream"]</option>
+                    </select>
+                </label>
+                <label>
+                    <span>@T["HTTP(S) URL"]</span>
+                    <input asp-for="Input.Url" placeholder="https://app.example.com/health" />
+                </label>
+                <div class="form-grid form-grid--two">
+                    <label>
+                        <span>@T["Status from"]</span>
+                        <input asp-for="Input.ExpectedStatusMin" type="number" />
+                    </label>
+                    <label>
+                        <span>@T["Status to"]</span>
+                        <input asp-for="Input.ExpectedStatusMax" type="number" />
+                    </label>
+                </div>
+                <label>
+                    <span>@T["Timeout in seconds"]</span>
+                    <input asp-for="Input.TimeoutSeconds" type="number" min="1" max="120" />
+                </label>
+            </form>
+        </div>
+        <footer class="dialog-footer">
+            <a class="button" asp-page="./Health" data-dialog-close>@T["Cancel"]</a>
+            <button class="button button--primary" type="submit" form="create-health-target-form">@T["Create target"]</button>
+        </footer>
+    </div>
+</dialog>

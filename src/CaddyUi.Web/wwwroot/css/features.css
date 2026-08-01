@@ -80,8 +80,8 @@
     max-height: 620px;
     overflow: auto;
     border-top: 1px solid var(--ui-border);
-    background: #11161d;
-    color: #dce4ee;
+    background: var(--ui-diff-surface);
+    color: var(--ui-diff-text);
     font-family: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
     font-size: 12px;
     line-height: 1.55;
@@ -89,12 +89,12 @@
 .diff-line { display: grid; grid-template-columns: 48px 48px 24px minmax(max-content, 1fr); min-height: 22px; }
 .diff-line > span, .diff-line > code { padding: 1px 8px; }
 .diff-line code { color: inherit; white-space: pre; }
-.diff-number { border-right: 1px solid #2c3542; color: #7f8b98; text-align: right; user-select: none; }
-.diff-marker { color: #9aa6b4; text-align: center; user-select: none; }
-.diff-line--added { background: #123522; }
-.diff-line--added .diff-marker { color: #65d28d; }
-.diff-line--removed { background: #3c1d1d; }
-.diff-line--removed .diff-marker { color: #ff8d85; }
+.diff-number { border-right: 1px solid var(--ui-diff-border); color: var(--ui-diff-muted); text-align: right; user-select: none; }
+.diff-marker { color: var(--ui-diff-muted); text-align: center; user-select: none; }
+.diff-line--added { background: var(--ui-diff-added); }
+.diff-line--added .diff-marker { color: var(--ui-diff-added-text); }
+.diff-line--removed { background: var(--ui-diff-removed); }
+.diff-line--removed .diff-marker { color: var(--ui-diff-removed-text); }
 .inline-form--reason .field { min-width: min(520px, 100%); }
 .transfer-preview { width: 100%; min-height: 460px; }
 .transfer-contract { margin-top: 16px; }

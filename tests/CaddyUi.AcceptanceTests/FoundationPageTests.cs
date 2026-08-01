@@ -39,14 +39,14 @@ public sealed class FoundationPageTests :
     }
 
     [Fact]
-    public async Task Login_DefaultsToEnglish()
+    public async Task Login_DefaultsToGerman()
     {
         using var response = await _client.GetAsync("/Login");
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("<html lang=\"en\">", body, StringComparison.Ordinal);
+        Assert.Contains("<html lang=\"de\"", body, StringComparison.Ordinal);
         Assert.Contains("Caddy UI", body, StringComparison.Ordinal);
-        Assert.Contains("TOTP or recovery code", body, StringComparison.Ordinal);
+        Assert.Contains("TOTP- oder Recovery-Code", body, StringComparison.Ordinal);
     }
 }

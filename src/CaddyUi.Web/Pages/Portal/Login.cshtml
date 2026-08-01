@@ -5,12 +5,13 @@
     var culture = global::System.Globalization.CultureInfo.CurrentUICulture.Name;
 }
 <!DOCTYPE html>
-<html lang="@culture">
+<html lang="@culture" data-theme="system">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>@Model.GroupName · @T["Protected access"]</title>
+    <script src="~/js/theme-init.js" asp-append-version="true"></script>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/features.css" asp-append-version="true" />
 </head>

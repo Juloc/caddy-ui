@@ -24,7 +24,9 @@ Caddy UI is a compact self-hosted control plane for Caddy. Its primary jobs are 
 ## UI rules
 
 - Follow `docs/UI_DESIGN_CONTRACT.md`.
-- Use a calm Microsoft Fluent 2 / Windows 11 visual language.
+- Microsoft Fluent 2 Web is the mandatory application-wide design system. Follow its semantic token, accessibility and responsive guidance; do not introduce a second visual system.
+- Build the UI with server-rendered Razor Pages and semantic HTML. React, SPA navigation and client-side rendering are not permitted. Fluent Web Components are optional progressive enhancement only and must never be required for a core workflow.
+- Keep a single central `--ui-*` semantic token alias layer. Components consume aliases for color, status and elevation; spacing and typography stay on the documented Fluent ramps instead of introducing page-local scales.
 - Tables, logs, forms and editors are flat and compact.
 - Use one icon family, clear focus states, semantic status colors and accessible contrast.
 - Default density is compact.
@@ -37,10 +39,11 @@ Caddy UI is a compact self-hosted control plane for Caddy. Its primary jobs are 
 Before declaring a work item complete:
 
 1. Run `dotnet restore`, `dotnet format --verify-no-changes`, Release build and all .NET tests.
+   The repository line-ending contract validates Git index blobs, not Windows worktree line endings: text blobs are LF, while shell scripts are checked out with LF through `.gitattributes`.
 2. Run `gofmt`, `go mod tidy` and `go test ./...` without repository changes.
 3. Build the `dotnet-companion` and `dotnet-bundle` targets from `Dockerfile.dotnet`.
 4. Validate the production Compose model, PostgreSQL migration, legacy SQLite import and health endpoints.
 5. Validate generated Caddy configuration, remote reload and rollback behavior.
-6. Check desktop and mobile layouts, keyboard navigation, themes and empty/error/loading states.
+6. Check the Fluent 2 verification matrix: desktop and mobile layouts, keyboard navigation, System/Light/Dark themes, 400% zoom, reduced motion, and empty/error/loading states.
 7. Confirm removed features and dead code are actually gone.
 8. Update the relevant architecture, operations and release documentation.

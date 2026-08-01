@@ -15,6 +15,8 @@
     const closeButton = document.querySelector("[data-mobile-navigation-close]");
     const backdrop = document.querySelector("[data-sidebar-backdrop]");
     const sidebar = document.querySelector("[data-sidebar]");
+    const appContent = document.querySelector(".app-content");
+    const skipLink = document.querySelector(".skip-link");
     let previouslyFocusedElement = null;
 
     function readPreference(key, fallback) {
@@ -79,51 +81,115 @@
         });
     }
 
-    function attachConfirmationHandlers(root = document) {
-        root.querySelectorAll("form[data-confirm]").forEach(form => {
-            if (form.dataset.confirmAttached === "true") {
-                return;
-            }
-
-            form.dataset.confirmAttached = "true";
-            form.addEventListener("submit", event => {
-                const message = form.dataset.confirm;
-                if (message && !window.confirm(message)) {
-                    event.preventDefault();
-                }
-            });
-        });
-    }
-
-    function openMobileNavigation() {
-        if (!mobileBreakpoint.matches) {
+    function setInert(element, isInert) {
+        if (!element) {
             return;
         }
 
-        previouslyFocusedElement = document.activeElement;
+        element.inert = isInert;
+        if (isInert) {
+            element.setAttribute("aria-hidden", "true");
+        } else {
+            element.removeAttribute("aria-hidden");
+        }
+    }
+
+    function setMobileNavigationAccessibility(isOpen) {
+        if (!sidebar) {
+            return;
+        }
+
+        if (!mobileBreakpoint.matches) {
+            sidebar.inert = false;
+            sidebar.removeAttribute("aria-hidden");
+            sidebar.removeAttribute("aria-modal");
+            sidebar.removeAttribute("role");
+            setInert(appContent, false);
+            setInert(skipLink, false);
+            setInert(openButton, false);
+            return;
+        }
+
+        sidebar.inert = !isOpen;
+        if (isOpen) {
+            sidebar.setAttribute("role", "dialog");
+            sidebar.setAttribute("aria-modal", "true");
+            sidebar.removeAttribute("aria-hidden");
+        } else {
+            sidebar.removeAttribute("role");
+            sidebar.removeAttribute("aria-modal");
+            sidebar.setAttribute("aria-hidden", "true");
+        }
+
+        setInert(appContent, isOpen);
+        setInert(skipLink, isOpen);
+        setInert(openButton, isOpen);
+    }
+
+    function drawerFocusableElements() {
+        if (!sidebar) {
+            return [];
+        }
+
+        return Array.from(sidebar.querySelectorAll(
+            "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        )).filter(element => !element.hasAttribute("hidden") && element.getAttribute("aria-hidden") !== "true");
+    }
+
+    function openMobileNavigation() {
+        if (!mobileBreakpoint.matches || shell.classList.contains("is-navigation-open")) {
+            return;
+        }
+
+        previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         shell.classList.add("is-navigation-open");
         document.body.classList.add("navigation-open");
         openButton?.setAttribute("aria-expanded", "true");
+        setMobileNavigationAccessibility(true);
         window.requestAnimationFrame(() => {
-            sidebar?.querySelector("a, button")?.focus();
+            (closeButton ?? drawerFocusableElements()[0])?.focus();
         });
     }
 
     function closeMobileNavigation(restoreFocus = true) {
+        const wasOpen = shell.classList.contains("is-navigation-open");
         shell.classList.remove("is-navigation-open");
         document.body.classList.remove("navigation-open");
         openButton?.setAttribute("aria-expanded", "false");
+        setMobileNavigationAccessibility(false);
 
-        if (restoreFocus && previouslyFocusedElement instanceof HTMLElement) {
+        if (wasOpen && restoreFocus && previouslyFocusedElement instanceof HTMLElement) {
             previouslyFocusedElement.focus();
         }
         previouslyFocusedElement = null;
     }
 
+    function trapDrawerFocus(event) {
+        if (event.key !== "Tab" || !shell.classList.contains("is-navigation-open")) {
+            return;
+        }
+
+        const focusableElements = drawerFocusableElements();
+        if (focusableElements.length === 0) {
+            event.preventDefault();
+            return;
+        }
+
+        const first = focusableElements[0];
+        const last = focusableElements[focusableElements.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
     applyTheme(readPreference(themeStorageKey, "system"), false);
     applyCollapsedState(readPreference(sidebarStorageKey, "false") === "true", false);
+    setMobileNavigationAccessibility(false);
     applyLocalTimes();
-    attachConfirmationHandlers();
 
     themeButtons.forEach(button => {
         button.addEventListener("click", () => applyTheme(button.dataset.themeOption, true));
@@ -147,13 +213,18 @@
 
     document.addEventListener("keydown", event => {
         if (event.key === "Escape" && shell.classList.contains("is-navigation-open")) {
+            event.preventDefault();
             closeMobileNavigation();
+            return;
         }
+
+        trapDrawerFocus(event);
     });
 
     mobileBreakpoint.addEventListener("change", event => {
         if (!event.matches) {
             closeMobileNavigation(false);
         }
+        setMobileNavigationAccessibility(false);
     });
 })();

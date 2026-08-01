@@ -3,7 +3,7 @@
 @{
     ViewData["Title"] = T["Bots and security"];
 }
-<section class="page-heading"><div><p class="eyebrow">Security Analytics</p><h1>@T["Bots and security"]</h1><p class="page-description">@T["Risk values are deterministic indicators with traceable reasons. They are not a reliable identification of a person."]</p></div><a class="button button--quiet" asp-page="/Security/Clients">@T["All clients"]</a></section>
+<section class="page-heading"><div><p class="eyebrow">@T["Security analytics"]</p><h1>@T["Bots and security"]</h1><p class="page-description">@T["Risk values are deterministic indicators with traceable reasons. They are not a reliable identification of a person."]</p></div><a class="button button--quiet" asp-page="/Security/Clients">@T["All clients"]</a></section>
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="metric-grid">
 <article class="metric-card"><span class="metric-label">@T["Clients"]</span><strong class="metric-value">@Model.Security.Clients.ToString("N0")</strong><span class="metric-detail">@T["estimated technical identities"]</span></article>

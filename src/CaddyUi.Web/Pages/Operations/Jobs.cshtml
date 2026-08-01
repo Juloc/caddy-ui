@@ -3,16 +3,167 @@
 @inject CaddyUi.Infrastructure.Operations.OperationsOptions OperationsOptions
 @{
     ViewData["Title"] = T["Jobs"];
+    var shouldOpenCreateDialog = ViewContext.HttpContext.Request.Query.ContainsKey("create") || !ViewData.ModelState.IsValid;
 }
-<section class="page-heading"><div><p class="eyebrow">@T["Automation"]</p><h1>@T["Jobs"]</h1><p class="page-description">@T["PostgreSQL-backed jobs run with exclusive locking, run history, and a unique correlation ID. The worker is disabled by default."]</p></div><span class="status-badge @(OperationsOptions.WorkerEnabled ? "status-badge--ok" : "status-badge--neutral")">Worker: @(OperationsOptions.WorkerEnabled ? T["enabled"] : T["disabled"])</span></section>
-@if (TempData["Message"] is string message) { <div class="notice notice--success">@message</div> }
-@if (TempData["Error"] is string error) { <div class="notice notice--warning">@error</div> }
-<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
-<section class="operations-grid operations-grid--sidebar">
-<article class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["Configured"]</p><h2>@T["{0} jobs", Model.Jobs.Count]</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>@T["Name"]</th><th>@T["Type"]</th><th>@T["Interval"]</th><th>@T["Next run"]</th><th>@T["Status"]</th><th class="table-actions">@T["Actions"]</th></tr></thead><tbody>
-@foreach (var job in Model.Jobs) { <tr><td><strong>@job.Name</strong><small>@(job.Enabled ? T["enabled"] : T["disabled"])</small></td><td><code>@job.JobType</code></td><td>@job.IntervalSeconds @T["sec."]</td><td><time datetime="@job.NextRunAt.ToString("O")" data-local-time>@job.NextRunAt.ToString("u")</time></td><td><span class="status-badge @(job.LastStatus == "ok" ? "status-badge--ok" : job.LastStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@job.LastStatus</span>@if (!string.IsNullOrWhiteSpace(job.LastError)) { <small>@job.LastError</small> }</td><td class="table-actions"><form method="post" asp-page-handler="Run"><input type="hidden" name="jobId" value="@job.Id" /><button class="button button--compact button--primary" type="submit">@T["Run now"]</button></form><form method="post" asp-page-handler="Toggle"><input type="hidden" name="jobId" value="@job.Id" /><input type="hidden" name="enabled" value="@(!job.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(job.Enabled ? T["Disable"] : T["Enable"])</button></form></td></tr> }
-@if (Model.Jobs.Count == 0) { <tr><td colspan="6" class="empty-state">@T["No jobs exist yet."]</td></tr> }
-</tbody></table></div></article>
-<aside class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["New"]</p><h2>@T["Create job"]</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="Create" class="form-stack"><label><span>@T["Name"]</span><input asp-for="Input.Name" /></label><label><span>@T["Type"]</span><select asp-for="Input.JobType"><option value="health">@T["Health checks"]</option><option value="ddns">@T["All DDNS targets"]</option><option value="provider-test">@T["Provider test"]</option><option value="backup">@T["Backup"]</option></select></label><label><span>@T["Interval in seconds"]</span><input asp-for="Input.IntervalSeconds" type="number" min="60" max="604800" /></label><label><span>@T["Configuration as JSON"]</span><textarea asp-for="Input.ConfigJson" rows="7"></textarea><small>@T["Provider test"]: <code>{"provider_id":"…","domain":"example.com"}</code>. @T["Other types use"] <code>{}</code>.</small></label><button class="button button--primary" type="submit">@T["Create job"]</button></form></div></aside>
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">@T["Automation"]</p>
+        <h1>@T["Jobs"]</h1>
+        <p class="page-description">@T["PostgreSQL-backed jobs run with exclusive locking, run history, and a unique correlation ID. The worker is disabled by default."]</p>
+    </div>
+    <div class="page-actions">
+        <span class="status-badge @(OperationsOptions.WorkerEnabled ? "status-badge--ok" : "status-badge--neutral")">Worker: @(OperationsOptions.WorkerEnabled ? T["Enabled"] : T["Disabled"])</span>
+        <a class="button button--primary" href="?create=1" data-dialog-open="create-job-dialog">@T["Create job"]</a>
+    </div>
 </section>
-<section class="workbench operations-section"><header class="workbench-header"><div><p class="eyebrow">@T["Run history"]</p><h2>@T["Latest runs"]</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>@T["Started"]</th><th>@T["Job"]</th><th>@T["Status"]</th><th>@T["Message"]</th><th>@T["Correlation ID"]</th></tr></thead><tbody>@foreach (var run in Model.Runs) { <tr><td><time datetime="@run.StartedAt.ToString("O")" data-local-time>@run.StartedAt.ToString("u")</time></td><td>@run.JobName</td><td><span class="status-badge @(run.Status == "ok" ? "status-badge--ok" : run.Status == "failed" ? "status-badge--warning" : "status-badge--neutral")">@run.Status</span></td><td>@run.Message</td><td><code>@run.CorrelationId</code></td></tr> }@if (Model.Runs.Count == 0) { <tr><td colspan="5" class="empty-state">@T["No job runs exist yet."]</td></tr> }</tbody></table></div></section>
+
+@if (TempData["Message"] is string message)
+{
+    <div class="notice notice--success">@message</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="notice notice--warning">@error</div>
+}
+
+<section class="operations-grid">
+    <article class="workbench">
+        <header class="workbench-header">
+            <div>
+                <p class="eyebrow">@T["Configured"]</p>
+                <h2>@T["{0} jobs", Model.Jobs.Count]</h2>
+            </div>
+        </header>
+        <div class="workbench-body table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>@T["Name"]</th>
+                        <th>@T["Type"]</th>
+                        <th>@T["Interval"]</th>
+                        <th>@T["Next run"]</th>
+                        <th>@T["Status"]</th>
+                        <th class="table-actions">@T["Actions"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var job in Model.Jobs)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@job.Name</strong>
+                                <small>@(job.Enabled ? T["Enabled"] : T["Disabled"])</small>
+                            </td>
+                            <td><code>@job.JobType</code></td>
+                            <td>@job.IntervalSeconds @T["sec."]</td>
+                            <td><time datetime="@job.NextRunAt.ToString("O")" data-local-time>@job.NextRunAt.ToString("u")</time></td>
+                            <td>
+                                <span class="status-badge @(job.LastStatus == "ok" ? "status-badge--ok" : job.LastStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@job.LastStatus</span>
+                                @if (!string.IsNullOrWhiteSpace(job.LastError))
+                                {
+                                    <small>@job.LastError</small>
+                                }
+                            </td>
+                            <td class="table-actions">
+                                <form method="post" asp-page-handler="Run">
+                                    <input type="hidden" name="jobId" value="@job.Id" />
+                                    <button class="button button--compact button--primary" type="submit">@T["Run now"]</button>
+                                </form>
+                                <form method="post" asp-page-handler="Toggle">
+                                    <input type="hidden" name="jobId" value="@job.Id" />
+                                    <input type="hidden" name="enabled" value="@(!job.Enabled)" />
+                                    <button class="button button--compact button--quiet" type="submit">@(job.Enabled ? T["Disable"] : T["Enable"])</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Jobs.Count == 0)
+                    {
+                        <tr><td colspan="6" class="empty-state">@T["No jobs exist yet."]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+
+<section class="workbench operations-section">
+    <header class="workbench-header">
+        <div>
+            <p class="eyebrow">@T["Run history"]</p>
+            <h2>@T["Latest runs"]</h2>
+        </div>
+    </header>
+    <div class="workbench-body table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>@T["Started"]</th>
+                    <th>@T["Job"]</th>
+                    <th>@T["Status"]</th>
+                    <th>@T["Message"]</th>
+                    <th>@T["Correlation ID"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var run in Model.Runs)
+                {
+                    <tr>
+                        <td><time datetime="@run.StartedAt.ToString("O")" data-local-time>@run.StartedAt.ToString("u")</time></td>
+                        <td>@run.JobName</td>
+                        <td><span class="status-badge @(run.Status == "ok" ? "status-badge--ok" : run.Status == "failed" ? "status-badge--warning" : "status-badge--neutral")">@run.Status</span></td>
+                        <td>@run.Message</td>
+                        <td><code>@run.CorrelationId</code></td>
+                    </tr>
+                }
+                @if (Model.Runs.Count == 0)
+                {
+                    <tr><td colspan="5" class="empty-state">@T["No job runs exist yet."]</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<dialog id="create-job-dialog" class="dialog-surface" data-dialog aria-labelledby="create-job-dialog-title" open="@(shouldOpenCreateDialog ? "open" : null)">
+    <div class="dialog-layout">
+        <header class="dialog-header">
+            <div>
+                <p class="eyebrow">@T["New"]</p>
+                <h2 id="create-job-dialog-title">@T["Create job"]</h2>
+            </div>
+        </header>
+        <div class="dialog-body">
+            <form id="create-job-form" method="post" asp-page-handler="Create" class="form-stack">
+                <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+                <label>
+                    <span>@T["Name"]</span>
+                    <input asp-for="Input.Name" />
+                </label>
+                <label>
+                    <span>@T["Type"]</span>
+                    <select asp-for="Input.JobType">
+                        <option value="health">@T["Health checks"]</option>
+                        <option value="ddns">@T["All DDNS targets"]</option>
+                        <option value="provider-test">@T["Provider test"]</option>
+                        <option value="backup">@T["Backup"]</option>
+                    </select>
+                </label>
+                <label>
+                    <span>@T["Interval in seconds"]</span>
+                    <input asp-for="Input.IntervalSeconds" type="number" min="60" max="604800" />
+                </label>
+                <label>
+                    <span>@T["Configuration as JSON"]</span>
+                    <textarea asp-for="Input.ConfigJson" rows="7"></textarea>
+                    <small>@T["Provider test"]: <code>{"provider_id":"…","domain":"example.com"}</code>. @T["Other types use"] <code>{}</code>.</small>
+                </label>
+            </form>
+        </div>
+        <footer class="dialog-footer">
+            <a class="button" asp-page="./Jobs" data-dialog-close>@T["Cancel"]</a>
+            <button class="button button--primary" type="submit" form="create-job-form">@T["Create job"]</button>
+        </footer>
+    </div>
+</dialog>

@@ -2,11 +2,135 @@
 @model CaddyUi.Web.Pages.Operations.NotificationsModel
 @{
     ViewData["Title"] = T["Notifications"];
+    var shouldOpenCreateDialog = ViewContext.HttpContext.Request.Query.ContainsKey("create") || !ViewData.ModelState.IsValid;
 }
-<section class="page-heading"><div><p class="eyebrow">@T["Messages"]</p><h1>@T["Notifications"]</h1><p class="page-description">@T["Failures are always stored permanently in PostgreSQL. External channels are delivered additionally and independently."]</p></div><span class="status-badge status-badge--neutral">@T["{0} channels", Model.Channels.Count]</span></section>
-@if (TempData["Message"] is string message) { <div class="notice notice--success">@message</div> }@if (TempData["Error"] is string error) { <div class="notice notice--warning">@error</div> }
-<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
-<section class="operations-grid operations-grid--sidebar"><article class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["Configured"]</p><h2>@T["Channels"]</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>@T["Name"]</th><th>@T["Type"]</th><th>@T["Status"]</th><th>@T["Latest test"]</th><th class="table-actions">@T["Actions"]</th></tr></thead><tbody>
-@foreach (var channel in Model.Channels) { <tr><td><strong>@channel.Name</strong><small>@(channel.Enabled ? T["enabled"] : T["disabled"])</small></td><td><code>@channel.ChannelType</code></td><td><span class="status-badge @(channel.LastTestStatus == "ok" ? "status-badge--ok" : channel.LastTestStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@channel.LastTestStatus</span></td><td>@if (channel.LastTestedAt is not null) { <time datetime="@channel.LastTestedAt.Value.ToString("O")" data-local-time>@channel.LastTestedAt.Value.ToString("u")</time> } else { <span>–</span> }@if (!string.IsNullOrWhiteSpace(channel.LastTestError)) { <small>@channel.LastTestError</small> }</td><td class="table-actions"><form method="post" asp-page-handler="Test"><input type="hidden" name="channelId" value="@channel.Id" /><button class="button button--compact button--primary" type="submit" disabled="@(!channel.Enabled)">@T["Test"]</button></form><form method="post" asp-page-handler="Toggle"><input type="hidden" name="channelId" value="@channel.Id" /><input type="hidden" name="enabled" value="@(!channel.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(channel.Enabled ? T["Disable"] : T["Enable"])</button></form></td></tr> }
-@if (Model.Channels.Count == 0) { <tr><td colspan="5" class="empty-state">@T["No channels exist yet."]</td></tr> }
-</tbody></table></div></article><aside class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["New"]</p><h2>@T["Add channel"]</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="Create" class="form-stack"><label><span>@T["Name"]</span><input asp-for="Input.Name" /></label><label><span>@T["Type"]</span><select asp-for="Input.ChannelType"><option value="webhook">Webhook</option><option value="discord">Discord</option><option value="telegram">Telegram</option><option value="email">@T["Email / SMTP"]</option></select></label><label><span>@T["Settings as JSON"]</span><textarea asp-for="Input.ConfigJson" rows="8"></textarea><small>@T["Only non-secret values such as URL, chat ID, SMTP host, or recipient."]</small></label><label><span>@T["Secret references as JSON"]</span><textarea asp-for="Input.SecretReferencesJson" rows="6"></textarea><small>@T["Use environment variables or secret:// references only, never token values."]</small></label><button class="button button--primary" type="submit">@T["Create channel"]</button></form></div></aside></section>
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">@T["Messages"]</p>
+        <h1>@T["Notifications"]</h1>
+        <p class="page-description">@T["Failures are always stored permanently in PostgreSQL. External channels are delivered additionally and independently."]</p>
+    </div>
+    <div class="page-actions">
+        <span class="status-badge status-badge--neutral">@T["{0} channels", Model.Channels.Count]</span>
+        <a class="button button--primary" href="?create=1" data-dialog-open="create-notification-channel-dialog">@T["Add channel"]</a>
+    </div>
+</section>
+
+@if (TempData["Message"] is string message)
+{
+    <div class="notice notice--success">@message</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="notice notice--warning">@error</div>
+}
+
+<section class="operations-grid">
+    <article class="workbench">
+        <header class="workbench-header">
+            <div>
+                <p class="eyebrow">@T["Configured"]</p>
+                <h2>@T["Channels"]</h2>
+            </div>
+        </header>
+        <div class="workbench-body table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>@T["Name"]</th>
+                        <th>@T["Type"]</th>
+                        <th>@T["Status"]</th>
+                        <th>@T["Latest test"]</th>
+                        <th class="table-actions">@T["Actions"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var channel in Model.Channels)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@channel.Name</strong>
+                                <small>@(channel.Enabled ? T["Enabled"] : T["Disabled"])</small>
+                            </td>
+                            <td><code>@channel.ChannelType</code></td>
+                            <td><span class="status-badge @(channel.LastTestStatus == "ok" ? "status-badge--ok" : channel.LastTestStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@channel.LastTestStatus</span></td>
+                            <td>
+                                @if (channel.LastTestedAt is not null)
+                                {
+                                    <time datetime="@channel.LastTestedAt.Value.ToString("O")" data-local-time>@channel.LastTestedAt.Value.ToString("u")</time>
+                                }
+                                else
+                                {
+                                    <span>–</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(channel.LastTestError))
+                                {
+                                    <small>@channel.LastTestError</small>
+                                }
+                            </td>
+                            <td class="table-actions">
+                                <form method="post" asp-page-handler="Test">
+                                    <input type="hidden" name="channelId" value="@channel.Id" />
+                                    <button class="button button--compact button--primary" type="submit" disabled="@(!channel.Enabled)">@T["Test"]</button>
+                                </form>
+                                <form method="post" asp-page-handler="Toggle">
+                                    <input type="hidden" name="channelId" value="@channel.Id" />
+                                    <input type="hidden" name="enabled" value="@(!channel.Enabled)" />
+                                    <button class="button button--compact button--quiet" type="submit">@(channel.Enabled ? T["Disable"] : T["Enable"])</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Channels.Count == 0)
+                    {
+                        <tr><td colspan="5" class="empty-state">@T["No channels exist yet."]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+
+<dialog id="create-notification-channel-dialog" class="dialog-surface" data-dialog aria-labelledby="create-notification-channel-dialog-title" open="@(shouldOpenCreateDialog ? "open" : null)">
+    <div class="dialog-layout">
+        <header class="dialog-header">
+            <div>
+                <p class="eyebrow">@T["New"]</p>
+                <h2 id="create-notification-channel-dialog-title">@T["Add channel"]</h2>
+            </div>
+        </header>
+        <div class="dialog-body">
+            <form id="create-notification-channel-form" method="post" asp-page-handler="Create" class="form-stack">
+                <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+                <label>
+                    <span>@T["Name"]</span>
+                    <input asp-for="Input.Name" />
+                </label>
+                <label>
+                    <span>@T["Type"]</span>
+                    <select asp-for="Input.ChannelType">
+                        <option value="webhook">Webhook</option>
+                        <option value="discord">Discord</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="email">@T["Email / SMTP"]</option>
+                    </select>
+                </label>
+                <label>
+                    <span>@T["Settings as JSON"]</span>
+                    <textarea asp-for="Input.ConfigJson" rows="8"></textarea>
+                    <small>@T["Only non-secret values such as URL, chat ID, SMTP host, or recipient."]</small>
+                </label>
+                <label>
+                    <span>@T["Secret references as JSON"]</span>
+                    <textarea asp-for="Input.SecretReferencesJson" rows="6"></textarea>
+                    <small>@T["Use environment variables or secret:// references only, never token values."]</small>
+                </label>
+            </form>
+        </div>
+        <footer class="dialog-footer">
+            <a class="button" asp-page="./Notifications" data-dialog-close>@T["Cancel"]</a>
+            <button class="button button--primary" type="submit" form="create-notification-channel-form">@T["Create channel"]</button>
+        </footer>
+    </div>
+</dialog>

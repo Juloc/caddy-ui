@@ -2,9 +2,11 @@
 @model CaddyUi.Web.Pages.Administration.DomainsModel
 @{
     ViewData["Title"] = T["Domains"];
+    var createDomainOpen = ViewContext.HttpContext.Request.Query.ContainsKey("create-domain") ||
+        ViewData.ModelState.Any(entry => entry.Key.StartsWith("Input.", StringComparison.Ordinal) && entry.Value?.Errors.Count > 0);
 }
 
-<section class="page-heading" data-certificate-auto-refresh="@(Model.HasActiveCertificateWork ? "true" : "false")">
+<section class="page-heading">
     <div>
         <p class="eyebrow">@T["DNS and certificates"]</p>
         <h1>@T["Domains"]</h1>
@@ -14,10 +16,11 @@
     <div class="page-actions">
         @if (Model.HasActiveCertificateWork)
         {
-            <span class="status-badge status-badge--warning">@T["Automatic refresh · 15 sec."]</span>
+            <span class="status-badge status-badge--warning">@T["Attempt running"]</span>
         }
         <a class="button button--quiet" asp-page="/Administration/Domains">@T["Refresh status"]</a>
-        <a class="button button--primary" asp-page="/Setup/Index">@T["Guided setup"]</a>
+        <a class="button button--quiet" asp-page="/Setup/Index">@T["Guided setup"]</a>
+        <a class="button button--primary" href="?create-domain=1" data-dialog-open="create-domain-dialog">@T["Add domain"]</a>
     </div>
 </section>
 
@@ -31,14 +34,13 @@
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
-<section class="operations-grid operations-grid--sidebar">
-    <article class="workbench">
+<article class="workbench operations-section">
         <header class="workbench-header">
             <div><p class="eyebrow">@T["Managed"]</p><h2>@T["{0} domains", Model.Domains.Count]</h2></div>
             <a class="button button--compact button--quiet" asp-page="/Routing/Preview">@T["Caddy preview"]</a>
         </header>
-        <div class="workbench-body table-wrap domain-table-wrap">
-            <table class="data-table domain-status-table">
+        <div class="workbench-body table-wrap">
+            <table class="data-table">
                 <thead>
                     <tr><th>@T["Domain"]</th><th>@T["DNS provider"]</th><th>@T["Certificates"]</th><th>@T["Routes"]</th><th></th></tr>
                 </thead>
@@ -108,7 +110,7 @@
                                                 }
                                             </div>
 
-                                            <details class="certificate-lifecycle" open="@(certificate.State is "renewal-failed" or "acquisition-failed" or "expired" or "retry-scheduled")">
+                                            <details class="certificate-lifecycle" open="@(certificate.State is "renewal-failed" or "acquisition-failed" or "expired" or "retry-scheduled" ? "open" : null)">
                                                 <summary>
                                                     <span>@T["Diagnostics and {0} attempts", attempts.Count]</span>
                                                     <span>@T["Show details"]</span>
@@ -225,7 +227,7 @@
                                 }
                             </div>
                         </td>
-                        <td data-label="@T["Routes"]"><strong>@domain.RouteCount</strong><small>@T["managed routes"]</small></td>
+                        <td data-label="@T["Routes"]"><strong>@domain.RouteCount</strong><small>@T["Managed routes"]</small></td>
                         <td data-label="@T["Actions"]" class="table-actions">
                             @if (!domain.IsDefault)
                             {
@@ -244,14 +246,16 @@
                 </tbody>
             </table>
         </div>
-    </article>
+ </article>
 
-    <aside class="workbench">
-        <header class="workbench-header">
-            <div><p class="eyebrow">@T["New"]</p><h2>@T["Add domain"]</h2></div>
+<dialog id="create-domain-dialog" class="dialog-surface dialog-surface--wide" data-dialog aria-labelledby="create-domain-dialog-title" open="@(createDomainOpen ? "open" : null)">
+    <div class="dialog-layout">
+        <header class="dialog-header">
+            <div><h2 id="create-domain-dialog-title">@T["Add domain"]</h2><p>@T["Create a protected draft before configuring Caddy."]</p></div>
+            <a class="button button--compact button--quiet" asp-page="./Domains" data-dialog-close>@T["Close"]</a>
         </header>
-        <div class="workbench-body">
-            <form method="post" asp-page-handler="Create" class="form-stack" data-domain-form>
+        <div class="dialog-body">
+            <form id="create-domain-form" method="post" asp-page-handler="Create" class="form-stack" data-domain-form>
                 <label class="field">
                     <span class="field-label">@T["Domain"]</span>
                     <input asp-for="Input.Name" placeholder="example.com" autocomplete="off" />
@@ -290,11 +294,14 @@
                     <strong>@T["Draft only"]</strong>
                     <span>@T["Creating a domain does not change Caddy. Certificate acquisition starts only after preview, validation, and apply."]</span>
                 </div>
-                <button class="button button--primary" type="submit">@T["Create domain safely"]</button>
             </form>
         </div>
-    </aside>
-</section>
+        <footer class="dialog-footer">
+            <a class="button button--quiet" asp-page="./Domains" data-dialog-close>@T["Cancel"]</a>
+            <button class="button button--primary" type="submit" form="create-domain-form">@T["Create domain safely"]</button>
+        </footer>
+    </div>
+</dialog>
 
 <section class="workbench operations-section">
     <header class="workbench-header"><div><p class="eyebrow">@T["Status model"]</p><h2>@T["What the indicators mean"]</h2></div></header>

@@ -34,6 +34,12 @@ The production stack contains:
 
 The application does not use the Docker socket. PostgreSQL is reachable only on an internal Docker network. The portal port `8099` is internal-only. `Dockerfile.dotnet` is the only supported application image definition.
 
+## User interface
+
+Caddy UI uses Microsoft Fluent 2 Web as its mandatory application-wide design system. The UI stays server-rendered with ASP.NET Core Razor Pages and semantic HTML; it does not use React, SPA navigation, or a client-rendered component tree. JavaScript and Fluent Web Components, when used, are progressive enhancement only and never a prerequisite for a management workflow.
+
+Theme colors, status roles and elevation flow through one semantic `--ui-*` token alias layer; typography, spacing, radius and motion follow the documented Fluent ramps. The available themes are exactly System (default), Light, and Dark. The design contract defines the component, dialog, responsive, accessibility, and visual verification requirements in [docs/UI_DESIGN_CONTRACT.md](docs/UI_DESIGN_CONTRACT.md); the implementation rationale and official Microsoft sources are in [docs/DESIGN.md](docs/DESIGN.md).
+
 ## Deployment
 
 Copy the environment template, create the shared proxy network and start the stack:
