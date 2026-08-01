@@ -72,7 +72,11 @@ public sealed class FluentDesignContractTests
 
         Assert.Contains("~/js/theme-init.js", layout, StringComparison.Ordinal);
         Assert.Contains("~/js/theme-init.js", login, StringComparison.Ordinal);
-        Assert.Contains("~/js/theme-init.js", portalLogin, StringComparison.Ordinal);
+        Assert.Contains(
+            "/__caddy_ui_auth/assets/portal.css",
+            portalLogin,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("~/js/theme-init.js", portalLogin, StringComparison.Ordinal);
         Assert.Contains("~/js/dialogs.js", layout, StringComparison.Ordinal);
         Assert.Contains("data-confirm-dialog", layout, StringComparison.Ordinal);
     }
