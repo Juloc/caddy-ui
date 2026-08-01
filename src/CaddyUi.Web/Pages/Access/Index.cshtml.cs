@@ -13,15 +13,18 @@ namespace CaddyUi.Web.Pages.Access;
 public sealed class IndexModel : LocalizedPageModel
 {
     private readonly RouteManagementStore _store;
+    private readonly AccessAdministrationStore _administrationStore;
     private readonly PasswordHashService _passwordHashService;
     private readonly IStringLocalizer<SharedResource> _localizer;
 
     public IndexModel(
         RouteManagementStore store,
+        AccessAdministrationStore administrationStore,
         PasswordHashService passwordHashService,
         IStringLocalizer<SharedResource> localizer)
     {
         _store = store;
+        _administrationStore = administrationStore;
         _passwordHashService = passwordHashService;
         _localizer = localizer;
     }
@@ -40,17 +43,49 @@ public sealed class IndexModel : LocalizedPageModel
     [BindProperty]
     public CredentialInput NewCredential { get; set; } = new();
 
+    [BindProperty]
+    public GroupEditInput EditGroup { get; set; } = new();
+
+    [BindProperty]
+    public CredentialEditInput EditCredential { get; set; } = new();
+
     [TempData]
     public string? StatusMessage { get; set; }
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(Guid? editGroup = null, Guid? editCredential = null)
     {
         await LoadAsync();
+        if (editGroup is Guid groupId)
+        {
+            var group = Groups.FirstOrDefault(item => item.Id == groupId);
+            if (group is not null)
+            {
+                EditGroup = new GroupEditInput
+                {
+                    Id = group.Id,
+                    Name = group.Name,
+                    Description = group.Description,
+                };
+            }
+        }
+
+        if (editCredential is Guid credentialId)
+        {
+            var credential = Credentials.FirstOrDefault(item => item.Id == credentialId);
+            if (credential is not null)
+            {
+                EditCredential = new CredentialEditInput
+                {
+                    Id = credential.Id,
+                    Username = credential.Username,
+                };
+            }
+        }
     }
 
     public async Task<IActionResult> OnPostCreateGroupAsync()
     {
-        ModelState.ClearValidationState(nameof(NewCredential));
+        ModelState.Clear();
         if (!TryValidateModel(NewGroup, nameof(NewGroup)))
         {
             await LoadAsync();
@@ -65,6 +100,34 @@ public sealed class IndexModel : LocalizedPageModel
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
             StatusMessage = _localizer["Access group created."];
+            return RedirectToPage();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ModelState.AddModelError(string.Empty, exception.Message);
+            await LoadAsync();
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostUpdateGroupAsync()
+    {
+        ModelState.Clear();
+        if (!TryValidateModel(EditGroup, nameof(EditGroup)))
+        {
+            await LoadAsync();
+            return Page();
+        }
+
+        try
+        {
+            await _administrationStore.UpdateGroupAsync(
+                EditGroup.Id,
+                EditGroup.Name,
+                EditGroup.Description,
+                User.ToManagementActor(HttpContext),
+                HttpContext.RequestAborted);
+            StatusMessage = _localizer["Access group updated."];
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -92,9 +155,27 @@ public sealed class IndexModel : LocalizedPageModel
         return RedirectToPage();
     }
 
+    public async Task<IActionResult> OnPostDeleteGroupAsync(Guid id)
+    {
+        try
+        {
+            await _administrationStore.DeleteGroupAsync(
+                id,
+                User.ToManagementActor(HttpContext),
+                HttpContext.RequestAborted);
+            StatusMessage = _localizer["Access group deleted."];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
+        return RedirectToPage();
+    }
+
     public async Task<IActionResult> OnPostCreateCredentialAsync()
     {
-        ModelState.ClearValidationState(nameof(NewGroup));
+        ModelState.Clear();
         if (!TryValidateModel(NewCredential, nameof(NewCredential)))
         {
             await LoadAsync();
@@ -123,6 +204,47 @@ public sealed class IndexModel : LocalizedPageModel
         }
     }
 
+    public async Task<IActionResult> OnPostUpdateCredentialAsync()
+    {
+        ModelState.Clear();
+        if (!TryValidateModel(EditCredential, nameof(EditCredential)))
+        {
+            await LoadAsync();
+            return Page();
+        }
+
+        if (EditCredential.NewPassword.Length is > 0 and < 12)
+        {
+            ModelState.AddModelError(
+                $"{nameof(EditCredential)}.{nameof(CredentialEditInput.NewPassword)}",
+                _localizer["Use at least twelve characters."]);
+            await LoadAsync();
+            return Page();
+        }
+
+        try
+        {
+            var passwordHash = EditCredential.NewPassword.Length == 0
+                ? null
+                : _passwordHashService.HashPassword(EditCredential.NewPassword);
+            await _administrationStore.UpdateCredentialAsync(
+                EditCredential.Id,
+                EditCredential.Username,
+                passwordHash,
+                User.ToManagementActor(HttpContext),
+                HttpContext.RequestAborted);
+            StatusMessage = _localizer["Portal credential updated."];
+            return RedirectToPage();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ModelState.AddModelError(string.Empty, exception.Message);
+            EditCredential.NewPassword = string.Empty;
+            await LoadAsync();
+            return Page();
+        }
+    }
+
     public async Task<IActionResult> OnPostToggleCredentialAsync(Guid id, bool enabled)
     {
         try
@@ -131,6 +253,24 @@ public sealed class IndexModel : LocalizedPageModel
             StatusMessage = enabled
                 ? _localizer["Portal credential enabled."]
                 : _localizer["Portal credential disabled."];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TempData["Error"] = exception.Message;
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostDeleteCredentialAsync(Guid id)
+    {
+        try
+        {
+            await _administrationStore.DeleteCredentialAsync(
+                id,
+                User.ToManagementActor(HttpContext),
+                HttpContext.RequestAborted);
+            StatusMessage = _localizer["Portal credential deleted."];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -180,5 +320,32 @@ public sealed class IndexModel : LocalizedPageModel
         [MaxLength(1024)]
         [DataType(DataType.Password)]
         public string Password { get; set; } = string.Empty;
+    }
+
+    public sealed class GroupEditInput
+    {
+        [Required]
+        public Guid Id { get; set; }
+
+        [Required]
+        [MaxLength(120)]
+        public string Name { get; set; } = string.Empty;
+
+        [MaxLength(500)]
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public sealed class CredentialEditInput
+    {
+        [Required]
+        public Guid Id { get; set; }
+
+        [Required]
+        [MaxLength(120)]
+        public string Username { get; set; } = string.Empty;
+
+        [MaxLength(1024)]
+        [DataType(DataType.Password)]
+        public string NewPassword { get; set; } = string.Empty;
     }
 }
