@@ -459,6 +459,9 @@ public sealed class CaddyRouteCompiler
             builder.Append("        forward_auth ").Append(_portalUpstream).AppendLine(" {");
             builder.Append("            uri /__caddy_ui_auth/authorize?group=")
                 .Append(accessGroupId.ToString("D")).AppendLine();
+            builder.AppendLine("            header_up X-Caddy-Portal-Secret {env.CADDY_UI_PORTAL_PROXY_SECRET}");
+            builder.AppendLine("            header_up X-Forwarded-Proto https");
+            builder.AppendLine("            header_up X-Forwarded-Host {host}");
             builder.AppendLine("            copy_headers Remote-User X-Caddy-Portal-User");
             builder.AppendLine("        }");
         }
