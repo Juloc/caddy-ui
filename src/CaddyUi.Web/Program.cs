@@ -4,6 +4,7 @@ using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure;
 using CaddyUi.Infrastructure.Analytics;
 using CaddyUi.Infrastructure.Persistence;
+using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Web.Localization;
 using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -31,6 +32,7 @@ builder.Services.AddSingleton<PasswordHashService>();
 builder.Services.AddSingleton<TotpService>();
 builder.Services.AddCaddyUiAuthentication(securityOptions);
 builder.Services.AddHostedService<AuthenticationBootstrapService>();
+builder.Services.AddHostedService<ManagedRouteReconciliationWorker>();
 builder.Services
     .AddHealthChecks()
     .AddCheck(
