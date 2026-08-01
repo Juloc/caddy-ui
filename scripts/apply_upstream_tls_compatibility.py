@@ -196,7 +196,7 @@ add_resx_entries(
 
 write(
     "tests/CaddyUi.Application.Tests/UpstreamTlsCompatibilityTests.cs",
-    """using System.Text.Json;
+    '''using System.Text.Json;
 using CaddyUi.Application.Routing;
 using CaddyUi.Domain.Routing;
 
@@ -277,5 +277,5 @@ public sealed class UpstreamTlsCompatibilityTests
             });
     }
 }
-""",
+''',
 )
