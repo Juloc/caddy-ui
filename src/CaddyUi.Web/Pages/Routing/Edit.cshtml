@@ -2,6 +2,10 @@
 @model CaddyUi.Web.Pages.Routing.EditModel
 @{
     ViewData["Title"] = Model.IsEdit ? T["Edit route"] : T["New route"];
+    var showRoutingAdvanced = Model.Input.PathPrefix != "/" || Model.Input.SortOrder != 0;
+    var showProxyAdvanced = Model.Input.PreserveHost ||
+        Model.Input.SkipUpstreamTlsVerification ||
+        !string.IsNullOrWhiteSpace(Model.Input.HealthPath);
 }
 
 <section class="page-heading page-heading--compact">
@@ -28,7 +32,7 @@
 
     <section class="workspace-section">
         <header class="section-header">
-            <div><h2>@T["Address and behavior"]</h2><p>@T["Domain, path, and route type determine when this rule is used."]</p></div>
+            <div><h2>@T["Address and behavior"]</h2><p>@T["Choose the public address and what the route should do."]</p></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field field--wide">
@@ -52,11 +56,6 @@
                 <small>@T["Leave empty to use the base domain."]</small>
             </label>
             <label class="field">
-                <span class="field-label">@T["Path prefix"]</span>
-                <input asp-for="Input.PathPrefix" autocomplete="off" placeholder="/" />
-                <span asp-validation-for="Input.PathPrefix" class="field-error"></span>
-            </label>
-            <label class="field">
                 <span class="field-label">@T["Route type"]</span>
                 <select asp-for="Input.Kind" data-route-kind>
                     <option value="proxy">@T["Reverse proxy"]</option>
@@ -68,32 +67,59 @@
                     }
                 </select>
             </label>
+        </div>
+        <div class="page-actions">
+            <button class="button button--quiet" type="button" data-disclosure-toggle="routing-advanced" aria-expanded="@(showRoutingAdvanced ? "true" : "false")">
+                @T["Advanced routing options"]
+            </button>
+        </div>
+        <div class="form-grid form-grid--two" data-disclosure-panel="routing-advanced" hidden="@(!showRoutingAdvanced)">
             <label class="field">
-                <span class="field-label">@T["Order"]</span>
+                <span class="field-label">@T["Path prefix"]</span>
+                <input asp-for="Input.PathPrefix" autocomplete="off" placeholder="/" />
+                <small>@T["Use only when multiple applications share one host, for example /app."]</small>
+                <span asp-validation-for="Input.PathPrefix" class="field-error"></span>
+            </label>
+            <label class="field">
+                <span class="field-label">@T["Rule priority"]</span>
                 <input asp-for="Input.SortOrder" type="number" />
-                <small>@T["Lower values are generated first."]</small>
+                <small>@T["Keep 0 unless several rules on the same host need an explicit order."]</small>
             </label>
         </div>
     </section>
 
     <section class="workspace-section route-kind-panel" data-kind-panel="proxy">
         <header class="section-header">
-            <div><h2>@T["Reverse proxy"]</h2><p>@T["Target and optional active health checks."]</p></div>
+            <div><h2>@T["Reverse proxy"]</h2><p>@T["Enter the internal service address. Most services need no other proxy settings."]</p></div>
         </header>
-        <div class="form-grid form-grid--three">
+        <div class="form-grid form-grid--two">
             <label class="field field--wide">
                 <span class="field-label">@T["Upstream"]</span>
                 <input asp-for="Input.Upstream" autocomplete="off" placeholder="192.168.1.20:9925" />
                 <small>@T["Allowed: host:port, http://host:port, or https://host:port."]</small>
             </label>
-            <label class="field">
-                <span class="field-label">@T["Health path"]</span>
-                <input asp-for="Input.HealthPath" autocomplete="off" placeholder="/health" />
+        </div>
+        <div class="page-actions">
+            <button class="button button--quiet" type="button" data-disclosure-toggle="proxy-advanced" aria-expanded="@(showProxyAdvanced ? "true" : "false")">
+                @T["Advanced proxy options"]
+            </button>
+        </div>
+        <div class="form-grid form-grid--two" data-disclosure-panel="proxy-advanced" hidden="@(!showProxyAdvanced)">
+            <label class="check field--wide">
+                <input type="checkbox" data-health-check-toggle checked="@(!string.IsNullOrWhiteSpace(Model.Input.HealthPath))" />
+                <span><strong>@T["Enable active health check"]</strong><small>@T["Caddy periodically checks a dedicated readiness endpoint and stops forwarding to an unhealthy service."]</small></span>
             </label>
-            <label class="field">
-                <span class="field-label">@T["Health interval"]</span>
-                <div class="input-with-suffix"><input asp-for="Input.HealthIntervalSeconds" type="number" min="5" max="3600" /><span>@T["sec."]</span></div>
-            </label>
+            <div class="form-grid form-grid--two field--wide" data-health-check-fields>
+                <label class="field">
+                    <span class="field-label">@T["Readiness path"]</span>
+                    <input asp-for="Input.HealthPath" autocomplete="off" placeholder="/health/ready" />
+                    <small>@T["The endpoint must return HTTP 2xx. Do not guess the path."]</small>
+                </label>
+                <label class="field">
+                    <span class="field-label">@T["Check interval"]</span>
+                    <div class="input-with-suffix"><input asp-for="Input.HealthIntervalSeconds" type="number" min="5" max="3600" /><span>@T["sec."]</span></div>
+                </label>
+            </div>
             <label class="check field--wide">
                 <input asp-for="Input.PreserveHost" />
                 <span><strong>@T["Preserve original Host header"]</strong><small>@T["Enable only when the upstream expects the public host."]</small></span>
@@ -188,8 +214,22 @@
 (() => {
     const editor = document.querySelector('[data-route-editor]');
     if (!editor) return;
+
     const selector = editor.querySelector('[data-route-kind]');
-    const update = () => {
+    const healthToggle = editor.querySelector('[data-health-check-toggle]');
+    const healthFields = editor.querySelector('[data-health-check-fields]');
+
+    const updateHealthCheck = () => {
+        if (!healthToggle || !healthFields) return;
+        const proxyPanel = healthToggle.closest('[data-kind-panel="proxy"]');
+        const enabled = healthToggle.checked && proxyPanel && !proxyPanel.hidden;
+        healthFields.hidden = !healthToggle.checked;
+        healthFields.querySelectorAll('input, select, textarea').forEach(control => {
+            control.disabled = !enabled;
+        });
+    };
+
+    const updateRouteKind = () => {
         editor.querySelectorAll('[data-kind-panel]').forEach(panel => {
             const active = panel.dataset.kindPanel === selector.value;
             panel.hidden = !active;
@@ -197,8 +237,22 @@
                 control.disabled = !active;
             });
         });
+        updateHealthCheck();
     };
-    selector.addEventListener('change', update);
-    update();
+
+    editor.querySelectorAll('[data-disclosure-toggle]').forEach(toggle => {
+        const panel = editor.querySelector(`[data-disclosure-panel="${toggle.dataset.disclosureToggle}"]`);
+        if (!panel) return;
+        toggle.addEventListener('click', () => {
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            panel.hidden = expanded;
+            if (!expanded) panel.querySelector('input, select, textarea')?.focus();
+        });
+    });
+
+    selector.addEventListener('change', updateRouteKind);
+    healthToggle?.addEventListener('change', updateHealthCheck);
+    updateRouteKind();
 })();
 </script>
