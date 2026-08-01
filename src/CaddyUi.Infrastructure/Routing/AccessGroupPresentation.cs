@@ -52,6 +52,10 @@ public sealed record AccessGroupPresentation(string AccentColor, string IconUrl)
         {
             return Create(null, null);
         }
+        catch (InvalidOperationException)
+        {
+            return Create(null, null);
+        }
     }
 
     public string ToJson()
