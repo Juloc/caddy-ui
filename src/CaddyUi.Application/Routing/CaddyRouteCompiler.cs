@@ -136,6 +136,11 @@ public sealed class CaddyRouteCompiler
             builder.Append(string.Join(", ", addresses)).AppendLine(" {");
             AppendAccessLogConfiguration(builder);
             AppendCertificateConfiguration(builder, dnsState);
+            if (wildcardRoutes.Any(source => source.Route.AccessGroupId is not null))
+            {
+                AppendPortalProxy(builder);
+            }
+
             foreach (var source in wildcardRoutes.Where(source =>
                          !deepWildcardRoutes.Any(deep => deep.Route.Id == source.Route.Id)))
             {
@@ -162,6 +167,11 @@ public sealed class CaddyRouteCompiler
         {
             builder.Append(group.Key).AppendLine(" {");
             AppendAccessLogConfiguration(builder);
+            if (group.Any(source => source.Route.AccessGroupId is not null))
+            {
+                AppendPortalProxy(builder);
+            }
+
             foreach (var source in group)
             {
                 AppendRoute(builder, source, warnings, includeHostMatcher: false);
@@ -418,6 +428,18 @@ public sealed class CaddyRouteCompiler
         builder.AppendLine();
     }
 
+    private void AppendPortalProxy(StringBuilder builder)
+    {
+        builder.AppendLine("    handle /__caddy_ui_auth/* {");
+        builder.Append("        reverse_proxy ").Append(_portalUpstream).AppendLine(" {");
+        builder.AppendLine("            header_up X-Caddy-Portal-Secret {env.CADDY_UI_PORTAL_PROXY_SECRET}");
+        builder.AppendLine("            header_up X-Forwarded-Proto https");
+        builder.AppendLine("            header_up X-Forwarded-Host {host}");
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+    }
+
     private void AppendRoute(
         StringBuilder builder,
         CaddyRouteSource source,
@@ -459,6 +481,9 @@ public sealed class CaddyRouteCompiler
             builder.Append("        forward_auth ").Append(_portalUpstream).AppendLine(" {");
             builder.Append("            uri /__caddy_ui_auth/authorize?group=")
                 .Append(accessGroupId.ToString("D")).AppendLine();
+            builder.AppendLine("            header_up X-Caddy-Portal-Secret {env.CADDY_UI_PORTAL_PROXY_SECRET}");
+            builder.AppendLine("            header_up X-Forwarded-Proto https");
+            builder.AppendLine("            header_up X-Forwarded-Host {host}");
             builder.AppendLine("            copy_headers Remote-User X-Caddy-Portal-User");
             builder.AppendLine("        }");
         }
