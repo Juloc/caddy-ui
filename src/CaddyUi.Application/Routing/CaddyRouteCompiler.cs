@@ -31,11 +31,17 @@ public sealed class CaddyRouteCompiler
 {
     private readonly bool _allowCustomRoutes;
     private readonly string _portalUpstream;
+    private readonly string _publicAdminHost;
 
-    public CaddyRouteCompiler(bool allowCustomRoutes, string portalUpstream)
+    public CaddyRouteCompiler(
+        bool allowCustomRoutes,
+        string portalUpstream,
+        string? publicAdminOrigin = null)
     {
         _allowCustomRoutes = allowCustomRoutes;
         _portalUpstream = NormalizePortalUpstream(portalUpstream);
+        _publicAdminHost = NormalizePublicAdminHost(
+            publicAdminOrigin ?? CaddyAdminSurfaceRegistry.PublicOrigin);
     }
 
     public CaddyCompilation Compile(IEnumerable<CaddyRouteSource> sources)
@@ -491,7 +497,7 @@ public sealed class CaddyRouteCompiler
         switch (route.Kind)
         {
             case ManagedRouteKind.Proxy:
-                AppendProxy(builder, route.Configuration);
+                AppendProxy(builder, route.Configuration, IsPublicAdminRoute(route));
                 break;
             case ManagedRouteKind.Redirect:
                 builder.Append("        redir ")
@@ -528,18 +534,29 @@ public sealed class CaddyRouteCompiler
         builder.AppendLine("    }");
     }
 
-    private static void AppendProxy(StringBuilder builder, RouteConfigurationDocument configuration)
+    private static void AppendProxy(
+        StringBuilder builder,
+        RouteConfigurationDocument configuration,
+        bool publicAdminRoute)
     {
         builder.Append("        reverse_proxy ").Append(CaddyQuote(configuration.Upstream));
         if (!configuration.PreserveHost &&
             configuration.HealthPath.Length == 0 &&
-            !configuration.SkipUpstreamTlsVerification)
+            !configuration.SkipUpstreamTlsVerification &&
+            !publicAdminRoute)
         {
             builder.AppendLine();
             return;
         }
 
         builder.AppendLine(" {");
+        if (publicAdminRoute)
+        {
+            builder.AppendLine("            header_up X-Caddy-Admin-Secret {env.CADDY_UI_ADMIN_PROXY_SECRET}");
+            builder.AppendLine("            header_up X-Forwarded-Proto https");
+            builder.AppendLine("            header_up X-Forwarded-Host {host}");
+        }
+
         if (configuration.PreserveHost)
         {
             builder.AppendLine("            header_up Host {host}");
@@ -561,6 +578,12 @@ public sealed class CaddyRouteCompiler
         }
 
         builder.AppendLine("        }");
+    }
+
+    private bool IsPublicAdminRoute(ManagedRouteDefinition route)
+    {
+        return _publicAdminHost.Length > 0 &&
+            string.Equals(route.Host, _publicAdminHost, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AppendFallback(StringBuilder builder)
@@ -672,6 +695,19 @@ public sealed class CaddyRouteCompiler
         }
 
         return candidate;
+    }
+
+    private static string NormalizePublicAdminHost(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return Uri.TryCreate(value.Trim(), UriKind.Absolute, out var origin) &&
+            string.Equals(origin.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                ? origin.Host
+                : throw new ArgumentException("The public admin origin must be an absolute HTTPS origin.", nameof(value));
     }
 
     private sealed record CertificateManifestItem(
