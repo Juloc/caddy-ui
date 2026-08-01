@@ -1,5 +1,6 @@
 using CaddyUi.Application;
 using CaddyUi.Application.Analytics;
+using CaddyUi.Application.Routing;
 using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Analytics;
 using CaddyUi.Infrastructure.Certificates;
@@ -37,6 +38,9 @@ public static class DependencyInjection
         var routingOptions = RoutingOptions.FromConfiguration(configuration);
         var operationsOptions = OperationsOptions.FromConfiguration(configuration);
         var cutoverOptions = CutoverOptions.FromConfiguration(configuration);
+        CaddyAdminSurfaceRegistry.Configure(
+            configuration["CADDY_UI_PUBLIC_ORIGIN"] ??
+            configuration["Security:PublicOrigin"]);
 
         services.AddSingleton<FoundationStatusService>();
         services.AddDbContext<CaddyUiDbContext>(options => Configure(options, connectionString));
@@ -56,6 +60,7 @@ public static class DependencyInjection
         services.AddSingleton<DomainProviderStore>();
         services.AddSingleton<CertificateStatusService>();
         services.AddSingleton<RouteManagementStore>();
+        services.AddSingleton<AccessAdministrationStore>();
         services.AddSingleton<RouteImportStore>();
         services.AddSingleton<RouteTransferService>();
         services.AddSingleton<AccessGroupStateStore>();
