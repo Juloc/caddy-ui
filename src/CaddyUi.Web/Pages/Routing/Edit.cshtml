@@ -98,6 +98,10 @@
                 <input asp-for="Input.PreserveHost" />
                 <span><strong>@T["Preserve original Host header"]</strong><small>@T["Enable only when the upstream expects the public host."]</small></span>
             </label>
+            <label class="check field--wide">
+                <input asp-for="Input.SkipUpstreamTlsVerification" />
+                <span><strong>@T["Allow self-signed upstream certificate"]</strong><small>@T["Disables certificate verification only for a trusted internal HTTPS service such as Proxmox."]</small></span>
+            </label>
         </div>
     </section>
 

@@ -117,7 +117,8 @@ public sealed class EditModel : LocalizedPageModel
                 Input.RedirectPermanent,
                 Input.StaticStatusCode,
                 Input.StaticBody,
-                Input.CustomSnippet);
+                Input.CustomSnippet,
+                Input.SkipUpstreamTlsVerification);
             var routeId = Input.Id ?? Guid.NewGuid();
             var definition = ManagedRouteDefinition.Create(
                 routeId,
@@ -272,6 +273,8 @@ public sealed class EditModel : LocalizedPageModel
 
         public bool PreserveHost { get; set; }
 
+        public bool SkipUpstreamTlsVerification { get; set; }
+
         [DisplayFormat(ConvertEmptyStringToNull = false)]
         [MaxLength(1024)]
         public string HealthPath { get; set; } = string.Empty;
@@ -310,6 +313,7 @@ public sealed class EditModel : LocalizedPageModel
                 case "redirect":
                     Upstream = string.Empty;
                     PreserveHost = false;
+                    SkipUpstreamTlsVerification = false;
                     HealthPath = string.Empty;
                     HealthIntervalSeconds = 30;
                     StaticStatusCode = 200;
@@ -319,6 +323,7 @@ public sealed class EditModel : LocalizedPageModel
                 case "static":
                     Upstream = string.Empty;
                     PreserveHost = false;
+                    SkipUpstreamTlsVerification = false;
                     HealthPath = string.Empty;
                     HealthIntervalSeconds = 30;
                     RedirectTarget = string.Empty;
@@ -328,6 +333,7 @@ public sealed class EditModel : LocalizedPageModel
                 case "custom":
                     Upstream = string.Empty;
                     PreserveHost = false;
+                    SkipUpstreamTlsVerification = false;
                     HealthPath = string.Empty;
                     HealthIntervalSeconds = 30;
                     RedirectTarget = string.Empty;
@@ -355,6 +361,7 @@ public sealed class EditModel : LocalizedPageModel
                 PathPrefix = route.Configuration.PathPrefix,
                 Upstream = route.Configuration.Upstream,
                 PreserveHost = route.Configuration.PreserveHost,
+                SkipUpstreamTlsVerification = route.Configuration.SkipUpstreamTlsVerification,
                 HealthPath = route.Configuration.HealthPath,
                 HealthIntervalSeconds = route.Configuration.HealthIntervalSeconds,
                 RedirectTarget = route.Configuration.RedirectTarget,
