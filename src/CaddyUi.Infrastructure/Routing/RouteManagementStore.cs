@@ -248,6 +248,7 @@ public sealed class RouteManagementStore
                    groups.enabled,
                    COUNT(DISTINCT credentials.id)::integer,
                    COUNT(DISTINCT routes.id)::integer,
+                   groups.config_json::text,
                    groups.updated_at
             FROM caddy_ui.access_groups AS groups
             LEFT JOIN caddy_ui.access_credentials AS credentials ON credentials.group_id = groups.id
@@ -259,14 +260,17 @@ public sealed class RouteManagementStore
         var result = new List<AccessGroupRecord>();
         while (await reader.ReadAsync(cancellationToken))
         {
+            var presentation = AccessGroupPresentation.FromJson(reader.GetString(6));
             result.Add(new AccessGroupRecord(
                 reader.GetGuid(0),
                 reader.GetString(1),
                 reader.GetString(2),
+                presentation.AccentColor,
+                presentation.IconUrl,
                 reader.GetBoolean(3),
                 reader.GetInt32(4),
                 reader.GetInt32(5),
-                ReadTimestamp(reader, 6)));
+                ReadTimestamp(reader, 7)));
         }
 
         return result;
@@ -303,15 +307,33 @@ public sealed class RouteManagementStore
         return result;
     }
 
+    public Task<Guid> CreateAccessGroupAsync(
+        string name,
+        string description,
+        ManagementActor actor,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateAccessGroupAsync(
+            name,
+            description,
+            accentColor: null,
+            iconUrl: null,
+            actor,
+            cancellationToken);
+    }
+
     public async Task<Guid> CreateAccessGroupAsync(
         string name,
         string description,
+        string? accentColor,
+        string? iconUrl,
         ManagementActor actor,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(actor);
         var normalizedName = Required(name, 120, "Group name");
         var normalizedDescription = Limit(description?.Trim() ?? string.Empty, 500);
+        var presentation = AccessGroupPresentation.Create(accentColor, iconUrl);
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
@@ -325,11 +347,14 @@ public sealed class RouteManagementStore
                 """
                 INSERT INTO caddy_ui.access_groups(
                     id, name, config_json, created_at, updated_at, enabled, description)
-                VALUES(@id, @name, '{}'::jsonb, @now, @now, true, @description)
+                VALUES(
+                    @id, @name, CAST(@config_json AS jsonb),
+                    @now, @now, true, @description)
                 """;
             AddParameter(command, "id", id);
             AddParameter(command, "name", normalizedName);
             AddParameter(command, "description", normalizedDescription);
+            AddParameter(command, "config_json", presentation.ToJson());
             AddParameter(command, "now", now);
             await command.ExecuteNonQueryAsync(cancellationToken);
             await InsertAuditAsync(
@@ -340,7 +365,15 @@ public sealed class RouteManagementStore
                 "access_group",
                 id.ToString("D"),
                 "{}",
-                JsonSerializer.Serialize(new { name = normalizedName, description = normalizedDescription }, JsonOptions),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        name = normalizedName,
+                        description = normalizedDescription,
+                        presentation.AccentColor,
+                        presentation.IconUrl,
+                    },
+                    JsonOptions),
                 "success",
                 null,
                 Guid.NewGuid().ToString("N"),

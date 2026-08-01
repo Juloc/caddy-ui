@@ -10,6 +10,7 @@ using CaddyUi.Web.Security;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,6 +60,16 @@ if (securityOptions.PublicAccessWithoutMandatoryTotp)
 }
 
 app.UseMiddleware<RequestSurfaceMiddleware>();
+var portalAssetRoot = Path.Combine(
+    app.Environment.WebRootPath ??
+        Path.Combine(app.Environment.ContentRootPath, "wwwroot"),
+    "portal");
+app.UseStaticFiles(
+    new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(portalAssetRoot),
+        RequestPath = "/__caddy_ui_auth/assets",
+    });
 app.UseStaticFiles();
 app.UseRouting();
 app.UseMiddleware<OriginValidationMiddleware>();

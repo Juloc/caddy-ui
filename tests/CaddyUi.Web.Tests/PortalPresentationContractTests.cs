@@ -1,38 +1,39 @@
 namespace CaddyUi.Web.Tests;
 
-public sealed class PortalRouteMarkupTests
+public sealed class PortalPresentationContractTests
 {
     [Fact]
-    public void PortalPages_UseTheInternalPathsGeneratedByCaddy()
+    public void PortalUsesDedicatedFluentSurfaceAndReservedAssetPath()
     {
-        var authorizeMarkup = File.ReadAllText(FindRepositoryFile(
-            "src/CaddyUi.Web/Pages/Portal/Authorize.cshtml"));
-        var loginMarkup = File.ReadAllText(FindRepositoryFile(
+        var markup = File.ReadAllText(FindRepositoryFile(
             "src/CaddyUi.Web/Pages/Portal/Login.cshtml"));
+        var styles = File.ReadAllText(FindRepositoryFile(
+            "src/CaddyUi.Web/wwwroot/portal/portal.css"));
+        var program = File.ReadAllText(FindRepositoryFile(
+            "src/CaddyUi.Web/Program.cs"));
 
-        Assert.Contains(
-            "@page \"/__caddy_ui_auth/authorize\"",
-            authorizeMarkup,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "@page \"/__caddy_ui_auth/login\"",
-            loginMarkup,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "@page \"/portal/authorize\"",
-            authorizeMarkup,
-            StringComparison.Ordinal);
+        Assert.Contains("portal-card", markup, StringComparison.Ordinal);
+        Assert.Contains("--portal-accent", markup, StringComparison.Ordinal);
+        Assert.Contains("portal-button", markup, StringComparison.Ordinal);
         Assert.Contains(
             "/__caddy_ui_auth/assets/portal.css",
-            loginMarkup,
+            markup,
             StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "~/css/site.css",
-            loginMarkup,
+        Assert.Contains(
+            "RequestPath = \"/__caddy_ui_auth/assets\"",
+            program,
             StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "~/js/theme-init.js",
-            loginMarkup,
+        Assert.Contains(
+            "\"Segoe UI Variable Text\"",
+            styles,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "@media (prefers-color-scheme: dark)",
+            styles,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "@media (prefers-reduced-motion: reduce)",
+            styles,
             StringComparison.Ordinal);
     }
 

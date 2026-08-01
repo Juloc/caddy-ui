@@ -44,6 +44,11 @@ public sealed class LoginModel : LocalizedPageModel
 
     public string GroupName { get; private set; } = "Geschützter Zugriff";
 
+    public string AccentColor { get; private set; } =
+        AccessGroupPresentation.DefaultAccentColor;
+
+    public string IconUrl { get; private set; } = string.Empty;
+
     public async Task<IActionResult> OnGetAsync()
     {
         ReturnTo = AuthorizeModel.SafeReturnTo(ReturnTo);
@@ -129,7 +134,10 @@ public sealed class LoginModel : LocalizedPageModel
             return false;
         }
 
+        var presentation = AccessGroupPresentation.FromJson(group.ConfigJson);
         GroupName = group.Name;
+        AccentColor = presentation.EffectiveAccentColor;
+        IconUrl = presentation.IconUrl;
         return true;
     }
 

@@ -905,4 +905,9 @@
   <data name="Disables certificate verification only for a trusted internal HTTPS service such as Proxmox." xml:space="preserve">
     <value>Deaktiviert die Zertifikatsprüfung nur für einen vertrauenswürdigen internen HTTPS-Dienst wie Proxmox.</value>
   </data>
+  <data name="Accent color" xml:space="preserve"><value>Akzentfarbe</value></data>
+  <data name="Optional hexadecimal color in the format #RRGGBB." xml:space="preserve"><value>Optionale Hexadezimalfarbe im Format #RRGGBB.</value></data>
+  <data name="Icon URL" xml:space="preserve"><value>Icon-URL</value></data>
+  <data name="Optional HTTPS image URL for the access portal." xml:space="preserve"><value>Optionale HTTPS-Bildadresse für das Zugriffsportal.</value></data>
+  <data name="Authentication is provided by the protected application's access group." xml:space="preserve"><value>Die Anmeldung erfolgt über die Zugriffsgruppe der geschützten Anwendung.</value></data>
 </root>

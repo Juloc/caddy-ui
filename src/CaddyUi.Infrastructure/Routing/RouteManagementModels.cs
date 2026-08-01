@@ -28,6 +28,8 @@ public sealed record AccessGroupRecord(
     Guid Id,
     string Name,
     string Description,
+    string AccentColor,
+    string IconUrl,
     bool Enabled,
     int CredentialCount,
     int RouteCount,
