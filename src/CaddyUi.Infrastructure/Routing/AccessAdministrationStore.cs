@@ -154,10 +154,7 @@ public sealed class AccessAdministrationStore
                 """
                 UPDATE caddy_ui.access_credentials
                 SET username = @username,
-                    password_hash = CASE
-                        WHEN @password_hash IS NULL THEN password_hash
-                        ELSE @password_hash
-                    END,
+                    password_hash = COALESCE(CAST(@password_hash AS text), password_hash),
                     updated_at = @now
                 WHERE id = @id
                 """;
