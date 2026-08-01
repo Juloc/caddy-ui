@@ -4,6 +4,7 @@ using CaddyUi.Domain.Routing;
 
 namespace CaddyUi.Application.Tests;
 
+[Collection(CaddyCertificateSourceRegistryCollection.Name)]
 public sealed class CaddyRouteCompilerTests : IDisposable
 {
     public CaddyRouteCompilerTests()
