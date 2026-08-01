@@ -1,4 +1,3 @@
-using System.Net;
 using CaddyUi.Application.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -145,7 +144,8 @@ public sealed class ManagedRouteReconciliationWorker : BackgroundService
                     _caddyConfigurationUri,
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken);
-                if (response.StatusCode is >= HttpStatusCode.OK and < HttpStatusCode.MultipleChoices)
+                var statusCode = (int)response.StatusCode;
+                if (statusCode is >= 200 and < 300)
                 {
                     return;
                 }
