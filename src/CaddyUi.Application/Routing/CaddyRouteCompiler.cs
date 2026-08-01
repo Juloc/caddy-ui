@@ -531,7 +531,9 @@ public sealed class CaddyRouteCompiler
     private static void AppendProxy(StringBuilder builder, RouteConfigurationDocument configuration)
     {
         builder.Append("        reverse_proxy ").Append(CaddyQuote(configuration.Upstream));
-        if (!configuration.PreserveHost && configuration.HealthPath.Length == 0)
+        if (!configuration.PreserveHost &&
+            configuration.HealthPath.Length == 0 &&
+            !configuration.SkipUpstreamTlsVerification)
         {
             builder.AppendLine();
             return;
@@ -541,6 +543,13 @@ public sealed class CaddyRouteCompiler
         if (configuration.PreserveHost)
         {
             builder.AppendLine("            header_up Host {host}");
+        }
+
+        if (configuration.SkipUpstreamTlsVerification)
+        {
+            builder.AppendLine("            transport http {");
+            builder.AppendLine("                tls_insecure_skip_verify");
+            builder.AppendLine("            }");
         }
 
         if (configuration.HealthPath.Length > 0)

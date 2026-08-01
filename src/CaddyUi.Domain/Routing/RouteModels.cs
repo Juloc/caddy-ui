@@ -28,7 +28,8 @@ public sealed record RouteConfigurationDocument(
     bool RedirectPermanent,
     int StaticStatusCode,
     string StaticBody,
-    string CustomSnippet)
+    string CustomSnippet,
+    bool SkipUpstreamTlsVerification = false)
 {
     public static RouteConfigurationDocument Empty { get; } = new(
         "route-v1",
@@ -41,7 +42,8 @@ public sealed record RouteConfigurationDocument(
         true,
         200,
         string.Empty,
-        string.Empty);
+        string.Empty,
+        false);
 }
 
 public sealed partial record ManagedRouteDefinition(
@@ -194,6 +196,15 @@ public sealed partial record ManagedRouteDefinition(
                 throw new ArgumentOutOfRangeException(nameof(kind));
         }
 
+        if (configuration.SkipUpstreamTlsVerification &&
+            (kind != ManagedRouteKind.Proxy ||
+             !upstream.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new ArgumentException(
+                "Skipping upstream TLS verification requires an HTTPS proxy upstream.",
+                nameof(configuration));
+        }
+
         return configuration with
         {
             Schema = "route-v1",
@@ -205,6 +216,8 @@ public sealed partial record ManagedRouteDefinition(
             StaticStatusCode = staticStatus,
             StaticBody = staticBody,
             CustomSnippet = customSnippet,
+            SkipUpstreamTlsVerification =
+                kind == ManagedRouteKind.Proxy && configuration.SkipUpstreamTlsVerification,
         };
     }
 
