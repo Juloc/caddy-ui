@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.AddSingleton<DomainProviderStore>();
         services.AddSingleton<CertificateStatusService>();
         services.AddSingleton<RouteManagementStore>();
+        services.AddSingleton<AccessAdministrationStore>();
         services.AddSingleton<RouteImportStore>();
         services.AddSingleton<RouteTransferService>();
         services.AddSingleton<AccessGroupStateStore>();
