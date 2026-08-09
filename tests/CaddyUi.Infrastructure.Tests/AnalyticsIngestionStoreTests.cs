@@ -99,6 +99,18 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
         Assert.Equal(
             101,
             await verification.Database
+                .SqlQueryRaw<long>(
+                    "SELECT request_count AS \"Value\" FROM caddy_ui.analytics_sessions")
+                .SingleAsync());
+        Assert.Equal(
+            1,
+            await verification.Database
+                .SqlQueryRaw<int>(
+                    "SELECT page_view_count AS \"Value\" FROM caddy_ui.analytics_sessions")
+                .SingleAsync());
+        Assert.Equal(
+            101,
+            await verification.Database
                 .SqlQueryRaw<int>(
                     "SELECT request_count AS \"Value\" FROM caddy_ui.page_loads")
                 .SingleAsync());
@@ -116,13 +128,19 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
                 .SingleAsync());
         Assert.Equal(
             101,
-            await verification.Database
-                .SqlQueryRaw<long>(
-                    """
-                    SELECT SUM(requests)::bigint AS "Value"
-                    FROM caddy_ui.hourly_traffic_aggregates
-                    """)
-                .SingleAsync());
+            await AggregateRequestCountAsync(
+                verification,
+                "caddy_ui.hourly_traffic_aggregates"));
+        Assert.Equal(
+            101,
+            await AggregateRequestCountAsync(
+                verification,
+                "caddy_ui.daily_traffic_aggregates"));
+        Assert.Equal(
+            101,
+            await AggregateRequestCountAsync(
+                verification,
+                "caddy_ui.monthly_traffic_aggregates"));
         Assert.Equal(
             1,
             await verification.Database
@@ -130,6 +148,15 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
                     """
                     SELECT SUM(page_views)::bigint AS "Value"
                     FROM caddy_ui.hourly_traffic_aggregates
+                    """)
+                .SingleAsync());
+        Assert.Equal(
+            101,
+            await verification.Database
+                .SqlQueryRaw<long>(
+                    """
+                    SELECT SUM(request_count)::bigint AS "Value"
+                    FROM caddy_ui.route_performance_aggregates
                     """)
                 .SingleAsync());
     }
@@ -141,6 +168,18 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
 #pragma warning disable EF1002
         return await database.Database
             .SqlQueryRaw<long>($"SELECT COUNT(*) AS \"Value\" FROM {table}")
+            .SingleAsync();
+#pragma warning restore EF1002
+    }
+
+    private static async Task<long> AggregateRequestCountAsync(
+        CaddyUiDbContext database,
+        string table)
+    {
+#pragma warning disable EF1002
+        return await database.Database
+            .SqlQueryRaw<long>(
+                $"SELECT SUM(requests)::bigint AS \"Value\" FROM {table}")
             .SingleAsync();
 #pragma warning restore EF1002
     }

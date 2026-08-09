@@ -8,9 +8,11 @@ public sealed class AnalyticsIngestionOptions
 
     public IReadOnlyList<string> LogPaths { get; init; } = Array.Empty<string>();
 
-    public int BatchSize { get; init; } = 1000;
+    public int BatchSize { get; init; } = 500;
 
     public int PollIntervalMilliseconds { get; init; } = 1000;
+
+    public int BacklogDelayMilliseconds { get; init; } = 100;
 
     public int SessionIdleMinutes { get; init; } = 30;
 
@@ -51,13 +53,20 @@ public sealed class AnalyticsIngestionOptions
                 .Distinct(StringComparer.Ordinal)
                 .ToArray(),
             BatchSize = Clamp(
-                ReadInt32(configuration, "CADDY_UI_INGEST_BATCH_SIZE", section.GetValue("BatchSize", 1000)),
+                ReadInt32(configuration, "CADDY_UI_INGEST_BATCH_SIZE", section.GetValue("BatchSize", 500)),
                 1,
-                10000),
+                5000),
             PollIntervalMilliseconds = Clamp(
                 ReadInt32(configuration, "CADDY_UI_INGEST_FLUSH_MS", section.GetValue("PollIntervalMilliseconds", 1000)),
                 100,
                 60000),
+            BacklogDelayMilliseconds = Clamp(
+                ReadInt32(
+                    configuration,
+                    "CADDY_UI_INGEST_BACKLOG_DELAY_MS",
+                    section.GetValue("BacklogDelayMilliseconds", 100)),
+                10,
+                5000),
             SessionIdleMinutes = Clamp(
                 ReadInt32(configuration, "CADDY_UI_SESSION_IDLE_MINUTES", section.GetValue("SessionIdleMinutes", 30)),
                 1,

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CaddyUi.Application.Analytics;
 using CaddyUi.Domain.Analytics;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +13,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
     private readonly CaddyAccessLogParser _parser;
     private readonly RequestClassifier _classifier;
     private readonly AnalyticsIngestionStore _store;
+    private readonly AnalyticsIngestionRuntimeMetrics _runtimeMetrics;
     private readonly AnalyticsClientKeyProvider _keyProvider;
     private readonly ILogger<AnalyticsIngestionWorker> _logger;
 
@@ -21,6 +23,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
         CaddyAccessLogParser parser,
         RequestClassifier classifier,
         AnalyticsIngestionStore store,
+        AnalyticsIngestionRuntimeMetrics runtimeMetrics,
         AnalyticsClientKeyProvider keyProvider,
         ILogger<AnalyticsIngestionWorker> logger)
     {
@@ -29,6 +32,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
         _parser = parser;
         _classifier = classifier;
         _store = store;
+        _runtimeMetrics = runtimeMetrics;
         _keyProvider = keyProvider;
         _logger = logger;
     }
@@ -50,8 +54,10 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
 
         var clientHashKey = await _keyProvider.GetKeyAsync(stoppingToken);
         _logger.LogInformation(
-            "Caddy analytics ingestion started for {LogPathCount} log file(s).",
-            _options.LogPaths.Count);
+            "Caddy analytics ingestion started for {LogPathCount} log file(s) with batch size {BatchSize} and backlog delay {BacklogDelayMilliseconds} ms.",
+            _options.LogPaths.Count,
+            _options.BatchSize,
+            _options.BacklogDelayMilliseconds);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -78,12 +84,12 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
                 }
             }
 
-            if (!madeProgress)
-            {
-                await Task.Delay(
-                    TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds),
-                    stoppingToken);
-            }
+            var delayMilliseconds = madeProgress
+                ? _options.BacklogDelayMilliseconds
+                : _options.PollIntervalMilliseconds;
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(delayMilliseconds),
+                stoppingToken);
         }
     }
 
@@ -103,6 +109,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
             return false;
         }
 
+        var stopwatch = Stopwatch.StartNew();
         var requests = new List<ClassifiedRequest>(batch.Lines.Count);
         var failures = new List<AnalyticsIngestionFailure>();
         foreach (var line in batch.Lines)
@@ -136,12 +143,42 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
             clientHashKey,
             _options,
             cancellationToken);
+        stopwatch.Stop();
+
+        _runtimeMetrics.Record(
+            new AnalyticsIngestionRuntimeSnapshot(
+                path,
+                batch.EndOffset,
+                GetSourceLength(path, batch.EndOffset),
+                DateTimeOffset.UtcNow,
+                result.RequestsInserted,
+                result.PageViewsInserted,
+                result.FailuresInserted,
+                stopwatch.ElapsedMilliseconds));
+
         _logger.LogDebug(
-            "Ingested {RequestCount} requests, {PageViewCount} pageviews and {FailureCount} failures from {LogPath}.",
+            "Ingested {RequestCount} requests, {PageViewCount} pageviews and {FailureCount} failures from {LogPath} in {ElapsedMilliseconds} ms.",
             result.RequestsInserted,
             result.PageViewsInserted,
             result.FailuresInserted,
-            path);
+            path,
+            stopwatch.ElapsedMilliseconds);
         return true;
+    }
+
+    private static long GetSourceLength(string path, long minimumLength)
+    {
+        try
+        {
+            return Math.Max(minimumLength, new FileInfo(path).Length);
+        }
+        catch (IOException)
+        {
+            return minimumLength;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return minimumLength;
+        }
     }
 }

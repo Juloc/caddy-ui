@@ -117,6 +117,7 @@ public static class DependencyInjection
         services.AddSingleton<RequestClassifier>();
         services.AddSingleton<AnalyticsLogTailer>();
         services.AddSingleton<AnalyticsIngestionStore>();
+        services.AddSingleton<AnalyticsIngestionRuntimeMetrics>();
         services.AddSingleton<AnalyticsClientKeyProvider>();
         services.AddSingleton<AnalyticsReadStore>();
         services.AddHostedService<AnalyticsIngestionWorker>();

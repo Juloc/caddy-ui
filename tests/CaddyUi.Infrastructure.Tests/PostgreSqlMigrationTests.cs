@@ -52,6 +52,9 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
         Assert.Contains(
             "20260801190000_AccessPortalPresentationAndLoginScope",
             appliedMigrations);
+        Assert.Contains(
+            "20260809113000_OptimizeAnalyticsIngestion",
+            appliedMigrations);
 
         var routeStore = new RouteManagementStore(
             new RuntimeDbContextFactory(_postgres.GetConnectionString()));
@@ -189,6 +192,15 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
                 """)
             .SingleAsync();
         Assert.True(pageViewNavigationIndexExists);
+
+        var pageViewClientHostIndexExists = await database.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT to_regclass(
+                    'caddy_ui.ix_page_views_client_host_occurred_at') IS NOT NULL AS "Value"
+                """)
+            .SingleAsync();
+        Assert.True(pageViewClientHostIndexExists);
 
         var blockActivationStateExists = await database.Database
             .SqlQueryRaw<bool>(
