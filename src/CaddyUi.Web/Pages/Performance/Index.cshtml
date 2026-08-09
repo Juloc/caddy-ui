@@ -14,6 +14,19 @@
 <article class="metric-card"><span class="metric-label">p99</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Performance.P99DurationMilliseconds)</strong></article>
 <article class="metric-card"><span class="metric-label">@T["Maximum"]</span><strong class="metric-value">@AnalyticsPageModelBase.FormatDuration(Model.Performance.MaximumDurationMilliseconds)</strong></article>
 </section>
+<article class="panel">
+<header class="panel-header"><div><p class="eyebrow">@T["Processing"]</p><h2>@T["Log processing"]</h2></div></header>
+<div class="panel-body">
+<section class="metric-grid metric-grid--dense">
+<article class="metric-card"><span class="metric-label">@T["Status"]</span><strong class="metric-value">@(Model.IngestionEnabled ? T["Enabled"] : T["Disabled"])</strong></article>
+<article class="metric-card"><span class="metric-label">Batch</span><strong class="metric-value">@Model.IngestionBatchSize.ToString("N0") / @Model.IngestionBacklogDelayMilliseconds.ToString("N0") ms</strong></article>
+<article class="metric-card"><span class="metric-label">Backlog</span><strong class="metric-value">@(Model.Ingestion is null ? "—" : AnalyticsPageModelBase.FormatBytes(Model.Ingestion.BacklogBytes))</strong></article>
+<article class="metric-card"><span class="metric-label">@T["Checkpoints"]</span><strong class="metric-value">@(Model.Ingestion is null ? "—" : $"{AnalyticsPageModelBase.FormatBytes(Model.Ingestion.CheckpointOffset)} / {AnalyticsPageModelBase.FormatBytes(Model.Ingestion.SourceLength)}")</strong></article>
+<article class="metric-card"><span class="metric-label">@T["Requests"]</span><strong class="metric-value">@(Model.Ingestion?.RequestsInserted.ToString("N0") ?? "—")</strong></article>
+<article class="metric-card"><span class="metric-label">@T["Duration"]</span><strong class="metric-value">@(Model.Ingestion is null ? "—" : AnalyticsPageModelBase.FormatDuration(Model.Ingestion.DurationMilliseconds))</strong></article>
+</section>
+</div>
+</article>
 <section class="analytics-columns analytics-columns--two">
 <article class="panel"><header class="panel-header"><div><p class="eyebrow">@T["Latency"]</p><h2>@T["Slowest routes"]</h2></div></header><div class="panel-body table-wrap"><table class="data-table"><thead><tr><th>@T["Route"]</th><th>@T["Requests"]</th><th>@T["Average"]</th><th>@T["Maximum"]</th></tr></thead><tbody>
 @foreach (var route in Model.Performance.SlowRoutes)
