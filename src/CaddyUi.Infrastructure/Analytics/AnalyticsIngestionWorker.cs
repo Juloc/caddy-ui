@@ -13,6 +13,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
     private readonly CaddyAccessLogParser _parser;
     private readonly RequestClassifier _classifier;
     private readonly AnalyticsIngestionStore _store;
+    private readonly AnalyticsIngestionRuntimeMetrics _runtimeMetrics;
     private readonly AnalyticsClientKeyProvider _keyProvider;
     private readonly ILogger<AnalyticsIngestionWorker> _logger;
 
@@ -22,6 +23,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
         CaddyAccessLogParser parser,
         RequestClassifier classifier,
         AnalyticsIngestionStore store,
+        AnalyticsIngestionRuntimeMetrics runtimeMetrics,
         AnalyticsClientKeyProvider keyProvider,
         ILogger<AnalyticsIngestionWorker> logger)
     {
@@ -30,6 +32,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
         _parser = parser;
         _classifier = classifier;
         _store = store;
+        _runtimeMetrics = runtimeMetrics;
         _keyProvider = keyProvider;
         _logger = logger;
     }
@@ -141,6 +144,18 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
             _options,
             cancellationToken);
         stopwatch.Stop();
+
+        _runtimeMetrics.Record(
+            new AnalyticsIngestionRuntimeSnapshot(
+                path,
+                batch.EndOffset,
+                GetSourceLength(path, batch.EndOffset),
+                DateTimeOffset.UtcNow,
+                result.RequestsInserted,
+                result.PageViewsInserted,
+                result.FailuresInserted,
+                stopwatch.ElapsedMilliseconds));
+
         _logger.LogDebug(
             "Ingested {RequestCount} requests, {PageViewCount} pageviews and {FailureCount} failures from {LogPath} in {ElapsedMilliseconds} ms.",
             result.RequestsInserted,
@@ -149,5 +164,21 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
             path,
             stopwatch.ElapsedMilliseconds);
         return true;
+    }
+
+    private static long GetSourceLength(string path, long minimumLength)
+    {
+        try
+        {
+            return Math.Max(minimumLength, new FileInfo(path).Length);
+        }
+        catch (IOException)
+        {
+            return minimumLength;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return minimumLength;
+        }
     }
 }
