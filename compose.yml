@@ -116,6 +116,8 @@ services:
       Security__PortalProxySecret: ${CADDY_UI_PORTAL_PROXY_SECRET}
       Analytics__Enabled: "true"
       Analytics__LogPaths__0: /var/log/caddy/access.log
+      Analytics__BatchSize: ${CADDY_UI_INGEST_BATCH_SIZE:-500}
+      Analytics__BacklogDelayMilliseconds: ${CADDY_UI_INGEST_BACKLOG_DELAY_MS:-100}
       Routing__WriteMode: active
       Routing__ManagedFragmentPath: /etc/caddy/routes/site-managed-routes.caddy
       Routing__ShadowFragmentPath: /state/shadow/site-managed-routes.caddy
