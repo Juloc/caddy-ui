@@ -77,6 +77,10 @@ Asset-Präfixe wie `/_nuxt/`, `/_next/`, `/assets/` und `/static/` werden separa
 - Request und Checkpoint werden in derselben PostgreSQL-Transaktion geschrieben.
 - Ein Neustart oder erneutes Lesen derselben Quellposition erzeugt keine doppelten Requests, Pageviews oder Aggregate.
 - Es gibt keine unbegrenzte In-Memory-Queue.
+- Requests, Clients, Session-Zähler, Page-Load-Zähler und Aggregate werden innerhalb eines Ingestion-Batches zusammengefasst, um PostgreSQL-Roundtrips zu begrenzen.
+- Die Standard-Batchgröße beträgt 500 Requests.
+- Solange ein Backlog vorhanden ist, liegt zwischen zwei Worker-Durchläufen standardmäßig eine kooperative Pause von 100 ms. Ohne Backlog gilt das normale Polling-Intervall von 1000 ms.
+- Batchgröße und Backlog-Pause sind über `CADDY_UI_INGEST_BATCH_SIZE` und `CADDY_UI_INGEST_BACKLOG_DELAY_MS` konfigurierbar.
 
 ## Aggregate und Aufbewahrung
 
@@ -91,7 +95,7 @@ Standardwerte:
 - Monatsaggregate: unbegrenzt
 - Session-Timeout: 30 Minuten
 
-Der Wartungsjob schließt inaktive Sessions und Page Loads, entfernt abgelaufene Daten, löscht vollständig abgelaufene Requestpartitionen und legt die aktuelle sowie die nächste Monatspartition an.
+Der Wartungsjob schließt inaktive Sessions und Page Loads, entfernt abgelaufene Daten, löscht vollständig abgelaufene Requestpartitionen und legt die aktuelle sowie die nächste Monatspartition an. Vollständig abgelaufene Monats-Partitionen werden vor zeilenweisen Fallback-Bereinigungen entfernt.
 
 ## SPA-Grenze
 
