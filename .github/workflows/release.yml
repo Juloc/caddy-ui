@@ -13,6 +13,9 @@ concurrency:
   group: caddy-ui-dotnet-release
   cancel-in-progress: false
 
+env:
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
+
 jobs:
   release:
     runs-on: ubuntu-latest
