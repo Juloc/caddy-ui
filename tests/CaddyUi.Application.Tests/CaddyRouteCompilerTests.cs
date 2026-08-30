@@ -88,6 +88,55 @@ public sealed class CaddyRouteCompilerTests : IDisposable
     }
 
     [Fact]
+    public void Compile_RendersNestedWildcardHostWithDnsChallenge()
+    {
+        var domainId = Guid.NewGuid();
+        var provider = NetcupProvider();
+        CaddyCertificateSourceRegistry.Replace([
+            new CaddyDomainCertificateSource(
+                domainId,
+                "example.com",
+                "individual",
+                false,
+                false,
+                provider),
+        ]);
+        var route = ManagedRouteDefinition.Create(
+            Guid.NewGuid(),
+            "JulOS proxy zone",
+            domainId,
+            "example.com",
+            "*.os",
+            ManagedRouteKind.Proxy,
+            true,
+            0,
+            RouteCertificateMode.Individual,
+            null,
+            RouteConfigurationDocument.Empty with { Upstream = "julos:8080" });
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var compilation = compiler.Compile([
+            new CaddyRouteSource(route, string.Empty, "individual", provider),
+        ]);
+
+        Assert.True(compilation.CertificateReadyForActiveApply);
+        Assert.False(compilation.RequiresWildcardCertificateRenderer);
+        Assert.Contains("*.os.example.com {", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("dns netcup {", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("host \"*.os.example.com\"", compilation.Content, StringComparison.Ordinal);
+        Assert.Contains("reverse_proxy \"julos:8080\"", compilation.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain(compilation.Warnings, warning =>
+            warning.Contains("nicht abgedeckt", StringComparison.Ordinal));
+        using var manifest = JsonDocument.Parse(compilation.ManifestJson);
+        var certificateNames = manifest.RootElement.GetProperty("certificates")
+            .EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString())
+            .ToArray();
+        Assert.Contains("*.os.example.com", certificateNames);
+        Assert.True(manifest.RootElement.GetProperty("routes")[0].GetProperty("generated").GetBoolean());
+    }
+
+    [Fact]
     public void Compile_RendersRequestedWildcardAndBaseCertificateWithoutRoutes()
     {
         var domainId = Guid.NewGuid();
