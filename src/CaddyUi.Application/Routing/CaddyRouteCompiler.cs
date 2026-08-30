@@ -81,8 +81,12 @@ public sealed class CaddyRouteCompiler
             var wildcardRoutes = domainRoutes
                 .Where(source => UsesWildcardCertificate(source, domains))
                 .ToArray();
+            var wildcardHostRoutes = wildcardRoutes
+                .Where(source => IsWildcardHost(source.Route.Host))
+                .ToArray();
             var deepWildcardRoutes = wildcardRoutes
-                .Where(source => !IsBaseHost(source.Route.Host, domain.DomainName) &&
+                .Where(source => !IsWildcardHost(source.Route.Host) &&
+                                 !IsBaseHost(source.Route.Host, domain.DomainName) &&
                                  !IsDirectSubdomain(source.Route.Host, domain.DomainName))
                 .ToArray();
             foreach (var source in deepWildcardRoutes)
@@ -100,7 +104,14 @@ public sealed class CaddyRouteCompiler
                 !UsesWildcardCertificate(source, domains) &&
                 IsBaseHost(source.Route.Host, domain.DomainName));
 
-            if (!requestWildcard && (!requestBase || hasIndividualBaseRoute) && wildcardRoutes.Length == 0)
+            var wildcardHosts = wildcardHostRoutes
+                .Select(source => source.Route.Host)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(host => host, StringComparer.Ordinal)
+                .ToArray();
+            var needsDnsChallenge = requestWildcard || wildcardHosts.Length > 0;
+
+            if (!needsDnsChallenge && (!requestBase || hasIndividualBaseRoute) && wildcardRoutes.Length == 0)
             {
                 continue;
             }
@@ -112,17 +123,27 @@ public sealed class CaddyRouteCompiler
                 usesWildcardCertificates = true;
             }
 
+            foreach (var wildcardHost in wildcardHosts)
+            {
+                if (!addresses.Contains(wildcardHost, StringComparer.Ordinal))
+                {
+                    addresses.Add(wildcardHost);
+                }
+
+                usesWildcardCertificates = true;
+            }
+
             if (requestBase && !hasIndividualBaseRoute)
             {
                 addresses.Add(domain.DomainName);
             }
 
-            var dnsState = requestWildcard
+            var dnsState = needsDnsChallenge
                 ? ResolveDnsChallengeState(domain.DomainName, domain.Provider, warnings)
                 : CertificateState.Individual;
             var domainReady = dnsState.Ready && deepWildcardRoutes.Length == 0;
             certificateReady &= domainReady;
-            requiresWildcardRenderer |= requestWildcard && !dnsState.Ready;
+            requiresWildcardRenderer |= needsDnsChallenge && !dnsState.Ready;
 
             foreach (var address in addresses)
             {
@@ -151,7 +172,8 @@ public sealed class CaddyRouteCompiler
                          !deepWildcardRoutes.Any(deep => deep.Route.Id == source.Route.Id)))
             {
                 if (IsBaseHost(source.Route.Host, domain.DomainName) && !requestBase ||
-                    IsDirectSubdomain(source.Route.Host, domain.DomainName) && !requestWildcard)
+                    IsDirectSubdomain(source.Route.Host, domain.DomainName) && !requestWildcard &&
+                    !IsWildcardHost(source.Route.Host))
                 {
                     continue;
                 }
@@ -269,7 +291,8 @@ public sealed class CaddyRouteCompiler
             .ToDictionary(source => source.DomainId);
         foreach (var source in routes)
         {
-            var routeUsesWildcard = source.Route.CertificateMode == RouteCertificateMode.Wildcard ||
+            var routeUsesWildcard = IsWildcardHost(source.Route.Host) ||
+                                    source.Route.CertificateMode == RouteCertificateMode.Wildcard ||
                                     source.Route.CertificateMode == RouteCertificateMode.Inherit &&
                                     NormalizeDomainCertificateMode(source.DomainCertificateMode) == "wildcard";
             var needsWildcard = routeUsesWildcard &&
@@ -597,7 +620,8 @@ public sealed class CaddyRouteCompiler
         CaddyRouteSource source,
         IReadOnlyDictionary<Guid, CaddyDomainCertificateSource> domains)
     {
-        if (source.Route.CertificateMode == RouteCertificateMode.Wildcard)
+        if (IsWildcardHost(source.Route.Host) ||
+            source.Route.CertificateMode == RouteCertificateMode.Wildcard)
         {
             return true;
         }
@@ -608,6 +632,11 @@ public sealed class CaddyRouteCompiler
         }
 
         return EffectiveDomainCertificateMode(source, domains) == "wildcard";
+    }
+
+    private static bool IsWildcardHost(string host)
+    {
+        return host.StartsWith("*.", StringComparison.Ordinal);
     }
 
     private static bool IsBaseHost(string host, string domainName)
