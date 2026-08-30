@@ -140,10 +140,32 @@ public sealed class CertificateStatusService
                 lifecycleLogs,
                 cancellationToken);
 
+            var certificates = new List<CertificateStatusItem> { wildcard, baseDomain };
+            var additionalNames = GetAdditionalAppliedCertificateNames(domainName, appliedNames);
+            for (var index = 0; index < additionalNames.Count; index++)
+            {
+                var name = additionalNames[index];
+                var isWildcard = name.StartsWith("*.", StringComparison.Ordinal);
+                var status = await BuildStatusAsync(
+                    isWildcard ? "wildcard" : "individual",
+                    name,
+                    isWildcard ? name[2..] : name,
+                    requested: true,
+                    isWildcard ? provider : null,
+                    store,
+                    appliedNames,
+                    lifecycleLogs,
+                    cancellationToken);
+
+                // Kind is also used as a DOM id suffix. Route certificates need a unique
+                // presentation kind while retaining the wildcard/individual lifecycle above.
+                certificates.Add(status with { Kind = $"route-{index}" });
+            }
+
             result[domainId] = new DomainCertificateStatus(
                 domainId,
                 domainName,
-                [wildcard, baseDomain]);
+                certificates);
         }
 
         return result;
@@ -697,6 +719,32 @@ public sealed class CertificateStatusService
         }
 
         return result;
+    }
+
+    internal static IReadOnlyList<string> GetAdditionalAppliedCertificateNames(
+        string domainName,
+        IReadOnlySet<string> appliedNames)
+    {
+        var root = CaddyCertificateStoreReader.NormalizeName(domainName);
+        if (root.Length == 0)
+        {
+            return [];
+        }
+
+        var rootWildcard = $"*.{root}";
+        return appliedNames
+            .Select(CaddyCertificateStoreReader.NormalizeName)
+            .Where(name => name.Length > 0)
+            .Where(name => !string.Equals(name, root, StringComparison.OrdinalIgnoreCase))
+            .Where(name => !string.Equals(name, rootWildcard, StringComparison.OrdinalIgnoreCase))
+            .Where(name =>
+            {
+                var host = name.StartsWith("*.", StringComparison.Ordinal) ? name[2..] : name;
+                return host.EndsWith($".{root}", StringComparison.OrdinalIgnoreCase);
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static (bool Wildcard, bool BaseDomain) ReadPlan(string mode, string json)
