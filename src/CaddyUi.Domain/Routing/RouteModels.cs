@@ -256,7 +256,7 @@ public sealed partial record ManagedRouteDefinition(
         {
             var wildcardSuffix = candidate[2..];
             if (wildcardSuffix.Length == 0 ||
-                wildcardSuffix.Contains('*', StringComparison.Ordinal) ||
+                wildcardSuffix.Contains("*", StringComparison.Ordinal) ||
                 !HostPattern().IsMatch(wildcardSuffix))
             {
                 throw new ArgumentException("The subdomain is invalid.", nameof(value));
@@ -265,7 +265,7 @@ public sealed partial record ManagedRouteDefinition(
             return candidate;
         }
 
-        if (candidate.Contains('*', StringComparison.Ordinal) || !HostPattern().IsMatch(candidate))
+        if (candidate.Contains("*", StringComparison.Ordinal) || !HostPattern().IsMatch(candidate))
         {
             throw new ArgumentException("The subdomain is invalid.", nameof(value));
         }
