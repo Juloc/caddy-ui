@@ -34,6 +34,7 @@ public sealed class RouteModelTests
 
     [Theory]
     [InlineData("*", "*.example.com")]
+    [InlineData("*.", "*.example.com")]
     [InlineData("*.OS", "*.os.example.com")]
     [InlineData("*.internal.apps", "*.internal.apps.example.com")]
     public void Create_AllowsLeadingWildcardSubdomain(string subdomain, string expectedHost)
@@ -59,7 +60,6 @@ public sealed class RouteModelTests
     [InlineData("*foo")]
     [InlineData("*.foo.*")]
     [InlineData("**")]
-    [InlineData("*.")]
     public void Create_RejectsWildcardOutsideLeadingLabel(string subdomain)
     {
         Assert.Throws<ArgumentException>(() => ManagedRouteDefinition.Create(
