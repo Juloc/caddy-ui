@@ -33,6 +33,50 @@ public sealed class RouteModelTests
     }
 
     [Theory]
+    [InlineData("*", "*.example.com")]
+    [InlineData("*.OS", "*.os.example.com")]
+    [InlineData("*.internal.apps", "*.internal.apps.example.com")]
+    public void Create_AllowsLeadingWildcardSubdomain(string subdomain, string expectedHost)
+    {
+        var route = ManagedRouteDefinition.Create(
+            Guid.NewGuid(),
+            "Wildcard",
+            Guid.NewGuid(),
+            "example.com",
+            subdomain,
+            ManagedRouteKind.Proxy,
+            true,
+            0,
+            RouteCertificateMode.Inherit,
+            null,
+            RouteConfigurationDocument.Empty with { Upstream = "app:8080" });
+
+        Assert.Equal(expectedHost, route.Host);
+    }
+
+    [Theory]
+    [InlineData("foo.*")]
+    [InlineData("*foo")]
+    [InlineData("*.foo.*")]
+    [InlineData("**")]
+    [InlineData("*.")]
+    public void Create_RejectsWildcardOutsideLeadingLabel(string subdomain)
+    {
+        Assert.Throws<ArgumentException>(() => ManagedRouteDefinition.Create(
+            Guid.NewGuid(),
+            "Wildcard",
+            Guid.NewGuid(),
+            "example.com",
+            subdomain,
+            ManagedRouteKind.Proxy,
+            true,
+            0,
+            RouteCertificateMode.Inherit,
+            null,
+            RouteConfigurationDocument.Empty with { Upstream = "app:8080" }));
+    }
+
+    [Theory]
     [InlineData("https://example.com/{danger}")]
     [InlineData("example.com:8080\nrespond 200")]
     public void Create_RejectsGeneratedConfigurationInjection(string upstream)
