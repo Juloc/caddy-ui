@@ -23,7 +23,7 @@ public sealed class CertificateStatusServiceTests
             appliedNames);
 
         Assert.Equal(
-            ["*.os.juloc.de", "app.os.juloc.de", "os.juloc.de"],
+            new[] { "*.os.juloc.de", "app.os.juloc.de", "os.juloc.de" },
             result);
     }
 
@@ -60,6 +60,6 @@ public sealed class CertificateStatusServiceTests
             "juloc.de",
             appliedNames);
 
-        Assert.Equal(["*.os.juloc.de"], result);
+        Assert.Equal(new[] { "*.os.juloc.de" }, result);
     }
 }
