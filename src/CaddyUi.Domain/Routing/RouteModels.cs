@@ -242,9 +242,30 @@ public sealed partial record ManagedRouteDefinition(
             return string.Empty;
         }
 
-        if (candidate.Length > 190 ||
-            !HostPattern().IsMatch(candidate) ||
-            candidate.Contains("..", StringComparison.Ordinal))
+        if (candidate.Length > 190 || candidate.Contains("..", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The subdomain is invalid.", nameof(value));
+        }
+
+        if (candidate == "*")
+        {
+            return candidate;
+        }
+
+        if (candidate.StartsWith("*.", StringComparison.Ordinal))
+        {
+            var wildcardSuffix = candidate[2..];
+            if (wildcardSuffix.Length == 0 ||
+                wildcardSuffix.Contains('*', StringComparison.Ordinal) ||
+                !HostPattern().IsMatch(wildcardSuffix))
+            {
+                throw new ArgumentException("The subdomain is invalid.", nameof(value));
+            }
+
+            return candidate;
+        }
+
+        if (candidate.Contains('*', StringComparison.Ordinal) || !HostPattern().IsMatch(candidate))
         {
             throw new ArgumentException("The subdomain is invalid.", nameof(value));
         }
