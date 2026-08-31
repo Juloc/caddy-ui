@@ -18,6 +18,23 @@
     <div class="notice notice--warning"><strong>@T["Database error"]:</strong> @Model.Status.DatabaseError</div>
 }
 
+@if (User.IsInRole("admin"))
+{
+    <section class="workspace-section system-tool-section">
+        <header class="section-header">
+            <div><h2>Systemwerkzeuge</h2><p>Technische und selten benötigte Funktionen sind hier zusammengefasst.</p></div>
+        </header>
+        <nav class="system-tool-grid" aria-label="Systemwerkzeuge">
+            <a class="system-tool-link" asp-page="/Operations/Health"><strong>Health Checks</strong><span>Dienste und Upstreams prüfen</span></a>
+            <a class="system-tool-link" asp-page="/Operations/Jobs"><strong>Jobs</strong><span>Hintergrundaufgaben und Status</span></a>
+            <a class="system-tool-link" asp-page="/Operations/Notifications"><strong>Benachrichtigungen</strong><span>Ereignisse und Kanäle</span></a>
+            <a class="system-tool-link" asp-page="/Operations/Backup"><strong>Backup &amp; Diagnose</strong><span>Sicherung und Diagnosepakete</span></a>
+            <a class="system-tool-link" asp-page="/Operations/Cutover"><strong>Migration &amp; Rollback</strong><span>Umstellung und Wiederherstellung</span></a>
+            <a class="system-tool-link" asp-page="/Administration/Security"><strong>Sicherheitseinstellungen</strong><span>Administrative Sicherheitsoptionen</span></a>
+        </nav>
+    </section>
+}
+
 <section class="metric-grid">
     <article class="metric-card"><span class="metric-label">@T["Request rows"]</span><strong class="metric-value">@Model.Status.RequestRows.ToString("N0")</strong><span class="metric-detail">@T["Retention {0} days", Model.Status.RawRequestRetentionDays]</span></article>
     <article class="metric-card"><span class="metric-label">@T["Page views"]</span><strong class="metric-value">@Model.Status.PageViewRows.ToString("N0")</strong><span class="metric-detail">@T["Retention {0} days", Model.Status.PageViewRetentionDays]</span></article>
