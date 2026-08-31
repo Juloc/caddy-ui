@@ -20,17 +20,17 @@
 
 @if (User.IsInRole("admin"))
 {
-    <section class="workspace-section system-tool-section">
+    <section class="workspace-section">
         <header class="section-header">
             <div><h2>Systemwerkzeuge</h2><p>Technische und selten benötigte Funktionen sind hier zusammengefasst.</p></div>
         </header>
-        <nav class="system-tool-grid" aria-label="Systemwerkzeuge">
-            <a class="system-tool-link" asp-page="/Operations/Health"><strong>Health Checks</strong><span>Dienste und Upstreams prüfen</span></a>
-            <a class="system-tool-link" asp-page="/Operations/Jobs"><strong>Jobs</strong><span>Hintergrundaufgaben und Status</span></a>
-            <a class="system-tool-link" asp-page="/Operations/Notifications"><strong>Benachrichtigungen</strong><span>Ereignisse und Kanäle</span></a>
-            <a class="system-tool-link" asp-page="/Operations/Backup"><strong>Backup &amp; Diagnose</strong><span>Sicherung und Diagnosepakete</span></a>
-            <a class="system-tool-link" asp-page="/Operations/Cutover"><strong>Migration &amp; Rollback</strong><span>Umstellung und Wiederherstellung</span></a>
-            <a class="system-tool-link" asp-page="/Administration/Security"><strong>Sicherheitseinstellungen</strong><span>Administrative Sicherheitsoptionen</span></a>
+        <nav class="page-actions" aria-label="Systemwerkzeuge">
+            <a class="button button--quiet" asp-page="/Operations/Health">Health Checks</a>
+            <a class="button button--quiet" asp-page="/Operations/Jobs">Jobs</a>
+            <a class="button button--quiet" asp-page="/Operations/Notifications">Benachrichtigungen</a>
+            <a class="button button--quiet" asp-page="/Operations/Backup">Backup &amp; Diagnose</a>
+            <a class="button button--quiet" asp-page="/Operations/Cutover">Migration &amp; Rollback</a>
+            <a class="button button--quiet" asp-page="/Administration/Security">Sicherheitseinstellungen</a>
         </nav>
     </section>
 }
