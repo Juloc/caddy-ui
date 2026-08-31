@@ -48,16 +48,20 @@ It contains summaries and grouped charts only. Full analytics and logs belong to
 
 ### Overview
 
-- Compact flat table with sensible defaults and configurable columns.
-- Default columns: state, host, upstream, route type, access group, requests, last change, actions.
-- Public reachability and upstream health are separate states.
-- Search, configurable columns, multi-selection, and bulk actions.
-- Enable/disable, duplicate, import, export, and delete.
-- Create/edit uses a desktop dialog and a full-screen mobile dialog.
+- Routes are grouped by managed base domain so the public namespace is the primary navigation model.
+- Each domain shows its route count, active count, default/disabled state, and a direct `+ Route` action.
+- Route rows show the public host, route name, target, access state, enabled state, and primary actions without exposing certificate mode, sort order, or renderer details.
+- Active routes with a concrete host expose an `Open` action for the public HTTPS URL. Wildcard hosts are not directly openable.
+- Less common actions such as analytics, enable/disable, delete, import/export, and advanced route creation stay behind secondary or overflow actions.
+- Quick create uses a desktop dialog and a full-screen mobile dialog. It asks only for a route name and upstream.
+- Quick create derives a DNS-safe direct subdomain from the route name, selects wildcard certificate mode, creates an enabled reverse-proxy route at `/`, validates the full configuration, and activates it through the normal safe apply pipeline.
+- If quick activation fails after persistence, the route remains stored but disabled so startup reconciliation cannot repeatedly apply a broken desired state.
+- Advanced create/edit remains available for non-default behavior and preselects the domain from which it was opened.
+- The route overview must collapse to a single-column layout on small screens without horizontal page scrolling; primary touch targets are at least 44 px high.
 
 ### Managed routes
 
-The basic form shows name, domain, host, and upstream. Advanced settings contain:
+The standard quick-create form shows only route name and upstream. The advanced form exposes domain, subdomain/host, route type, and optional behavior. Advanced settings contain:
 
 - path matchers and path-based targets;
 - request and response headers;
@@ -66,6 +70,7 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 - redirects;
 - upstream TLS options;
 - reusable access group;
+- certificate override;
 - selected safe reverse-proxy options.
 
 The path prefix `/__caddy_ui_auth/*` is reserved for the access portal and cannot be assigned to a managed route. Generated access-portal handlers are placed before route-specific path matchers so a route cannot recursively protect its own login page.
