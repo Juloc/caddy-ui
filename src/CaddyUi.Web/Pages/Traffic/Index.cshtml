@@ -3,7 +3,14 @@
 @{
     ViewData["Title"] = T["Traffic"];
 }
-<section class="page-heading"><div><p class="eyebrow">@T["Server load"]</p><h1>@T["Traffic"]</h1><p class="page-description">@T["Requests, page views, errors, transferred data, and duration are shown separately for each time interval."]</p></div><span class="status-badge status-badge--neutral">@T["{0} intervals", Model.Series.Count]</span></section>
+<section class="page-heading">
+    <div><p class="eyebrow">@T["Server load"]</p><h1>@T["Traffic"]</h1><p class="page-description">@T["Requests, page views, errors, transferred data, and duration are shown separately for each time interval."]</p></div>
+    <div class="page-actions">
+        <span class="status-badge status-badge--neutral">@T["{0} intervals", Model.Series.Count]</span>
+        <a class="button button--quiet" asp-page="/Performance/Index">Performance</a>
+        <a class="button button--quiet" asp-page="/Routes/Analytics">Routenstatistik</a>
+    </div>
+</section>
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="panel panel--wide">
     <header class="panel-header"><div><p class="eyebrow">@T["Time series"]</p><h2>@T["Aggregated intervals"]</h2></div></header>
