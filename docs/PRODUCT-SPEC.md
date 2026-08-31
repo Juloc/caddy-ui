@@ -18,20 +18,20 @@ Caddy UI is a fast, lightweight desktop-oriented web application for daily Caddy
 
 ## Navigation
 
-1. Dashboard
-2. Routes
-3. Access
-4. Analytics
-5. Security
-6. Logs
-7. System
-8. DNS
-9. Administration
-   - Users
-   - Audit Log
-   - Settings
+The primary navigation contains only daily task areas:
 
-Administration is a collapsible group at the bottom of the desktop navigation. Mobile uses a navigation drawer.
+1. Overview
+2. Routes
+3. Domains & DNS
+4. Access
+5. Traffic
+6. Requests
+7. Security
+8. System
+
+Settings and About remain in the footer next to theme and sign-out controls. Role checks hide configuration areas the current user cannot change.
+
+Specialized pages do not occupy permanent sidebar entries. Performance and route analytics are reached from Traffic, Live Log is reached from Requests, and health checks, jobs, notifications, backup/diagnostics, migration/rollback, and administrative security settings are grouped under System. Provider, DDNS, certificate, and guided setup tasks are grouped under Domains & DNS. Mobile uses the same hierarchy in the navigation drawer.
 
 ## Dashboard
 
@@ -116,7 +116,7 @@ Managed route files are reconciled through the current hardened renderer during 
 
 ## Analytics
 
-Analytics is a dedicated top-level workspace with Overview, Performance, Traffic, Endpoints, and Clients/IPs views.
+Traffic is the primary analytics entry point. Specialized performance and per-route analytics remain available contextually without permanent sidebar entries.
 
 Required metrics and behavior:
 
@@ -139,7 +139,7 @@ Charts are responsive, theme-aware, dependency-free, and shipped locally without
 
 ## Logs and traffic
 
-The Logs workspace provides structured request logs plus the existing Caddy/System and DDNS/DNS views.
+Requests is the primary structured-log entry point. Live request mode is reached contextually from Requests rather than occupying a permanent sidebar entry.
 
 Request log filters include:
 
@@ -171,7 +171,7 @@ Request persistence:
 
 ## Security
 
-Security is a dedicated top-level workspace with Overview, Threats, Blocked IPs, Rate Limits, and Login Protection.
+Security is a primary workspace for threats, blocked IPs, rate limits, and login protection. Administrative security configuration that is not needed for daily monitoring is grouped under System.
 
 Protection levels:
 
@@ -210,7 +210,14 @@ The custom protection handler is built into bundle mode so no CrowdSec, Redis, P
 
 ## System
 
+System is the parent workspace for technical and infrequently used operational tools.
+
 - Caddy admin health, version, storage, certificates, and configuration state.
+- Health checks and background jobs.
+- Notification configuration.
+- Backup and diagnostics.
+- Migration and rollback.
+- Administrative security settings.
 - Validate configuration, safely reload Caddy, download diagnostics, view revisions, and restore a revision.
 - No Docker socket and no container start/stop/update controls.
 - Daily automatic backups and additional backups before updates/migrations.
@@ -218,7 +225,8 @@ The custom protection handler is built into bundle mode so no CrowdSec, Redis, P
 
 ## DNS
 
-- DNS remains a dedicated secondary navigation item.
+Domains & DNS is the parent workspace for domain, certificate, provider, DDNS, and guided setup tasks.
+
 - Provider accounts and multiple domains are supported.
 - Netcup supports listing, adding, editing, and deleting records plus DDNS status.
 - Credentials may use environment references or encrypted application storage; secrets are never displayed.
