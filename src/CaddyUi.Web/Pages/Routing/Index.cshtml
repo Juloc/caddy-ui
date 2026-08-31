@@ -1,20 +1,19 @@
 @page
-@model CaddyUi.Web.Pages.Routing.IndexModel
 @using CaddyUi.Domain.Routing
+@model CaddyUi.Web.Pages.Routing.IndexModel
 @{
     ViewData["Title"] = T["Routes"];
 }
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">@T["Caddy configuration"]</p>
+        <p class="eyebrow">@T["Routing"]</p>
         <h1>@T["Routes"]</h1>
-        <p class="page-description">@T["Routes are saved first, validated as a complete configuration, and only then applied in a controlled operation."]</p>
+        <p class="page-description">Dienste nach Domain verwalten. Neue Standardrouten brauchen nur einen Namen und ein Upstream-Ziel.</p>
     </div>
     <div class="page-actions">
-        <a class="button button--quiet" asp-page="/Routing/Transfer">@T["Import and export"]</a>
-        <a class="button button--quiet" asp-page="/Routing/Preview">@T["Preview and apply"]</a>
-        <a class="button button--primary" asp-page="/Routing/Edit">@T["New route"]</a>
+        <a class="button button--quiet" asp-page="/Administration/Domains">@T["Domains"]</a>
+        <a class="button button--quiet" asp-page="/Routing/Preview">Vorschau &amp; anwenden</a>
     </div>
 </section>
 
@@ -22,115 +21,217 @@
 {
     <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
 }
-<div asp-validation-summary="ModelOnly" class="validation-summary"></div>
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="notice notice--danger" role="alert">@Model.ErrorMessage</div>
+}
+<div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
 
-<section class="workspace-toolbar" aria-label="@T["Route status"]">
-    <div class="toolbar-group">
-        <span class="toolbar-label">@T["Write mode"]</span>
-        <span class="status-badge @(Model.RoutingOptions.WriteMode == CaddyUi.Infrastructure.Routing.RouteWriteMode.Active ? "status-badge--warning" : "status-badge--neutral")">@Model.RoutingOptions.WriteMode.ToString().ToLowerInvariant()</span>
-        <span class="toolbar-separator"></span>
-        <span class="toolbar-summary">@T["{0} routes · {1} enabled", Model.Routes.Count, Model.Routes.Count(route => route.Definition.Enabled)]</span>
-    </div>
-    @if (User.IsInRole("admin"))
-    {
-        <div class="toolbar-group">
-            <a class="button button--compact button--quiet" asp-page="/Administration/Domains">@T["Domains"]</a>
-            <a class="button button--compact button--quiet" asp-page="/Access/Index">@T["Access groups"]</a>
-        </div>
-    }
-</section>
-
-<section class="workspace-section feature-routing-list">
-    <header class="section-header">
+<section class="route-overview" aria-label="Domain-Routen">
+    <header class="route-overview-header">
         <div>
-            <h2>@T["Managed routes"]</h2>
-            <p>@T["Enabled only means that the route is included in the next generated revision. It does not write to Caddy immediately."]</p>
+            <strong>@Model.DomainGroups.Count Domains</strong>
+            <span>· @Model.Routes.Count Routen</span>
+            <span>· @Model.Routes.Count(route => route.Definition.Enabled) aktiv</span>
         </div>
+        <details class="route-overview-more">
+            <summary class="button button--compact button--quiet">Weitere Optionen</summary>
+            <nav aria-label="Weitere Routing-Optionen">
+                <a asp-page="/Routing/Edit">Erweiterte Route erstellen</a>
+                <a asp-page="/Routing/Transfer">Import / Export</a>
+            </nav>
+        </details>
     </header>
-    <div class="table-wrap">
-        <table class="data-table data-table--comfortable">
-            <thead>
-                <tr>
-                    <th>@T["Route"]</th>
-                    <th>@T["Target"]</th>
-                    <th>@T["Access"]</th>
-                    <th>@T["Status"]</th>
-                    <th class="table-actions">@T["Actions"]</th>
-                </tr>
-            </thead>
-            <tbody>
-            @foreach (var item in Model.Routes)
-            {
-                var route = item.Definition;
-                <tr class="@(route.Enabled ? string.Empty : "is-muted")">
-                    <td>
-                        <a class="table-primary-link" asp-page="/Routing/Edit" asp-route-id="@route.Id">@route.Name</a>
-                        <small><code>@route.Host@route.Configuration.PathPrefix</code></small>
-                        <div class="inline-meta">
-                            <span>@ManagedRouteDefinition.ToStorageValue(route.Kind)</span>
-                            <span>@T["Order {0}", route.SortOrder]</span>
-                            <span>@ManagedRouteDefinition.ToStorageValue(route.CertificateMode)</span>
+
+    <div class="domain-route-stack">
+        @foreach (var group in Model.DomainGroups)
+        {
+            var dialogId = $"quick-route-{group.Domain.Id:N}";
+            var formId = $"quick-route-form-{group.Domain.Id:N}";
+            var restoreQuickValues = Model.QuickCreateDialogDomainId == group.Domain.Id && !ViewData.ModelState.IsValid;
+            <section class="domain-route-group" data-domain-route-group>
+                <header class="domain-route-header">
+                    <div class="domain-route-heading">
+                        <div class="domain-route-title">
+                            <h2>@group.Domain.Name</h2>
+                            @if (group.Domain.IsDefault)
+                            {
+                                <span class="status-badge status-badge--ok">Standard</span>
+                            }
+                            @if (!group.Domain.Enabled)
+                            {
+                                <span class="status-badge status-badge--neutral">Deaktiviert</span>
+                            }
                         </div>
-                    </td>
-                    <td>
-                        @switch (route.Kind)
+                        @if (!string.Equals(group.Domain.DisplayName, group.Domain.Name, StringComparison.OrdinalIgnoreCase))
                         {
-                            case ManagedRouteKind.Proxy:
-                                <strong>@route.Configuration.Upstream</strong>
-                                @if (route.Configuration.HealthPath.Length > 0)
-                                {
-                                    <small>@T["Health"]: @route.Configuration.HealthPath · @route.Configuration.HealthIntervalSeconds @T["sec."]</small>
-                                }
-                                break;
-                            case ManagedRouteKind.Redirect:
-                                <strong>@route.Configuration.RedirectTarget</strong>
-                                <small>@(route.Configuration.RedirectPermanent ? T["308 permanent"] : T["302 temporary"])</small>
-                                break;
-                            case ManagedRouteKind.StaticResponse:
-                                <strong>HTTP @route.Configuration.StaticStatusCode</strong>
-                                <small>@T["Static response"]</small>
-                                break;
-                            case ManagedRouteKind.Custom:
-                                <strong>@T["Custom directives"]</strong>
-                                <small>@T["Advanced mode"]</small>
-                                break;
+                            <span>@group.Domain.DisplayName</span>
                         }
-                    </td>
-                    <td>
-                        @if (route.AccessGroupId is null)
+                        <small>@group.Routes.Count Routen · @group.Routes.Count(route => route.Definition.Enabled) aktiv</small>
+                    </div>
+                    @if (group.Domain.Enabled)
+                    {
+                        <a class="button button--primary domain-route-add"
+                           asp-page="/Routing/Index"
+                           asp-route-quickDomain="@group.Domain.Id"
+                           data-dialog-open="@dialogId">+ Route</a>
+                    }
+                </header>
+
+                @if (group.Routes.Count == 0)
+                {
+                    <div class="domain-route-empty">
+                        <span>Noch keine Route für diese Domain.</span>
+                    </div>
+                }
+                else
+                {
+                    <ul class="domain-route-list">
+                        @foreach (var route in group.Routes)
                         {
-                            <span class="status-badge status-badge--neutral">@T["Public"]</span>
+                            var definition = route.Definition;
+                            var target = definition.Kind switch
+                            {
+                                ManagedRouteKind.Proxy => definition.Configuration.Upstream,
+                                ManagedRouteKind.Redirect => definition.Configuration.RedirectTarget,
+                                ManagedRouteKind.StaticResponse => $"HTTP {definition.Configuration.StaticStatusCode}",
+                                ManagedRouteKind.Custom => "Custom Caddyfile",
+                                _ => string.Empty,
+                            };
+                            <li class="domain-route-row @(definition.Enabled ? null : "domain-route-row--disabled")">
+                                <div class="domain-route-address">
+                                    <strong>@definition.Host</strong>
+                                    <small>@definition.Name@if (definition.Configuration.PathPrefix != "/") { <text> · @definition.Configuration.PathPrefix</text> }</small>
+                                </div>
+                                <div class="domain-route-target">
+                                    <span aria-hidden="true">→</span>
+                                    <code>@target</code>
+                                </div>
+                                <div class="domain-route-state">
+                                    @if (!string.IsNullOrWhiteSpace(route.AccessGroupName))
+                                    {
+                                        <span class="status-badge status-badge--neutral">@route.AccessGroupName</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-badge status-badge--neutral">Öffentlich</span>
+                                    }
+                                    <span class="status-badge @(definition.Enabled ? "status-badge--ok" : "status-badge--neutral")">
+                                        @(definition.Enabled ? "Aktiv" : "Deaktiviert")
+                                    </span>
+                                </div>
+                                <div class="domain-route-actions">
+                                    @if (IndexModel.CanOpen(definition))
+                                    {
+                                        <a class="button button--compact button--quiet"
+                                           href="@IndexModel.PublicUrl(definition)"
+                                           target="_blank"
+                                           rel="noopener noreferrer">Öffnen ↗</a>
+                                    }
+                                    <a class="button button--compact button--quiet" asp-page="/Routing/Edit" asp-route-id="@definition.Id">Bearbeiten</a>
+                                    <details class="route-row-menu">
+                                        <summary class="button button--compact button--quiet" aria-label="Aktionen für @definition.Name">⋯</summary>
+                                        <div class="route-row-menu-items">
+                                            <a asp-page="/Routes/Analytics" asp-route-routeId="@definition.Id">Statistik</a>
+                                            <form method="post" asp-page-handler="Toggle" asp-antiforgery="true">
+                                                <input type="hidden" name="id" value="@definition.Id" />
+                                                <input type="hidden" name="enabled" value="@(!definition.Enabled)" />
+                                                <button type="submit">@(definition.Enabled ? "Deaktivieren" : "Aktivieren")</button>
+                                            </form>
+                                            <form method="post"
+                                                  asp-page-handler="Delete"
+                                                  asp-antiforgery="true"
+                                                  data-confirm="Route '@definition.Name' wirklich löschen?">
+                                                <input type="hidden" name="id" value="@definition.Id" />
+                                                <button class="route-row-delete" type="submit">Löschen</button>
+                                            </form>
+                                        </div>
+                                    </details>
+                                </div>
+                            </li>
                         }
-                        else
-                        {
-                            <span class="status-badge status-badge--info">@item.AccessGroupName</span>
-                        }
-                    </td>
-                    <td>
-                        <span class="status-badge @(route.Enabled ? "status-badge--ok" : "status-badge--neutral")">@(route.Enabled ? T["Enabled"] : T["Disabled"])</span>
-                        <small>@T["Changed"] <time datetime="@item.UpdatedAt.ToString("O")" data-local-time>@item.UpdatedAt.ToString("u")</time></small>
-                    </td>
-                    <td class="table-actions">
-                        <div class="row-actions">
-                            <a class="button button--compact button--quiet" asp-page="/Routing/Edit" asp-route-id="@route.Id">@T["Edit"]</a>
-                            <form method="post" asp-page-handler="Toggle">
-                                <input type="hidden" name="id" value="@route.Id" />
-                                <input type="hidden" name="enabled" value="@(!route.Enabled)" />
-                                <button class="button button--compact button--quiet" type="submit">@(route.Enabled ? T["Disable"] : T["Enable"])</button>
-                            </form>
-                            <form method="post" asp-page-handler="Delete" data-confirm="@T["Delete this route from management permanently? The active Caddy configuration remains unchanged until the next apply."]">
-                                <input type="hidden" name="id" value="@route.Id" />
-                                <button class="button button--compact button--danger-quiet" type="submit">@T["Delete"]</button>
+                    </ul>
+                }
+
+                @if (group.Domain.Enabled)
+                {
+                    <footer class="domain-route-footer">
+                        <a asp-page="/Routing/Index"
+                           asp-route-quickDomain="@group.Domain.Id"
+                           data-dialog-open="@dialogId">+ Route hinzufügen</a>
+                    </footer>
+                }
+            </section>
+
+            @if (group.Domain.Enabled)
+            {
+                <dialog id="@dialogId"
+                        class="dialog-surface"
+                        data-dialog
+                        aria-labelledby="@($"{dialogId}-title")"
+                        open="@(Model.QuickCreateDialogDomainId == group.Domain.Id ? "open" : null)">
+                    <div class="dialog-layout">
+                        <header class="dialog-header">
+                            <div>
+                                <h2 id="@($"{dialogId}-title")">Neue Route für @group.Domain.Name</h2>
+                                <p>Die Subdomain wird automatisch aus dem Routennamen erstellt.</p>
+                            </div>
+                            <a class="button button--compact button--quiet" asp-page="/Routing/Index" data-dialog-close>Schließen</a>
+                        </header>
+                        <div class="dialog-body">
+                            <form id="@formId"
+                                  method="post"
+                                  asp-page-handler="QuickCreate"
+                                  asp-antiforgery="true"
+                                  class="form-stack">
+                                <input type="hidden" name="QuickRoute.DomainId" value="@group.Domain.Id" />
+                                <label class="field">
+                                    <span class="field-label">Routenname</span>
+                                    <input name="QuickRoute.Name"
+                                           value="@(restoreQuickValues ? Model.QuickRoute.Name : string.Empty)"
+                                           maxlength="120"
+                                           autocomplete="off"
+                                           placeholder="Home Assistant"
+                                           required />
+                                    <small>Beispiel: „Home Assistant“ wird zu <code>home-assistant.@group.Domain.Name</code>.</small>
+                                    <span asp-validation-for="QuickRoute.Name" class="field-error"></span>
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Upstream</span>
+                                    <input name="QuickRoute.Upstream"
+                                           value="@(restoreQuickValues ? Model.QuickRoute.Upstream : string.Empty)"
+                                           maxlength="2048"
+                                           autocomplete="off"
+                                           placeholder="http://homeassistant:8123"
+                                           required />
+                                    <small>Hostname oder interne URL des Dienstes.</small>
+                                    <span asp-validation-for="QuickRoute.Upstream" class="field-error"></span>
+                                </label>
+                                <div class="safe-apply-note">
+                                    <strong>Wildcard automatisch</strong>
+                                    <span>Die Route verwendet standardmäßig das Wildcard-Zertifikat der Domain und wird vor der Aktivierung vollständig validiert.</span>
+                                </div>
                             </form>
                         </div>
-                    </td>
-                </tr>
+                        <footer class="dialog-footer quick-route-dialog-footer">
+                            <a class="button button--quiet"
+                               asp-page="/Routing/Edit"
+                               asp-route-domainId="@group.Domain.Id">Erweitert</a>
+                            <a class="button button--quiet" asp-page="/Routing/Index" data-dialog-close>Abbrechen</a>
+                            <button class="button button--primary" type="submit" form="@formId">Erstellen &amp; aktivieren</button>
+                        </footer>
+                    </div>
+                </dialog>
             }
-            @if (Model.Routes.Count == 0)
-            {
-                <tr><td colspan="5" class="empty-state">@T["No route has been created yet."]</td></tr>
-            }
-            </tbody>
-        </table>
+        }
+
+        @if (Model.DomainGroups.Count == 0)
+        {
+            <div class="empty-state route-domain-empty">
+                <strong>Noch keine Domain eingerichtet.</strong>
+                <span>Lege zuerst eine Domain an. Danach kannst du Routen direkt darunter hinzufügen.</span>
+                <a class="button button--primary" asp-page="/Administration/Domains" asp-route-create-domain="1">Domain hinzufügen</a>
+            </div>
+        }
     </div>
 </section>

@@ -48,12 +48,16 @@ public sealed class EditModel : LocalizedPageModel
 
     public bool AllowCustomRoutes => _applyService.Options.AllowCustomRoutes;
 
-    public async Task<IActionResult> OnGetAsync(Guid? id)
+    public async Task<IActionResult> OnGetAsync(Guid? id, Guid? domainId)
     {
         await LoadOptionsAsync();
         if (id is null)
         {
-            var defaultDomain = Domains.FirstOrDefault(domain => domain.IsDefault && domain.Enabled) ??
+            var selectedDomain = domainId is null
+                ? null
+                : Domains.FirstOrDefault(domain => domain.Id == domainId.Value && domain.Enabled);
+            var defaultDomain = selectedDomain ??
+                Domains.FirstOrDefault(domain => domain.IsDefault && domain.Enabled) ??
                 Domains.FirstOrDefault(domain => domain.Enabled);
             Input.DomainId = defaultDomain?.Id ?? Guid.Empty;
             return Page();

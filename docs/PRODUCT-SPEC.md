@@ -18,20 +18,20 @@ Caddy UI is a fast, lightweight desktop-oriented web application for daily Caddy
 
 ## Navigation
 
-1. Dashboard
-2. Routes
-3. Access
-4. Analytics
-5. Security
-6. Logs
-7. System
-8. DNS
-9. Administration
-   - Users
-   - Audit Log
-   - Settings
+The primary navigation contains only daily task areas:
 
-Administration is a collapsible group at the bottom of the desktop navigation. Mobile uses a navigation drawer.
+1. Overview
+2. Routes
+3. Domains & DNS
+4. Access
+5. Traffic
+6. Requests
+7. Security
+8. System
+
+Settings and About remain in the footer next to theme and sign-out controls. Role checks hide configuration areas the current user cannot change.
+
+Specialized pages do not occupy permanent sidebar entries. Performance and route analytics are reached from Traffic, Live Log is reached from Requests, and health checks, jobs, notifications, backup/diagnostics, migration/rollback, and administrative security settings are grouped under System. Provider, DDNS, certificate, and guided setup tasks are grouped under Domains & DNS. Mobile uses the same hierarchy in the navigation drawer.
 
 ## Dashboard
 
@@ -48,16 +48,20 @@ It contains summaries and grouped charts only. Full analytics and logs belong to
 
 ### Overview
 
-- Compact flat table with sensible defaults and configurable columns.
-- Default columns: state, host, upstream, route type, access group, requests, last change, actions.
-- Public reachability and upstream health are separate states.
-- Search, configurable columns, multi-selection, and bulk actions.
-- Enable/disable, duplicate, import, export, and delete.
-- Create/edit uses a desktop dialog and a full-screen mobile dialog.
+- Routes are grouped by managed base domain so the public namespace is the primary navigation model.
+- Each domain shows its route count, active count, default/disabled state, and a direct `+ Route` action.
+- Route rows show the public host, route name, target, access state, enabled state, and primary actions without exposing certificate mode, sort order, or renderer details.
+- Active routes with a concrete host expose an `Open` action for the public HTTPS URL. Wildcard hosts are not directly openable.
+- Less common actions such as analytics, enable/disable, delete, import/export, and advanced route creation stay behind secondary or overflow actions.
+- Quick create uses a desktop dialog and a full-screen mobile dialog. It asks only for a route name and upstream.
+- Quick create derives a DNS-safe direct subdomain from the route name, selects wildcard certificate mode, creates an enabled reverse-proxy route at `/`, validates the full configuration, and activates it through the normal safe apply pipeline.
+- If quick activation fails after persistence, the route remains stored but disabled so startup reconciliation cannot repeatedly apply a broken desired state.
+- Advanced create/edit remains available for non-default behavior and preselects the domain from which it was opened.
+- The route overview must collapse to a single-column layout on small screens without horizontal page scrolling; primary touch targets are at least 44 px high.
 
 ### Managed routes
 
-The basic form shows name, domain, host, and upstream. Advanced settings contain:
+The standard quick-create form shows only route name and upstream. The advanced form exposes domain, subdomain/host, route type, and optional behavior. Advanced settings contain:
 
 - path matchers and path-based targets;
 - request and response headers;
@@ -66,6 +70,7 @@ The basic form shows name, domain, host, and upstream. Advanced settings contain
 - redirects;
 - upstream TLS options;
 - reusable access group;
+- certificate override;
 - selected safe reverse-proxy options.
 
 The path prefix `/__caddy_ui_auth/*` is reserved for the access portal and cannot be assigned to a managed route. Generated access-portal handlers are placed before route-specific path matchers so a route cannot recursively protect its own login page.
@@ -111,7 +116,7 @@ Managed route files are reconciled through the current hardened renderer during 
 
 ## Analytics
 
-Analytics is a dedicated top-level workspace with Overview, Performance, Traffic, Endpoints, and Clients/IPs views.
+Traffic is the primary analytics entry point. Specialized performance and per-route analytics remain available contextually without permanent sidebar entries.
 
 Required metrics and behavior:
 
@@ -134,7 +139,7 @@ Charts are responsive, theme-aware, dependency-free, and shipped locally without
 
 ## Logs and traffic
 
-The Logs workspace provides structured request logs plus the existing Caddy/System and DDNS/DNS views.
+Requests is the primary structured-log entry point. Live request mode is reached contextually from Requests rather than occupying a permanent sidebar entry.
 
 Request log filters include:
 
@@ -166,7 +171,7 @@ Request persistence:
 
 ## Security
 
-Security is a dedicated top-level workspace with Overview, Threats, Blocked IPs, Rate Limits, and Login Protection.
+Security is a primary workspace for threats, blocked IPs, rate limits, and login protection. Administrative security configuration that is not needed for daily monitoring is grouped under System.
 
 Protection levels:
 
@@ -205,7 +210,14 @@ The custom protection handler is built into bundle mode so no CrowdSec, Redis, P
 
 ## System
 
+System is the parent workspace for technical and infrequently used operational tools.
+
 - Caddy admin health, version, storage, certificates, and configuration state.
+- Health checks and background jobs.
+- Notification configuration.
+- Backup and diagnostics.
+- Migration and rollback.
+- Administrative security settings.
 - Validate configuration, safely reload Caddy, download diagnostics, view revisions, and restore a revision.
 - No Docker socket and no container start/stop/update controls.
 - Daily automatic backups and additional backups before updates/migrations.
@@ -213,7 +225,8 @@ The custom protection handler is built into bundle mode so no CrowdSec, Redis, P
 
 ## DNS
 
-- DNS remains a dedicated secondary navigation item.
+Domains & DNS is the parent workspace for domain, certificate, provider, DDNS, and guided setup tasks.
+
 - Provider accounts and multiple domains are supported.
 - Netcup supports listing, adding, editing, and deleting records plus DDNS status.
 - Credentials may use environment references or encrypted application storage; secrets are never displayed.

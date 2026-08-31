@@ -3,8 +3,23 @@
     var version = global::System.Environment.GetEnvironmentVariable("CADDY_UI_VERSION")
         ?? global::CaddyUi.Domain.ProductMetadata.FoundationVersion;
     var culture = global::System.Globalization.CultureInfo.CurrentUICulture.Name;
-    var providerPath = path.StartsWithSegments("/Administration/Providers") ||
-        path.StartsWithSegments("/Administration/ProviderDns");
+    var domainsPath = path.StartsWithSegments("/Administration/Domains") ||
+        path.StartsWithSegments("/Administration/Providers") ||
+        path.StartsWithSegments("/Administration/ProviderDns") ||
+        path.StartsWithSegments("/Operations/Dns") ||
+        path.StartsWithSegments("/Setup");
+    var trafficPath = path.StartsWithSegments("/Traffic") ||
+        path.StartsWithSegments("/Performance") ||
+        path.StartsWithSegments("/Routes/Analytics");
+    var requestsPath = path.StartsWithSegments("/Requests") ||
+        path.StartsWithSegments("/LiveLog");
+    var systemPath = path.StartsWithSegments("/System") ||
+        path.StartsWithSegments("/Operations/Health") ||
+        path.StartsWithSegments("/Operations/Jobs") ||
+        path.StartsWithSegments("/Operations/Notifications") ||
+        path.StartsWithSegments("/Operations/Backup") ||
+        path.StartsWithSegments("/Operations/Cutover") ||
+        path.StartsWithSegments("/Administration/Security");
 }
 <!DOCTYPE html>
 <html lang="@culture" data-theme="system">
@@ -42,9 +57,6 @@
             <nav class="primary-nav" aria-label="@T["Main navigation"]">
                 <span class="nav-section">@T["Overview"]</span>
                 <a class="nav-item @(path == "/" ? "nav-item--active" : string.Empty)" aria-current="@(path == "/" ? "page" : null)" asp-page="/Index" title="@T["Overview"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#home"></use></svg><span class="nav-label">@T["Overview"]</span></a>
-                <a class="nav-item @(path.StartsWithSegments("/Traffic") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Traffic") ? "page" : null)" asp-page="/Traffic/Index" title="@T["Traffic"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#traffic"></use></svg><span class="nav-label">@T["Traffic"]</span></a>
-                <a class="nav-item @(path.StartsWithSegments("/Requests") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Requests") ? "page" : null)" asp-page="/Requests/Index" title="@T["Requests"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#requests"></use></svg><span class="nav-label">@T["Requests"]</span></a>
-                <a class="nav-item @(path.StartsWithSegments("/Routes/Analytics") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Routes/Analytics") ? "page" : null)" asp-page="/Routes/Analytics" title="@T["Route analytics"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#chart"></use></svg><span class="nav-label">@T["Route analytics"]</span></a>
 
                 @if (User.IsInRole("admin") || User.IsInRole("editor"))
                 {
@@ -53,32 +65,17 @@
                 }
                 @if (User.IsInRole("admin"))
                 {
-                    <a class="nav-item @(path.StartsWithSegments("/Setup") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Setup") ? "page" : null)" asp-page="/Setup/Index" title="@T["Setup"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#setup"></use></svg><span class="nav-label">@T["Setup"]</span></a>
-                    <a class="nav-item @(providerPath ? "nav-item--active" : string.Empty)" aria-current="@(providerPath ? "page" : null)" asp-page="/Administration/Providers" title="@T["DNS providers"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#provider"></use></svg><span class="nav-label">@T["DNS providers"]</span></a>
-                    <a class="nav-item @(path.StartsWithSegments("/Administration/Domains") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Administration/Domains") ? "page" : null)" asp-page="/Administration/Domains" title="@T["Domains and certificates"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#domain"></use></svg><span class="nav-label">@T["Domains and certificates"]</span></a>
+                    <a class="nav-item @(domainsPath ? "nav-item--active" : string.Empty)" aria-current="@(domainsPath ? "page" : null)" asp-page="/Administration/Domains" title="@T["Domains and certificates"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#domain"></use></svg><span class="nav-label">Domains &amp; DNS</span></a>
                     <a class="nav-item @(path.StartsWithSegments("/Access") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Access") ? "page" : null)" asp-page="/Access/Index" title="@T["Access groups"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#access"></use></svg><span class="nav-label">@T["Access groups"]</span></a>
-                    <a class="nav-item @(path.StartsWithSegments("/Operations/Dns") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Operations/Dns") ? "page" : null)" asp-page="/Operations/Dns" title="@T["DNS and DDNS"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#dns"></use></svg><span class="nav-label">@T["DNS and DDNS"]</span></a>
                 }
 
-                <span class="nav-section">@T["Operations"]</span>
+                <span class="nav-section">Monitoring</span>
+                <a class="nav-item @(trafficPath ? "nav-item--active" : string.Empty)" aria-current="@(trafficPath ? "page" : null)" asp-page="/Traffic/Index" title="@T["Traffic"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#traffic"></use></svg><span class="nav-label">@T["Traffic"]</span></a>
+                <a class="nav-item @(requestsPath ? "nav-item--active" : string.Empty)" aria-current="@(requestsPath ? "page" : null)" asp-page="/Requests/Index" title="@T["Requests"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#requests"></use></svg><span class="nav-label">@T["Requests"]</span></a>
                 <a class="nav-item @(path.StartsWithSegments("/Security") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Security") ? "page" : null)" asp-page="/Security/Overview" title="@T["Bots and security"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#security"></use></svg><span class="nav-label">@T["Bots and security"]</span></a>
-                <a class="nav-item @(path.StartsWithSegments("/Performance") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Performance") ? "page" : null)" asp-page="/Performance/Index" title="@T["Errors and performance"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#performance"></use></svg><span class="nav-label">@T["Errors and performance"]</span></a>
-                <a class="nav-item @(path.StartsWithSegments("/LiveLog") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/LiveLog") ? "page" : null)" asp-page="/LiveLog/Index" title="@T["Live log"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#terminal"></use></svg><span class="nav-label">@T["Live log"]</span></a>
-                @if (User.IsInRole("admin"))
-                {
-                    <a class="nav-item @(path.StartsWithSegments("/Operations/Health") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Operations/Health") ? "page" : null)" asp-page="/Operations/Health" title="@T["Health checks"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#health"></use></svg><span class="nav-label">@T["Health checks"]</span></a>
-                    <a class="nav-item @(path.StartsWithSegments("/Operations/Jobs") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Operations/Jobs") ? "page" : null)" asp-page="/Operations/Jobs" title="@T["Jobs"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#jobs"></use></svg><span class="nav-label">@T["Jobs"]</span></a>
-                }
-                <a class="nav-item @(path.StartsWithSegments("/System") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/System") ? "page" : null)" asp-page="/SystemStatus/Index" title="@T["System"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#system"></use></svg><span class="nav-label">@T["System"]</span></a>
 
-                @if (User.IsInRole("admin"))
-                {
-                    <span class="nav-section">@T["Administration"]</span>
-                    <a class="nav-item @(path.StartsWithSegments("/Operations/Notifications") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Operations/Notifications") ? "page" : null)" asp-page="/Operations/Notifications" title="@T["Notifications"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#notifications"></use></svg><span class="nav-label">@T["Notifications"]</span></a>
-                    <a class="nav-item @(path.StartsWithSegments("/Operations/Backup") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Operations/Backup") ? "page" : null)" asp-page="/Operations/Backup" title="@T["Backup and diagnostics"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#backup"></use></svg><span class="nav-label">@T["Backup and diagnostics"]</span></a>
-                    <a class="nav-item @(path.StartsWithSegments("/Operations/Cutover") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Operations/Cutover") ? "page" : null)" asp-page="/Operations/Cutover" title="@T["Migration and rollback"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#migration"></use></svg><span class="nav-label">@T["Migration and rollback"]</span></a>
-                    <a class="nav-item @(path.StartsWithSegments("/Administration/Security") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Administration/Security") ? "page" : null)" asp-page="/Administration/Security" title="@T["Security"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#lock"></use></svg><span class="nav-label">@T["Security"]</span></a>
-                }
+                <span class="nav-section">@T["System"]</span>
+                <a class="nav-item @(systemPath ? "nav-item--active" : string.Empty)" aria-current="@(systemPath ? "page" : null)" asp-page="/SystemStatus/Index" title="@T["System"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#system"></use></svg><span class="nav-label">@T["System"]</span></a>
             </nav>
 
             <div class="sidebar-footer">
