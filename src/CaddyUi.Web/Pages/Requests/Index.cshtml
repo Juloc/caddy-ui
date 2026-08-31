@@ -3,7 +3,14 @@
 @{
     ViewData["Title"] = T["Requests"];
 }
-<section class="page-heading"><div><p class="eyebrow">@T["Raw events"]</p><h1>@T["Requests"]</h1><p class="page-description">@T["Every HTTP request processed by the server appears exactly once. Sensitive query and header values were redacted before storage."]</p></div><span class="status-badge status-badge--neutral">@T["{0} entries", Model.Requests.Count]</span></section>
+<section class="page-heading">
+    <div><p class="eyebrow">@T["Raw events"]</p><h1>@T["Requests"]</h1><p class="page-description">@T["Every HTTP request processed by the server appears exactly once. Sensitive query and header values were redacted before storage."]</p></div>
+    <div class="page-actions">
+        <span class="status-badge status-badge--neutral">@T["{0} entries", Model.Requests.Count]</span>
+        <a class="button button--quiet" asp-page="/LiveLog/Index">Live-Log</a>
+        <a class="button button--quiet" asp-page="/Traffic/Index">@T["Traffic"]</a>
+    </div>
+</section>
 @if (!string.IsNullOrWhiteSpace(Model.LoadError))
 {
     <div class="notice notice--warning"><strong>@T["Requests are currently unavailable"]</strong><span>@Model.LoadError</span><small>@T["Check PostgreSQL migrations, the analytics worker, and the mounted Caddy logs."]</small></div>
