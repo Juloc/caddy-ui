@@ -70,6 +70,7 @@ public static class DependencyInjection
 
         services.AddSingleton(operationsOptions);
         services.AddSingleton<OperationsStore>();
+        services.AddSingleton<DdnsProvisioningStore>();
         services.AddSingleton<SecretReferenceResolver>();
         services.AddSingleton<ISecretReferenceResolver>(serviceProvider =>
             serviceProvider.GetRequiredService<SecretReferenceResolver>());
@@ -123,7 +124,7 @@ public static class DependencyInjection
         services.AddHostedService<AnalyticsIngestionWorker>();
         services.AddHostedService<AnalyticsMaintenanceWorker>();
         services.AddSingleton(ipSecurityOptions);
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimeProvider.System);
         services.AddSingleton<IpAddressClassifier>();
         services.AddSingleton<ClientRiskEngine>();
         services.AddSingleton<IpIntelligenceStore>();
