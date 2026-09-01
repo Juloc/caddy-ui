@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using CaddyUi.Infrastructure.Certificates;
 using CaddyUi.Infrastructure.Management;
+using CaddyUi.Infrastructure.Operations;
 using CaddyUi.Infrastructure.Routing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,9 @@ namespace CaddyUi.Web.Pages.Administration;
 public sealed class DomainsModel : LocalizedPageModel
 {
     private readonly DomainProviderStore _store;
+    private readonly OperationsStore _operationsStore;
+    private readonly DdnsProvisioningStore _ddnsProvisioning;
+    private readonly DdnsService _ddns;
     private readonly CertificateStatusService _certificateStatusService;
     private readonly CaddyApplyService _applyService;
     private readonly ICaddyCommandRunner _commandRunner;
@@ -21,12 +25,18 @@ public sealed class DomainsModel : LocalizedPageModel
 
     public DomainsModel(
         DomainProviderStore store,
+        OperationsStore operationsStore,
+        DdnsProvisioningStore ddnsProvisioning,
+        DdnsService ddns,
         CertificateStatusService certificateStatusService,
         CaddyApplyService applyService,
         ICaddyCommandRunner commandRunner,
         ILogger<DomainsModel> logger)
     {
         _store = store;
+        _operationsStore = operationsStore;
+        _ddnsProvisioning = ddnsProvisioning;
+        _ddns = ddns;
         _certificateStatusService = certificateStatusService;
         _applyService = applyService;
         _commandRunner = commandRunner;
@@ -36,6 +46,9 @@ public sealed class DomainsModel : LocalizedPageModel
     public IReadOnlyList<ManagedDomainRecord> Domains { get; private set; } = Array.Empty<ManagedDomainRecord>();
 
     public IReadOnlyList<DnsProviderRecord> Providers { get; private set; } = Array.Empty<DnsProviderRecord>();
+
+    public IReadOnlyDictionary<Guid, IReadOnlyList<DdnsTargetRecord>> DdnsTargetsByDomain { get; private set; } =
+        new Dictionary<Guid, IReadOnlyList<DdnsTargetRecord>>();
 
     public IReadOnlyDictionary<Guid, DomainCertificateStatus> CertificateStatuses { get; private set; } =
         new Dictionary<Guid, DomainCertificateStatus>();
@@ -57,6 +70,7 @@ public sealed class DomainsModel : LocalizedPageModel
 
     public async Task<IActionResult> OnPostCreateAsync()
     {
+        ValidateAutomaticDnsInput();
         if (!ModelState.IsValid)
         {
             await LoadAsync();
@@ -65,7 +79,7 @@ public sealed class DomainsModel : LocalizedPageModel
 
         try
         {
-            await _store.CreateDomainWithCertificatePlanAsync(
+            var domainId = await _store.CreateDomainWithCertificatePlanAsync(
                 Input.Name,
                 Input.DisplayName,
                 Input.DnsProviderId,
@@ -73,7 +87,49 @@ public sealed class DomainsModel : LocalizedPageModel
                 Input.RequestBaseCertificate,
                 Input.MakeDefault,
                 HttpContext.RequestAborted);
-            TempData["Message"] = "Domain wurde als Entwurf angelegt. Zertifikate werden erst nach Vorschau und Apply beschafft.";
+
+            if (!Input.ConfigureDnsAutomatically)
+            {
+                TempData["Message"] =
+                    "Domain wurde als Entwurf angelegt. DNS wurde nicht verändert. Zertifikate werden erst nach Vorschau und Apply beschafft.";
+                return RedirectToPage();
+            }
+
+            var providerId = Input.DnsProviderId!.Value;
+            var configurations = BuildAutomaticDnsTargets(Input).ToArray();
+            var targetIds = await _ddnsProvisioning.UpsertTargetsAsync(
+                domainId,
+                providerId,
+                configurations,
+                Input.DdnsIntervalSeconds,
+                HttpContext.RequestAborted);
+
+            var allTargets = await _operationsStore.ListDdnsTargetsAsync(HttpContext.RequestAborted);
+            var createdTargets = allTargets
+                .Where(target => targetIds.Contains(target.Id))
+                .ToArray();
+            var syncResults = new List<(DdnsTargetRecord Target, ProviderOperationResult Result)>();
+            foreach (var target in createdTargets)
+            {
+                syncResults.Add((target, await _ddns.RunAsync(target, HttpContext.RequestAborted)));
+            }
+
+            var failures = syncResults.Where(item => !item.Result.Succeeded).ToArray();
+            if (failures.Length == 0)
+            {
+                var targets = string.Join(
+                    ", ",
+                    createdTargets.Select(target => $"{target.RecordType} {target.Fqdn}"));
+                TempData["Message"] =
+                    $"Domain wurde angelegt. Automatisches DNS ist für {targets} eingerichtet und der erste Sync wurde ausgeführt. Caddy bleibt bis Vorschau und Apply unverändert.";
+            }
+            else
+            {
+                TempData["Error"] =
+                    "Domain und DDNS-Ziele wurden gespeichert, aber der erste DNS-Sync ist fehlgeschlagen: " +
+                    string.Join(" | ", failures.Select(item => $"{item.Target.RecordType} {item.Target.Fqdn}: {item.Result.Message}"));
+            }
+
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -158,6 +214,73 @@ public sealed class DomainsModel : LocalizedPageModel
         return RedirectToPage();
     }
 
+    private void ValidateAutomaticDnsInput()
+    {
+        if (!Input.ConfigureDnsAutomatically)
+        {
+            return;
+        }
+
+        if (Input.DnsProviderId is null)
+        {
+            ModelState.AddModelError(
+                "Input.DnsProviderId",
+                "Für automatische DNS-Einrichtung muss ein DNS-Provider ausgewählt sein.");
+        }
+
+        if (!Input.ConfigureRootRecord && !Input.ConfigureWildcardRecord)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Wähle mindestens die Basisdomain (@) oder den Wildcard-DNS-Eintrag (*).");
+        }
+
+        if (!Input.ConfigureIpv4 && !Input.ConfigureIpv6)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Wähle mindestens IPv4 (A) oder IPv6 (AAAA) für automatische DNS-Einrichtung.");
+        }
+    }
+
+    public static IEnumerable<DdnsTargetConfiguration> BuildAutomaticDnsTargets(DomainInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var names = new List<string>(2);
+        if (input.ConfigureRootRecord)
+        {
+            names.Add("@");
+        }
+        if (input.ConfigureWildcardRecord)
+        {
+            names.Add("*");
+        }
+
+        var recordTypes = new List<string>(2);
+        if (input.ConfigureIpv4)
+        {
+            recordTypes.Add("A");
+        }
+        if (input.ConfigureIpv6)
+        {
+            recordTypes.Add("AAAA");
+        }
+
+        foreach (var name in names)
+        {
+            foreach (var recordType in recordTypes)
+            {
+                yield return new DdnsTargetConfiguration(
+                    name,
+                    recordType,
+                    "public",
+                    string.Empty,
+                    input.KeepIpUpdated);
+            }
+        }
+    }
+
     private async Task LoadAsync()
     {
         Domains = await _store.ListDomainsAsync(HttpContext.RequestAborted);
@@ -165,6 +288,17 @@ public sealed class DomainsModel : LocalizedPageModel
         Providers = allProviders
             .Where(provider => provider.Enabled)
             .ToArray();
+
+        var ddnsTargets = await _operationsStore.ListDdnsTargetsAsync(HttpContext.RequestAborted);
+        DdnsTargetsByDomain = ddnsTargets
+            .GroupBy(target => target.DomainId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<DdnsTargetRecord>)group
+                    .OrderBy(target => target.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(target => target.RecordType, StringComparer.Ordinal)
+                    .ToArray());
+
         CertificateStatuses = await _certificateStatusService.GetDomainStatusesAsync(HttpContext.RequestAborted);
         DnsChallengeTimings = Domains
             .Where(domain => domain.DnsProviderId is not null)
@@ -185,6 +319,17 @@ public sealed class DomainsModel : LocalizedPageModel
             "renewal-due" or "requested" or "draft" or "renewing" or "obtaining" or
                 "retry-scheduled" or "renewal-pending" or "verifying" => "status-badge--warning",
             "blocked" or "expired" or "renewal-failed" or "acquisition-failed" => "status-badge--danger",
+            _ => "status-badge--neutral",
+        };
+    }
+
+    public static string DdnsStatusClass(string state)
+    {
+        return state switch
+        {
+            "ok" => "status-badge--ok",
+            "failed" => "status-badge--danger",
+            "pending" => "status-badge--warning",
             _ => "status-badge--neutral",
         };
     }
@@ -489,6 +634,21 @@ public sealed class DomainsModel : LocalizedPageModel
         public bool RequestWildcardCertificate { get; set; } = true;
 
         public bool RequestBaseCertificate { get; set; } = true;
+
+        public bool ConfigureDnsAutomatically { get; set; } = true;
+
+        public bool ConfigureRootRecord { get; set; } = true;
+
+        public bool ConfigureWildcardRecord { get; set; } = true;
+
+        public bool ConfigureIpv4 { get; set; } = true;
+
+        public bool ConfigureIpv6 { get; set; }
+
+        public bool KeepIpUpdated { get; set; } = true;
+
+        [Range(60, 86400)]
+        public int DdnsIntervalSeconds { get; set; } = 300;
 
         public bool MakeDefault { get; set; }
     }
