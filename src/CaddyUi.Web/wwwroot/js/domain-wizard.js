@@ -21,7 +21,6 @@
             automaticDns.checked = true;
         }
 
-        automaticDns.disabled = !providerSelected;
         const enabled = providerSelected && automaticDns.checked;
         for (const field of automaticDnsFields) {
             field.disabled = !enabled;
