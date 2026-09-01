@@ -11,14 +11,10 @@
         return;
     }
 
-    let automaticDnsTouched = false;
-
     const updateAutomaticDnsFields = () => {
         const providerSelected = provider.value.length > 0;
         if (!providerSelected) {
             automaticDns.checked = false;
-        } else if (!automaticDnsTouched) {
-            automaticDns.checked = true;
         }
 
         const enabled = providerSelected && automaticDns.checked;
@@ -27,13 +23,10 @@
         }
     };
 
-    automaticDns.addEventListener('change', () => {
-        automaticDnsTouched = true;
-        updateAutomaticDnsFields();
-    });
+    automaticDns.addEventListener('change', updateAutomaticDnsFields);
 
     provider.addEventListener('change', () => {
-        automaticDnsTouched = false;
+        automaticDns.checked = provider.value.length > 0;
         updateAutomaticDnsFields();
     });
 
