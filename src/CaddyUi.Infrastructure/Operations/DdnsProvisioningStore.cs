@@ -76,7 +76,7 @@ public sealed class DdnsProvisioningStore
                         @id, @domain_id, @provider_id, @name, @record_type, @enabled,
                         @interval_seconds, @address_source, @static_value, '',
                         @now, NULL, 'pending', '', @now, @now)
-                    ON CONFLICT (domain_id, lower(name), record_type)
+                    ON CONFLICT (domain_id, (lower(name)), record_type)
                     DO UPDATE SET
                         provider_id = EXCLUDED.provider_id,
                         enabled = EXCLUDED.enabled,
