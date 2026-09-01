@@ -12,6 +12,7 @@ namespace CaddyUi.Web.Pages.Operations;
 public sealed class DnsModel : LocalizedPageModel
 {
     private readonly OperationsStore _store;
+    private readonly DdnsProvisioningStore _provisioning;
     private readonly DomainProviderStore _management;
     private readonly DnsProviderRuntimeService _providers;
     private readonly DdnsService _ddns;
@@ -19,12 +20,14 @@ public sealed class DnsModel : LocalizedPageModel
 
     public DnsModel(
         OperationsStore store,
+        DdnsProvisioningStore provisioning,
         DomainProviderStore management,
         DnsProviderRuntimeService providers,
         DdnsService ddns,
         IStringLocalizer<SharedResource> localizer)
     {
         _store = store;
+        _provisioning = provisioning;
         _management = management;
         _providers = providers;
         _ddns = ddns;
@@ -127,17 +130,38 @@ public sealed class DnsModel : LocalizedPageModel
 
         try
         {
-            await _store.CreateDdnsTargetAsync(
-                DynamicInput.DomainId,
-                DynamicInput.ProviderId,
-                DynamicInput.Name,
-                DynamicInput.RecordType,
+            var domains = await _management.ListDomainsAsync(HttpContext.RequestAborted);
+            var domain = domains.FirstOrDefault(item => item.Id == DynamicInput.DomainId) ??
+                throw new InvalidOperationException(_localizer["The selected domain no longer exists."]);
+            if (!domain.Enabled)
+            {
+                throw new InvalidOperationException(_localizer["The selected domain is disabled."]);
+            }
+
+            var providerId = domain.DnsProviderId ??
+                throw new InvalidOperationException(
+                    _localizer["Assign an enabled DNS provider to the domain before creating DDNS."]);
+
+            var targetIds = await _provisioning.UpsertTargetsAsync(
+                domain.Id,
+                providerId,
+                [new DdnsTargetConfiguration(
+                    DynamicInput.Name,
+                    DynamicInput.RecordType,
+                    DynamicInput.AddressSource,
+                    DynamicInput.StaticValue,
+                    true)],
                 DynamicInput.IntervalSeconds,
-                DynamicInput.AddressSource,
-                DynamicInput.StaticValue,
                 HttpContext.RequestAborted);
-            TempData["Message"] = _localizer["DDNS target created."];
-            return RedirectToPage();
+
+            var targetId = targetIds.Single();
+            var target = (await _store.ListDdnsTargetsAsync(HttpContext.RequestAborted))
+                .First(item => item.Id == targetId);
+            var result = await _ddns.RunAsync(target, HttpContext.RequestAborted);
+            TempData[result.Succeeded ? "Message" : "Error"] = result.Succeeded
+                ? _localizer["DDNS target saved and synchronized. {0}", result.Message]
+                : _localizer["DDNS target was saved, but the initial synchronization failed: {0}", result.Message];
+            return RedirectToPage("/Operations/Dns", null, null, "ddns-targets");
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
@@ -153,7 +177,7 @@ public sealed class DnsModel : LocalizedPageModel
         TempData["Message"] = enabled
             ? _localizer["DDNS target enabled."]
             : _localizer["DDNS target disabled."];
-        return RedirectToPage();
+        return RedirectToPage("/Operations/Dns", null, null, "ddns-targets");
     }
 
     public async Task<IActionResult> OnPostRunDdnsAsync(Guid targetId)
@@ -163,7 +187,7 @@ public sealed class DnsModel : LocalizedPageModel
             throw new InvalidOperationException(_localizer["The DDNS target no longer exists."]);
         var result = await _ddns.RunAsync(target, HttpContext.RequestAborted);
         TempData[result.Succeeded ? "Message" : "Error"] = result.Message;
-        return RedirectToPage();
+        return RedirectToPage("/Operations/Dns", null, null, "ddns-targets");
     }
 
     private void RemoveModelStatePrefix(string prefix)
@@ -213,9 +237,6 @@ public sealed class DnsModel : LocalizedPageModel
     {
         [Required]
         public Guid DomainId { get; set; }
-
-        [Required]
-        public Guid ProviderId { get; set; }
 
         [MaxLength(253)]
         public string Name { get; set; } = "@";
