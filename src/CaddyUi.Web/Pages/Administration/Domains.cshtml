@@ -19,6 +19,7 @@
             <span class="status-badge status-badge--warning">@T["Attempt running"]</span>
         }
         <a class="button button--quiet" asp-page="/Administration/Domains">@T["Refresh status"]</a>
+        <a class="button button--quiet" asp-page="/Operations/Dns" asp-fragment="ddns-targets">DNS &amp; DDNS</a>
         <a class="button button--quiet" asp-page="/Setup/Index">@T["Guided setup"]</a>
         <a class="button button--primary" href="?create-domain=1" data-dialog-open="create-domain-dialog">@T["Add domain"]</a>
     </div>
@@ -49,6 +50,7 @@
                 {
                     Model.CertificateStatuses.TryGetValue(domain.Id, out var certificateStatus);
                     Model.DnsChallengeTimings.TryGetValue(domain.Id, out var dnsTiming);
+                    Model.DdnsTargetsByDomain.TryGetValue(domain.Id, out var ddnsTargets);
                     <tr>
                         <td data-label="@T["Domain"]">
                             <strong>@domain.DisplayName</strong>
@@ -62,7 +64,21 @@
                             <strong>@(domain.DnsProviderLabel ?? T["Not assigned"])</strong>
                             @if (domain.DnsProviderId is null)
                             {
-                                <small>@T["Required for wildcard certificates."]</small>
+                                <small>@T["Required for wildcard certificates and automatic DNS."]</small>
+                            }
+                            else if (ddnsTargets is { Count: > 0 })
+                            {
+                                <div class="certificate-status-list">
+                                    @foreach (var target in ddnsTargets)
+                                    {
+                                        <span class="status-badge @DomainsModel.DdnsStatusClass(target.LastStatus)">@target.RecordType @target.Name · @target.LastStatus</span>
+                                    }
+                                </div>
+                                <small><a asp-page="/Operations/Dns" asp-fragment="ddns-targets">@T["Manage DDNS"]</a></small>
+                            }
+                            else
+                            {
+                                <small>@T["No DDNS target configured."] <a asp-page="/Operations/Dns" asp-fragment="create-ddns">@T["Add DDNS"]</a></small>
                             }
                         </td>
                         <td data-label="@T["Certificates"]">
@@ -251,7 +267,7 @@
 <dialog id="create-domain-dialog" class="dialog-surface dialog-surface--wide" data-dialog aria-labelledby="create-domain-dialog-title" open="@(createDomainOpen ? "open" : null)">
     <div class="dialog-layout">
         <header class="dialog-header">
-            <div><h2 id="create-domain-dialog-title">@T["Add domain"]</h2><p>@T["Create a protected draft before configuring Caddy."]</p></div>
+            <div><h2 id="create-domain-dialog-title">@T["Add domain"]</h2><p>@T["Create the domain, certificate plan, and optional automatic DNS configuration in one guided step."]</p></div>
             <a class="button button--compact button--quiet" asp-page="./Domains" data-dialog-close>@T["Close"]</a>
         </header>
         <div class="dialog-body">
@@ -268,15 +284,21 @@
                 </label>
                 <label class="field">
                     <span class="field-label">@T["DNS provider"]</span>
-                    <select asp-for="Input.DnsProviderId">
+                    <select asp-for="Input.DnsProviderId" data-domain-provider>
                         <option value="">@T["Assign later"]</option>
                         @foreach (var provider in Model.Providers)
                         {
                             <option value="@provider.Id">@provider.Label · @provider.ProviderType</option>
                         }
                     </select>
-                    <small>@T["Required for wildcard certificates. The domain can still be stored safely as a blocked draft."]</small>
+                    <span asp-validation-for="Input.DnsProviderId" class="field-error"></span>
+                    <small>@T["Required for wildcard certificates and automatic A/AAAA/DDNS configuration."]</small>
                 </label>
+
+                <div class="safe-apply-note">
+                    <strong>@T["Certificates"]</strong>
+                    <span>@T["Choose which names Caddy should obtain certificates for after preview and apply."]</span>
+                </div>
                 <label class="check certificate-choice">
                     <input asp-for="Input.RequestWildcardCertificate" data-certificate-choice />
                     <span><strong>@T["Wildcard certificate"]</strong><small><code>*.example.com</code> @T["for direct subdomains."]</small></span>
@@ -286,13 +308,55 @@
                     <span><strong>@T["Base-domain certificate"]</strong><small><code>example.com</code> @T["is not included in the wildcard certificate."]</small></span>
                 </label>
                 <div class="notice notice--warning" data-certificate-warning hidden>@T["Select at least one certificate type."]</div>
+
+                <div class="safe-apply-note">
+                    <strong>@T["Automatic DNS"]</strong>
+                    <span>@T["Optionally point the base domain and wildcard DNS directly to this server and keep the public IP current with DDNS."]</span>
+                </div>
+                <label class="check">
+                    <input asp-for="Input.ConfigureDnsAutomatically" data-domain-auto-dns />
+                    <span><strong>@T["Configure DNS automatically"]</strong><small>@T["Uses the selected provider and performs an initial synchronization immediately."]</small></span>
+                </label>
+                <div class="form-grid form-grid--two">
+                    <label class="check">
+                        <input asp-for="Input.ConfigureRootRecord" data-domain-auto-dns-field />
+                        <span><strong>@T["Base domain (@)"]</strong><small><code>example.com</code></small></span>
+                    </label>
+                    <label class="check">
+                        <input asp-for="Input.ConfigureWildcardRecord" data-domain-auto-dns-field />
+                        <span><strong>@T["Wildcard DNS (*)"]</strong><small><code>*.example.com</code></small></span>
+                    </label>
+                    <label class="check">
+                        <input asp-for="Input.ConfigureIpv4" data-domain-auto-dns-field />
+                        <span><strong>IPv4 (A)</strong><small>@T["Detect the public IPv4 address."]</small></span>
+                    </label>
+                    <label class="check">
+                        <input asp-for="Input.ConfigureIpv6" data-domain-auto-dns-field />
+                        <span><strong>IPv6 (AAAA)</strong><small>@T["Optional. Enable only when this server has working public IPv6."]</small></span>
+                    </label>
+                    <label class="check form-span">
+                        <input asp-for="Input.KeepIpUpdated" data-domain-auto-dns-field />
+                        <span><strong>@T["Keep IP automatically updated (DDNS)"]</strong><small>@T["When disabled, the first sync still runs once, but the target is not scheduled afterwards."]</small></span>
+                    </label>
+                    <label class="field form-span">
+                        <span class="field-label">@T["DDNS check interval"]</span>
+                        <select asp-for="Input.DdnsIntervalSeconds" data-domain-auto-dns-field>
+                            <option value="60">1 min</option>
+                            <option value="300">5 min</option>
+                            <option value="900">15 min</option>
+                            <option value="3600">1 h</option>
+                        </select>
+                        <small>@T["A DNS update is only sent when the detected IP changed."]</small>
+                    </label>
+                </div>
+
                 <label class="check">
                     <input asp-for="Input.MakeDefault" />
                     <span><strong>@T["Use as default domain"]</strong><small>@T["New routes select this domain first."]</small></span>
                 </label>
                 <div class="safe-apply-note">
-                    <strong>@T["Draft only"]</strong>
-                    <span>@T["Creating a domain does not change Caddy. Certificate acquisition starts only after preview, validation, and apply."]</span>
+                    <strong>@T["Safe apply"]</strong>
+                    <span>@T["Caddy routing and certificate configuration remains a draft until preview, validation, and apply. If automatic DNS is enabled, DNS records are synchronized immediately and every result remains visible under DNS & DDNS."]</span>
                 </div>
             </form>
         </div>
@@ -315,4 +379,5 @@
 
 @section Scripts {
     <script src="~/js/certificate-diagnostics.js" asp-append-version="true" defer></script>
+    <script src="~/js/domain-wizard.js" asp-append-version="true" defer></script>
 }
