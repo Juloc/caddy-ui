@@ -77,9 +77,10 @@ public sealed class DomainsModel : LocalizedPageModel
             return Page();
         }
 
+        Guid domainId;
         try
         {
-            var domainId = await _store.CreateDomainWithCertificatePlanAsync(
+            domainId = await _store.CreateDomainWithCertificatePlanAsync(
                 Input.Name,
                 Input.DisplayName,
                 Input.DnsProviderId,
@@ -87,14 +88,23 @@ public sealed class DomainsModel : LocalizedPageModel
                 Input.RequestBaseCertificate,
                 Input.MakeDefault,
                 HttpContext.RequestAborted);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            ModelState.AddModelError("Input.Name", exception.Message);
+            await LoadAsync();
+            return Page();
+        }
 
-            if (!Input.ConfigureDnsAutomatically)
-            {
-                TempData["Message"] =
-                    "Domain wurde als Entwurf angelegt. DNS wurde nicht verändert. Zertifikate werden erst nach Vorschau und Apply beschafft.";
-                return RedirectToPage();
-            }
+        if (!Input.ConfigureDnsAutomatically)
+        {
+            TempData["Message"] =
+                "Domain wurde als Entwurf angelegt. DNS wurde nicht verändert. Zertifikate werden erst nach Vorschau und Apply beschafft.";
+            return RedirectToPage();
+        }
 
+        try
+        {
             var providerId = Input.DnsProviderId!.Value;
             var configurations = BuildAutomaticDnsTargets(Input).ToArray();
             var targetIds = await _ddnsProvisioning.UpsertTargetsAsync(
@@ -129,15 +139,15 @@ public sealed class DomainsModel : LocalizedPageModel
                     "Domain und DDNS-Ziele wurden gespeichert, aber der erste DNS-Sync ist fehlgeschlagen: " +
                     string.Join(" | ", failures.Select(item => $"{item.Target.RecordType} {item.Target.Fqdn}: {item.Result.Message}"));
             }
-
-            return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
-            ModelState.AddModelError(string.Empty, exception.Message);
-            await LoadAsync();
-            return Page();
+            TempData["Error"] =
+                $"Die Domain wurde angelegt, aber die automatische DNS-/DDNS-Einrichtung konnte nicht gespeichert werden: {exception.Message} " +
+                "Die Domain bleibt erhalten und kann unter DNS & DDNS fertig eingerichtet werden.";
         }
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostDefaultAsync(Guid domainId)
@@ -231,14 +241,14 @@ public sealed class DomainsModel : LocalizedPageModel
         if (!Input.ConfigureRootRecord && !Input.ConfigureWildcardRecord)
         {
             ModelState.AddModelError(
-                string.Empty,
+                "Input.ConfigureRootRecord",
                 "Wähle mindestens die Basisdomain (@) oder den Wildcard-DNS-Eintrag (*).");
         }
 
         if (!Input.ConfigureIpv4 && !Input.ConfigureIpv6)
         {
             ModelState.AddModelError(
-                string.Empty,
+                "Input.ConfigureIpv4",
                 "Wähle mindestens IPv4 (A) oder IPv6 (AAAA) für automatische DNS-Einrichtung.");
         }
     }
