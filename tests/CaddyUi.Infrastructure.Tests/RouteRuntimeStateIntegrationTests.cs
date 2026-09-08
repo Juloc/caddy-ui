@@ -8,7 +8,7 @@ using Testcontainers.PostgreSql;
 
 namespace CaddyUi.Infrastructure.Tests;
 
-[CollectionDefinition(CollectionName, DisableParallelization = true)]
+[CollectionDefinition("Route runtime state integration", DisableParallelization = true)]
 public sealed class RouteRuntimeStateIntegrationCollection
 {
     public const string CollectionName = "Route runtime state integration";
