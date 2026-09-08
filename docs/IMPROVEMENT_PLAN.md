@@ -26,11 +26,11 @@ Highest priority because the current UI can present desired database state as if
 
 - [ ] **IN PROGRESS** Define an explicit desired-vs-applied route state model. Tracking: #72
 - [ ] **IN PROGRESS** Persist or derive the last applied revision in a way the UI can compare reliably.
-- [ ] **TODO** Show `Applied`, `Apply required`, `New draft`, `Pending removal` and failed-apply states.
-- [ ] **TODO** Keep deleted-but-still-applied routes visible or otherwise explicitly represented until Apply removes them.
-- [ ] **TODO** Align enable/disable feedback with actual applied state.
-- [ ] **TODO** Add integration tests for save/toggle/delete/apply convergence and failed Apply.
-- [ ] **TODO** Update route-state documentation.
+- [ ] **IN PROGRESS** Show `Applied`, `Apply required`, `New draft`, `Pending removal` and failed-apply states.
+- [ ] **IN PROGRESS** Keep deleted-but-still-applied routes visible or otherwise explicitly represented until Apply removes them.
+- [ ] **IN PROGRESS** Align enable/disable feedback with actual applied state.
+- [ ] **IN PROGRESS** Add integration tests for save/toggle/delete/apply convergence and failed Apply.
+- [x] **DONE** Update route-state documentation. See `docs/ROUTE_STATE_MODEL.md`.
 
 ## Phase 2 - Fix simple route creation
 
