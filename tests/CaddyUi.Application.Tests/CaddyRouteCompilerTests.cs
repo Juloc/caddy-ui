@@ -279,12 +279,47 @@ public sealed class CaddyRouteCompilerTests : IDisposable
     }
 
     [Fact]
+    public void Compile_ManifestFingerprintIsDeterministicAndTracksRouteChanges()
+    {
+        var route = CreateProxy(
+            "mealie.example.com",
+            "/",
+            RouteCertificateMode.Individual,
+            null);
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var first = compiler.Compile([new CaddyRouteSource(route, string.Empty)]);
+        var second = compiler.Compile([new CaddyRouteSource(route, string.Empty)]);
+        var changed = compiler.Compile([
+            new CaddyRouteSource(
+                route with
+                {
+                    Configuration = route.Configuration with { Upstream = "mealie-new:9925" },
+                },
+                string.Empty),
+        ]);
+
+        Assert.Equal(RouteFingerprint(first), RouteFingerprint(second));
+        Assert.NotEqual(RouteFingerprint(first), RouteFingerprint(changed));
+        Assert.Equal(64, RouteFingerprint(first).Length);
+    }
+
+    [Fact]
     public void LineDiff_SeparatesAddedAndRemovedLines()
     {
         var diff = LineDiff.Create("a\nb", "a\nc");
 
         Assert.Contains(diff, line => line.Kind == DiffLineKind.Removed && line.Text == "b");
         Assert.Contains(diff, line => line.Kind == DiffLineKind.Added && line.Text == "c");
+    }
+
+    private static string RouteFingerprint(CaddyCompilation compilation)
+    {
+        using var manifest = JsonDocument.Parse(compilation.ManifestJson);
+        return manifest.RootElement
+            .GetProperty("routes")[0]
+            .GetProperty("fingerprint")
+            .GetString() ?? string.Empty;
     }
 
     private static CaddyDnsProviderSource NetcupProvider()
