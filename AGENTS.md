@@ -20,6 +20,8 @@ Caddy UI is a compact self-hosted control plane for Caddy. Its primary jobs are 
 - Use English for code, technical documentation, tests, logs and commit messages. Product UI text is German.
 - Format C# with `dotnet format` and Go with `gofmt`.
 - State-changing requests require authorization and CSRF protection.
+- Treat `docs/CODE_AUDIT.md` as the active audit problem ledger and `docs/IMPROVEMENT_PLAN.md` as the living remediation plan.
+- Update `docs/IMPROVEMENT_PLAN.md` whenever an audit item is started, materially changed, completed, blocked, cancelled or replaced. Do not let implementation status drift from the plan.
 
 ## UI rules
 
@@ -47,3 +49,4 @@ Before declaring a work item complete:
 6. Check the Fluent 2 verification matrix: desktop and mobile layouts, keyboard navigation, System/Light/Dark themes, 400% zoom, reduced motion, and empty/error/loading states.
 7. Confirm removed features and dead code are actually gone.
 8. Update the relevant architecture, operations and release documentation.
+9. Update `docs/IMPROVEMENT_PLAN.md` so the recorded status and verification evidence match the repository state.
