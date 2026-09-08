@@ -7,6 +7,32 @@ namespace CaddyUi.Application.Tests;
 public sealed class RouteRuntimeStateResolverTests
 {
     [Fact]
+    public void Resolve_EmptyDesiredStateAndMissingManagedFragmentAreConverged()
+    {
+        var desiredManifest = JsonSerializer.Serialize(new
+        {
+            schema = "managed-routes-v3",
+            certificates = Array.Empty<object>(),
+            routes = Array.Empty<object>(),
+        });
+
+        var result = RouteRuntimeStateResolver.Resolve(
+            Array.Empty<ManagedRouteDefinition>(),
+            "compiler-header-digest",
+            desiredManifest,
+            "empty-file-digest",
+            activeRevisionId: null,
+            activeManifestJson: null,
+            activeContentIsEmpty: true,
+            lastApplyFailed: false,
+            lastApplyError: string.Empty);
+
+        Assert.True(result.ActiveStateTracked);
+        Assert.False(result.HasPendingChanges);
+        Assert.Equal(0, result.ActiveRouteCount);
+    }
+
+    [Fact]
     public void Resolve_MarksMatchingFingerprintAsAppliedEvenWhenAnotherChangeIsPending()
     {
         var route = CreateRoute(enabled: true);
