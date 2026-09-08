@@ -209,9 +209,11 @@ public sealed class IndexModel : LocalizedPageModel
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
             var runtimeState = await _runtimeStateService.GetAsync(HttpContext.RequestAborted);
-            StatusMessage = runtimeState.PendingRemovals.Any(route => route.Id == id)
-                ? _localizer["Route deleted. It remains active in Caddy until the saved changes are applied."]
-                : _localizer["Route deleted. It was not active in Caddy, so no removal apply is required."];
+            StatusMessage = !runtimeState.ActiveStateTracked
+                ? _localizer["Route deleted. The active Caddy state could not be verified; review and apply the saved configuration."]
+                : runtimeState.PendingRemovals.Any(route => route.Id == id)
+                    ? _localizer["Route deleted. It remains active in Caddy until the saved changes are applied."]
+                    : _localizer["Route deleted. It was not active in Caddy, so no removal apply is required."];
             return RedirectToPage();
         }
         catch (InvalidOperationException exception)
@@ -233,7 +235,7 @@ public sealed class IndexModel : LocalizedPageModel
         RouteRuntimeState runtimeState)
     {
         ArgumentNullException.ThrowIfNull(route);
-        return runtimeState == RouteRuntimeState.Applied &&
+        return IsActiveState(runtimeState) &&
             !route.Host.StartsWith("*.", StringComparison.Ordinal);
     }
 
