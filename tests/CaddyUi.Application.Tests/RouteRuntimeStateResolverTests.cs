@@ -100,6 +100,44 @@ public sealed class RouteRuntimeStateResolverTests
     }
 
     [Fact]
+    public void Resolve_ReadsCompilerStyleManifestPropertyCasingForPendingRemoval()
+    {
+        var deletedId = Guid.NewGuid();
+        var activeManifest = JsonSerializer.Serialize(new
+        {
+            schema = "managed-routes-v3",
+            routes = new[]
+            {
+                new
+                {
+                    id = deletedId,
+                    Name = "App",
+                    Host = "app.example.com",
+                    kind = "proxy",
+                    path = "/",
+                    fingerprint = "active",
+                    generated = true,
+                },
+            },
+        });
+
+        var result = RouteRuntimeStateResolver.Resolve(
+            Array.Empty<ManagedRouteDefinition>(),
+            "desired",
+            Manifest(),
+            "active",
+            Guid.NewGuid(),
+            activeManifest,
+            activeContentIsEmpty: false,
+            lastApplyFailed: false,
+            lastApplyError: string.Empty);
+
+        var pending = Assert.Single(result.PendingRemovals);
+        Assert.Equal("App", pending.Name);
+        Assert.Equal("app.example.com", pending.Host);
+    }
+
+    [Fact]
     public void Resolve_UsesUnknownWhenActiveContentDoesNotMatchARevision()
     {
         var route = CreateRoute(enabled: true);
