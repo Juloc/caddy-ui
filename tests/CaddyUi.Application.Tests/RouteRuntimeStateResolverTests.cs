@@ -26,6 +26,25 @@ public sealed class RouteRuntimeStateResolverTests
     }
 
     [Fact]
+    public void Resolve_ExactGlobalDigestWinsOverMetadataFingerprintDifference()
+    {
+        var route = CreateRoute(enabled: true);
+        var result = RouteRuntimeStateResolver.Resolve(
+            [route],
+            "same-digest",
+            Manifest((route.Id, "new-metadata", true)),
+            "same-digest",
+            Guid.NewGuid(),
+            Manifest((route.Id, "old-metadata", true)),
+            activeContentIsEmpty: false,
+            lastApplyFailed: false,
+            lastApplyError: string.Empty);
+
+        Assert.False(result.HasPendingChanges);
+        Assert.Equal(RouteRuntimeState.Applied, result.StateFor(route.Id));
+    }
+
+    [Fact]
     public void Resolve_MarksChangedFingerprintAsApplyRequired()
     {
         var route = CreateRoute(enabled: true);
