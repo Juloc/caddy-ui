@@ -29,7 +29,7 @@ public sealed class RouteRuntimeStateService
             _options.PortalUpstream);
         var desired = compiler.Compile(sources);
 
-        var activeContent = await _applyService.ReadCurrentContentAsync(cancellationToken);
+        var activeContent = await _applyService.ReadManagedContentAsync(cancellationToken);
         var normalizedActiveContent = activeContent.Replace("\r\n", "\n", StringComparison.Ordinal);
         var activeDigest = Convert.ToHexStringLower(
             SHA256.HashData(Encoding.UTF8.GetBytes(normalizedActiveContent)));
