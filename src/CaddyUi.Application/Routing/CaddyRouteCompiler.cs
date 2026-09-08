@@ -422,7 +422,6 @@ public sealed class CaddyRouteCompiler
             certificateMode = ManagedRouteDefinition.ToStorageValue(source.Route.CertificateMode),
             domainCertificateMode = EffectiveDomainCertificateMode(source, domains),
             source.Route.AccessGroupId,
-            source.AccessGroupName,
             configuration = source.Route.Configuration,
             domainCertificate = domain is null
                 ? null
