@@ -24,13 +24,15 @@ Status values:
 
 Highest priority because the current UI can present desired database state as if it were already active in Caddy.
 
-- [ ] **TODO** Define an explicit desired-vs-applied route state model. Tracking: #72
-- [ ] **TODO** Persist or derive the last applied revision in a way the UI can compare reliably.
-- [ ] **TODO** Show `Applied`, `Apply required`, `New draft`, `Pending removal` and failed-apply states.
-- [ ] **TODO** Keep deleted-but-still-applied routes visible or otherwise explicitly represented until Apply removes them.
-- [ ] **TODO** Align enable/disable feedback with actual applied state.
-- [ ] **TODO** Add integration tests for save/toggle/delete/apply convergence and failed Apply.
-- [ ] **TODO** Update route-state documentation.
+- [x] **DONE** Define an explicit desired-vs-applied route state model. Tracking: #72
+- [x] **DONE** Derive the active revision from the actual managed-fragment digest, including rollback-safe matching.
+- [x] **DONE** Show `Applied`, `Apply required`, `New draft`, `Pending removal`, `Disabled`, `Unknown` and failed-apply states.
+- [x] **DONE** Keep deleted-but-still-applied routes visible until Apply removes them.
+- [x] **DONE** Align enable/disable/delete feedback with actual applied state.
+- [x] **DONE** Add PostgreSQL + Apply lifecycle integration tests for save/toggle/delete/apply convergence and failed Apply.
+- [x] **DONE** Update route-state documentation. See `docs/ROUTE_STATE_MODEL.md`.
+
+Verification evidence for Phase 1: PR #73, GitHub Actions **Verify .NET application** run #208 — restore, formatting, Release build, all .NET tests, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke tests including `/Routing`, SQLite migration CLI and bundled Caddy module verification all passed.
 
 ## Phase 2 - Fix simple route creation
 

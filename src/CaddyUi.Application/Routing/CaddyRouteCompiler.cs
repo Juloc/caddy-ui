@@ -272,6 +272,7 @@ public sealed class CaddyRouteCompiler
                 domainCertificateMode = EffectiveDomainCertificateMode(source, domains),
                 accessGroupId = source.Route.AccessGroupId,
                 accessGroupName = source.AccessGroupName,
+                fingerprint = RouteFingerprint(source, domains),
                 generated = processedRoutes.Contains(source.Route.Id),
             }),
         };
@@ -400,6 +401,52 @@ public sealed class CaddyRouteCompiler
             warnings.Add(error);
             return CertificateState.Blocked(error, provider.ProviderType);
         }
+    }
+
+    private static string RouteFingerprint(
+        CaddyRouteSource source,
+        IReadOnlyDictionary<Guid, CaddyDomainCertificateSource> domains)
+    {
+        domains.TryGetValue(source.Route.DomainId, out var domain);
+        var provider = domain?.Provider ?? source.DnsProvider;
+        var payload = JsonSerializer.Serialize(new
+        {
+            source.Route.Id,
+            source.Route.Name,
+            source.Route.DomainId,
+            source.Route.DomainName,
+            source.Route.Subdomain,
+            source.Route.Host,
+            kind = ManagedRouteDefinition.ToStorageValue(source.Route.Kind),
+            source.Route.SortOrder,
+            certificateMode = ManagedRouteDefinition.ToStorageValue(source.Route.CertificateMode),
+            domainCertificateMode = EffectiveDomainCertificateMode(source, domains),
+            source.Route.AccessGroupId,
+            configuration = source.Route.Configuration,
+            domainCertificate = domain is null
+                ? null
+                : new
+                {
+                    domain.RequestWildcardCertificate,
+                    domain.RequestBaseCertificate,
+                },
+            dnsProvider = provider is null
+                ? null
+                : new
+                {
+                    provider.ProviderType,
+                    provider.Enabled,
+                    provider.ModuleInstalled,
+                    settings = provider.Settings
+                        .OrderBy(item => item.Key, StringComparer.Ordinal)
+                        .Select(item => new { item.Key, item.Value }),
+                    secretReferences = provider.SecretReferences
+                        .OrderBy(item => item.Key, StringComparer.Ordinal)
+                        .Select(item => new { item.Key, item.Value }),
+                },
+        });
+        return Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
     }
 
     private static string EffectiveDomainCertificateMode(

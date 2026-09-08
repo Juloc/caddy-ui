@@ -27,12 +27,45 @@
 }
 <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
 
+@if (!Model.RuntimeState.ActiveStateTracked)
+{
+    <div class="notice notice--warning" role="status">
+        Die aktive Caddy-Konfiguration entspricht keiner bekannten Revision. Der Runtime-Status kann nicht sicher einzelnen Routen zugeordnet werden.
+        <a asp-page="/Routing/Preview">Vorschau prüfen</a>
+    </div>
+}
+else if (Model.RuntimeState.LastApplyFailed)
+{
+    <div class="notice notice--danger" role="alert">
+        Das letzte Anwenden der aktuellen Änderungen ist fehlgeschlagen. Die vorherige Caddy-Konfiguration bleibt aktiv.
+        @if (!string.IsNullOrWhiteSpace(Model.RuntimeState.LastApplyError))
+        {
+            <span>@Model.RuntimeState.LastApplyError</span>
+        }
+        <a asp-page="/Routing/Preview">Vorschau &amp; anwenden</a>
+    </div>
+}
+else if (Model.RuntimeState.HasPendingChanges)
+{
+    <div class="notice notice--warning" role="status">
+        Gespeicherte Änderungen sind noch nicht vollständig in Caddy aktiv.
+        <a asp-page="/Routing/Preview">Vorschau &amp; anwenden</a>
+    </div>
+}
+
 <section class="route-overview" aria-label="Domain-Routen">
     <header class="route-overview-header">
         <div>
             <strong>@Model.DomainGroups.Count Domains</strong>
             <span>· @Model.Routes.Count Routen</span>
-            <span>· @Model.Routes.Count(route => route.Definition.Enabled) aktiv</span>
+            @if (Model.RuntimeState.ActiveStateTracked)
+            {
+                <span>· @Model.RuntimeState.ActiveRouteCount in Caddy aktiv</span>
+            }
+            else
+            {
+                <span>· Aktivstatus unbekannt</span>
+            }
         </div>
         <details class="route-overview-more">
             <summary class="button button--compact button--quiet">Weitere Optionen</summary>
@@ -67,7 +100,14 @@
                         {
                             <span>@group.Domain.DisplayName</span>
                         }
-                        <small>@group.Routes.Count Routen · @group.Routes.Count(route => route.Definition.Enabled) aktiv</small>
+                        @if (Model.RuntimeState.ActiveStateTracked)
+                        {
+                            <small>@group.Routes.Count Routen · @Model.ActiveRouteCount(group.Routes) in Caddy aktiv</small>
+                        }
+                        else
+                        {
+                            <small>@group.Routes.Count Routen · Aktivstatus unbekannt</small>
+                        }
                     </div>
                     @if (group.Domain.Enabled)
                     {
@@ -98,6 +138,7 @@
                                 ManagedRouteKind.Custom => "Custom Caddyfile",
                                 _ => string.Empty,
                             };
+                            var runtimeState = Model.StateFor(definition.Id);
                             <li class="domain-route-row @(definition.Enabled ? null : "domain-route-row--disabled")">
                                 <div class="domain-route-address">
                                     <strong>@definition.Host</strong>
@@ -116,12 +157,12 @@
                                     {
                                         <span class="status-badge status-badge--neutral">Öffentlich</span>
                                     }
-                                    <span class="status-badge @(definition.Enabled ? "status-badge--ok" : "status-badge--neutral")">
-                                        @(definition.Enabled ? "Aktiv" : "Deaktiviert")
+                                    <span class="status-badge @IndexModel.StateBadgeClass(runtimeState)">
+                                        @IndexModel.StateLabel(runtimeState)
                                     </span>
                                 </div>
                                 <div class="domain-route-actions">
-                                    @if (IndexModel.CanOpen(definition))
+                                    @if (IndexModel.CanOpen(definition, runtimeState))
                                     {
                                         <a class="button button--compact button--quiet"
                                            href="@IndexModel.PublicUrl(definition)"
@@ -234,4 +275,41 @@
             </div>
         }
     </div>
+
+    @if (Model.RuntimeState.PendingRemovals.Count > 0)
+    {
+        <section class="domain-route-group" aria-label="Gelöschte, noch aktive Routen">
+            <header class="domain-route-header">
+                <div class="domain-route-heading">
+                    <div class="domain-route-title">
+                        <h2>Noch in Caddy aktiv</h2>
+                        <span class="status-badge status-badge--warning">Entfernung offen</span>
+                    </div>
+                    <small>Diese Routen wurden bereits gelöscht, bleiben aber bis zum nächsten Anwenden aktiv.</small>
+                </div>
+                <a class="button button--primary" asp-page="/Routing/Preview">Vorschau &amp; anwenden</a>
+            </header>
+            <ul class="domain-route-list">
+                @foreach (var pending in Model.RuntimeState.PendingRemovals)
+                {
+                    <li class="domain-route-row domain-route-row--disabled">
+                        <div class="domain-route-address">
+                            <strong>@pending.Host</strong>
+                            <small>@pending.Name@if (pending.Path != "/") { <text> · @pending.Path</text> }</small>
+                        </div>
+                        <div class="domain-route-target">
+                            <span aria-hidden="true">→</span>
+                            <code>aus Datenbank gelöscht</code>
+                        </div>
+                        <div class="domain-route-state">
+                            <span class="status-badge status-badge--warning">Entfernung offen</span>
+                        </div>
+                        <div class="domain-route-actions">
+                            <a class="button button--compact button--quiet" asp-page="/Routing/Preview">Anwenden</a>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
 </section>

@@ -208,6 +208,11 @@ public sealed class CaddyApplyService
         return await ReadFileIfExistsAsync(TargetPath(), cancellationToken);
     }
 
+    public async Task<string> ReadManagedContentAsync(CancellationToken cancellationToken = default)
+    {
+        return await ReadFileIfExistsAsync(_options.ManagedFragmentPath, cancellationToken);
+    }
+
     private async Task<RouteApplyResult> ApplyCoreAsync(
         Guid revisionId,
         ManagementActor actor,

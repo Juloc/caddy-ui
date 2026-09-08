@@ -582,6 +582,31 @@ public sealed class RouteManagementStore
         return await reader.ReadAsync(cancellationToken) ? ReadRevision(reader) : null;
     }
 
+    public async Task<RouteRevisionRecord?> GetRevisionByDigestAsync(
+        string digest,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedDigest = Required(digest, 128, "Revision digest");
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT revisions.id, revisions.created_at, revisions.actor_user_id,
+                   COALESCE(users.username, 'system'), revisions.reason,
+                   revisions.manifest_json::text, revisions.content_json::text,
+                   revisions.digest, revisions.applied
+            FROM caddy_ui.route_revisions AS revisions
+            LEFT JOIN caddy_ui.users AS users ON users.id = revisions.actor_user_id
+            WHERE lower(revisions.digest) = lower(@digest)
+            ORDER BY revisions.created_at DESC
+            LIMIT 1
+            """;
+        AddParameter(command, "digest", normalizedDigest);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadRevision(reader) : null;
+    }
+
     public async Task<IReadOnlyList<RouteRevisionRecord>> ListRevisionsAsync(
         int limit = 50,
         CancellationToken cancellationToken = default)

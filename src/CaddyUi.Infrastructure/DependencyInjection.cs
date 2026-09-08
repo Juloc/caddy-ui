@@ -110,6 +110,7 @@ public static class DependencyInjection
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<CaddyCertificateSourceRefreshWorker>());
         services.AddSingleton<CaddyApplyService>();
+        services.AddSingleton<RouteRuntimeStateService>();
         services.AddHostedService<SystemJobWorker>();
 
         services.AddSingleton(analyticsOptions);

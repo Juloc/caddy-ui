@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using CaddyUi.Application.Routing;
 using CaddyUi.Domain.Routing;
 using CaddyUi.Infrastructure.Routing;
 using CaddyUi.Web.Security;
@@ -15,17 +16,20 @@ public sealed class IndexModel : LocalizedPageModel
 {
     private readonly RouteManagementStore _store;
     private readonly CaddyApplyService _applyService;
+    private readonly RouteRuntimeStateService _runtimeStateService;
     private readonly IStringLocalizer<SharedResource> _localizer;
     private readonly ILogger<IndexModel> _logger;
 
     public IndexModel(
         RouteManagementStore store,
         CaddyApplyService applyService,
+        RouteRuntimeStateService runtimeStateService,
         IStringLocalizer<SharedResource> localizer,
         ILogger<IndexModel> logger)
     {
         _store = store;
         _applyService = applyService;
+        _runtimeStateService = runtimeStateService;
         _localizer = localizer;
         _logger = logger;
     }
@@ -35,6 +39,8 @@ public sealed class IndexModel : LocalizedPageModel
 
     public IReadOnlyList<DomainRouteGroup> DomainGroups { get; private set; } =
         Array.Empty<DomainRouteGroup>();
+
+    public RoutingRuntimeState RuntimeState { get; private set; } = null!;
 
     [BindProperty]
     public QuickRouteInput QuickRoute { get; set; } = new();
@@ -170,7 +176,20 @@ public sealed class IndexModel : LocalizedPageModel
                 existing.Definition with { Enabled = enabled },
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
-            StatusMessage = enabled ? _localizer["Route enabled."] : _localizer["Route disabled."];
+            var runtimeState = await _runtimeStateService.GetAsync(HttpContext.RequestAborted);
+            StatusMessage = runtimeState.StateFor(id) switch
+            {
+                RouteRuntimeState.Applied =>
+                    _localizer["Route enabled. The active Caddy configuration already matches."],
+                RouteRuntimeState.ApplyRequired or RouteRuntimeState.NewDraft =>
+                    _localizer["Route enabled. Apply the saved changes to update Caddy."],
+                RouteRuntimeState.PendingRemoval =>
+                    _localizer["Route disabled. It remains active in Caddy until the saved changes are applied."],
+                RouteRuntimeState.Disabled =>
+                    _localizer["Route disabled. No active Caddy route remains."],
+                _ =>
+                    _localizer["Route state changed, but the active Caddy state could not be verified."],
+            };
             return RedirectToPage();
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -189,8 +208,12 @@ public sealed class IndexModel : LocalizedPageModel
                 id,
                 User.ToManagementActor(HttpContext),
                 HttpContext.RequestAborted);
-            StatusMessage = _localizer[
-                "Route deleted. The active Caddy configuration changes only after preview and apply."];
+            var runtimeState = await _runtimeStateService.GetAsync(HttpContext.RequestAborted);
+            StatusMessage = !runtimeState.ActiveStateTracked
+                ? _localizer["Route deleted. The active Caddy state could not be verified; review and apply the saved configuration."]
+                : runtimeState.PendingRemovals.Any(route => route.Id == id)
+                    ? _localizer["Route deleted. It remains active in Caddy until the saved changes are applied."]
+                    : _localizer["Route deleted. It was not active in Caddy, so no removal apply is required."];
             return RedirectToPage();
         }
         catch (InvalidOperationException exception)
@@ -207,15 +230,61 @@ public sealed class IndexModel : LocalizedPageModel
         return $"https://{route.Host}{route.Configuration.PathPrefix}";
     }
 
-    public static bool CanOpen(ManagedRouteDefinition route)
+    public static bool CanOpen(
+        ManagedRouteDefinition route,
+        RouteRuntimeState runtimeState)
     {
         ArgumentNullException.ThrowIfNull(route);
-        return route.Enabled && !route.Host.StartsWith("*.", StringComparison.Ordinal);
+        return IsActiveState(runtimeState) &&
+            !route.Host.StartsWith("*.", StringComparison.Ordinal);
+    }
+
+    public RouteRuntimeState StateFor(Guid routeId)
+    {
+        return RuntimeState.StateFor(routeId);
+    }
+
+    public int ActiveRouteCount(IEnumerable<ManagedRouteRecord> routes)
+    {
+        return routes.Count(route => IsActiveState(StateFor(route.Definition.Id)));
+    }
+
+    public static string StateLabel(RouteRuntimeState state)
+    {
+        return state switch
+        {
+            RouteRuntimeState.Applied => "Aktiv",
+            RouteRuntimeState.ApplyRequired => "Änderung offen",
+            RouteRuntimeState.NewDraft => "Neu · nicht aktiv",
+            RouteRuntimeState.PendingRemoval => "Entfernung offen",
+            RouteRuntimeState.Disabled => "Deaktiviert",
+            _ => "Status unbekannt",
+        };
+    }
+
+    public static string StateBadgeClass(RouteRuntimeState state)
+    {
+        return state switch
+        {
+            RouteRuntimeState.Applied => "status-badge--ok",
+            RouteRuntimeState.ApplyRequired or
+                RouteRuntimeState.NewDraft or
+                RouteRuntimeState.PendingRemoval => "status-badge--warning",
+            _ => "status-badge--neutral",
+        };
+    }
+
+    private static bool IsActiveState(RouteRuntimeState state)
+    {
+        return state is RouteRuntimeState.Applied or
+            RouteRuntimeState.ApplyRequired or
+            RouteRuntimeState.PendingRemoval;
     }
 
     private async Task LoadAsync()
     {
         Routes = await _store.ListRoutesAsync(HttpContext.RequestAborted);
+        RuntimeState = await _runtimeStateService.GetAsync(HttpContext.RequestAborted);
         var domains = await _store.ListDomainsAsync(HttpContext.RequestAborted);
         DomainGroups = domains
             .OrderByDescending(domain => domain.IsDefault)

@@ -170,6 +170,7 @@ jobs:
           check_page /Operations/Cutover '<h1>Production readiness</h1>' 5
           check_page /Administration/Providers '<h1>DNS providers</h1>'
           check_page /Setup '<h1>Set up DNS, domain, and route</h1>'
+          check_page /Routing '<h1>Routes</h1>'
           grep -F 'data-theme-option="system"' /tmp/page--.html
           grep -F 'data-theme-option="light"' /tmp/page--.html
           grep -F 'data-theme-option="dark"' /tmp/page--.html
