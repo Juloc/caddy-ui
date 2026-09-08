@@ -64,10 +64,13 @@ public static class RouteRuntimeStateResolver
         var desiredManifest = ParseManifest(desiredManifestJson);
         var activeManifest = ParseManifest(activeManifestJson);
         var activeStateTracked = activeContentIsEmpty || activeRevisionId is not null;
-        var hasPendingChanges = !string.Equals(
-            desiredDigest,
-            activeDigest,
-            StringComparison.OrdinalIgnoreCase);
+        var desiredHasManagedContent = ManifestHasManagedContent(desiredManifestJson);
+        var hasPendingChanges =
+            !(activeContentIsEmpty && !desiredHasManagedContent) &&
+            !string.Equals(
+                desiredDigest,
+                activeDigest,
+                StringComparison.OrdinalIgnoreCase);
         var desiredRouteIds = desiredRoutes
             .Select(route => route.Id)
             .ToHashSet();
@@ -151,6 +154,34 @@ public static class RouteRuntimeStateResolver
             lastApplyError,
             states,
             pendingRemovals);
+    }
+
+    private static bool ManifestHasManagedContent(string? manifestJson)
+    {
+        if (string.IsNullOrWhiteSpace(manifestJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(manifestJson);
+            if (document.RootElement.TryGetProperty("routes", out var routes) &&
+                routes.ValueKind == JsonValueKind.Array &&
+                routes.EnumerateArray().Any(route =>
+                    Boolean(route, "generated", defaultValue: true)))
+            {
+                return true;
+            }
+
+            return document.RootElement.TryGetProperty("certificates", out var certificates) &&
+                certificates.ValueKind == JsonValueKind.Array &&
+                certificates.GetArrayLength() > 0;
+        }
+        catch (JsonException)
+        {
+            return true;
+        }
     }
 
     private static IReadOnlyDictionary<Guid, ManifestRoute> ParseManifest(string? manifestJson)
