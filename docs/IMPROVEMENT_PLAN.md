@@ -24,8 +24,8 @@ Status values:
 
 Highest priority because the current UI can present desired database state as if it were already active in Caddy.
 
-- [ ] **TODO** Define an explicit desired-vs-applied route state model. Tracking: #72
-- [ ] **TODO** Persist or derive the last applied revision in a way the UI can compare reliably.
+- [ ] **IN PROGRESS** Define an explicit desired-vs-applied route state model. Tracking: #72
+- [ ] **IN PROGRESS** Persist or derive the last applied revision in a way the UI can compare reliably.
 - [ ] **TODO** Show `Applied`, `Apply required`, `New draft`, `Pending removal` and failed-apply states.
 - [ ] **TODO** Keep deleted-but-still-applied routes visible or otherwise explicitly represented until Apply removes them.
 - [ ] **TODO** Align enable/disable feedback with actual applied state.
