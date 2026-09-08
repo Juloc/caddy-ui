@@ -250,7 +250,7 @@ else if (Model.RuntimeState.HasPendingChanges)
                                 </label>
                                 <div class="safe-apply-note">
                                     <strong>Wildcard automatisch</strong>
-                                    <span>Die Route verwendet standardmäßig das Wildcard-Zertifikat der Domain und wird vor der Aktivierung vollständig validiert.</span>
+                                    <span>Speichern lässt die aktive Caddy-Konfiguration unverändert. Beim Aktivieren wird die Route vollständig validiert.</span>
                                 </div>
                             </form>
                         </div>
@@ -259,7 +259,16 @@ else if (Model.RuntimeState.HasPendingChanges)
                                asp-page="/Routing/Edit"
                                asp-route-domainId="@group.Domain.Id">Erweitert</a>
                             <a class="button button--quiet" asp-page="/Routing/Index" data-dialog-close>Abbrechen</a>
-                            <button class="button button--primary" type="submit" form="@formId">Erstellen &amp; aktivieren</button>
+                            <button class="button"
+                                    type="submit"
+                                    form="@formId"
+                                    name="applyAfterSave"
+                                    value="false">Speichern</button>
+                            <button class="button button--primary"
+                                    type="submit"
+                                    form="@formId"
+                                    name="applyAfterSave"
+                                    value="true">Erstellen &amp; aktivieren</button>
                         </footer>
                     </div>
                 </dialog>
