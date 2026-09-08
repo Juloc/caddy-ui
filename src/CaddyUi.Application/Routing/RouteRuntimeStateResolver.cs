@@ -193,7 +193,7 @@ public static class RouteRuntimeStateResolver
 
     private static string String(JsonElement element, string propertyName)
     {
-        return element.TryGetProperty(propertyName, out var property) &&
+        return TryGetProperty(element, propertyName, out var property) &&
                property.ValueKind == JsonValueKind.String
             ? property.GetString() ?? string.Empty
             : string.Empty;
@@ -204,10 +204,36 @@ public static class RouteRuntimeStateResolver
         string propertyName,
         bool defaultValue)
     {
-        return element.TryGetProperty(propertyName, out var property) &&
+        return TryGetProperty(element, propertyName, out var property) &&
                property.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? property.GetBoolean()
             : defaultValue;
+    }
+
+    private static bool TryGetProperty(
+        JsonElement element,
+        string propertyName,
+        out JsonElement property)
+    {
+        if (element.TryGetProperty(propertyName, out property))
+        {
+            return true;
+        }
+
+        foreach (var candidate in element.EnumerateObject())
+        {
+            if (string.Equals(
+                    candidate.Name,
+                    propertyName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                property = candidate.Value;
+                return true;
+            }
+        }
+
+        property = default;
+        return false;
     }
 
     private sealed record ManifestRoute(
