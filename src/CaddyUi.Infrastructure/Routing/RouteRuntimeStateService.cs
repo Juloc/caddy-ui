@@ -1,0 +1,69 @@
+using System.Security.Cryptography;
+using System.Text;
+using CaddyUi.Application.Routing;
+
+namespace CaddyUi.Infrastructure.Routing;
+
+public sealed class RouteRuntimeStateService
+{
+    private readonly RouteManagementStore _store;
+    private readonly CaddyApplyService _applyService;
+    private readonly RoutingOptions _options;
+
+    public RouteRuntimeStateService(
+        RouteManagementStore store,
+        CaddyApplyService applyService,
+        RoutingOptions options)
+    {
+        _store = store;
+        _applyService = applyService;
+        _options = options;
+    }
+
+    public async Task<RoutingRuntimeState> GetAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var sources = await _store.LoadCompilerSourcesAsync(cancellationToken);
+        var compiler = new CaddyRouteCompiler(
+            _options.AllowCustomRoutes,
+            _options.PortalUpstream);
+        var desired = compiler.Compile(sources);
+
+        var activeContent = await _applyService.ReadCurrentContentAsync(cancellationToken);
+        var normalizedActiveContent = activeContent.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var activeDigest = Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(normalizedActiveContent)));
+        var activeRevision = activeContent.Length == 0
+            ? null
+            : await _store.GetRevisionByDigestAsync(activeDigest, cancellationToken);
+
+        var latestOperation = (await _store.ListOperationsAsync(1, cancellationToken))
+            .FirstOrDefault();
+        var lastApplyFailed = false;
+        var lastApplyError = string.Empty;
+        if (latestOperation is { State: "failed", RouteRevisionId: Guid failedRevisionId })
+        {
+            var failedRevision = await _store.GetRevisionAsync(failedRevisionId, cancellationToken);
+            if (failedRevision is not null &&
+                string.Equals(
+                    failedRevision.Digest,
+                    desired.Digest,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                lastApplyFailed = true;
+                lastApplyError = latestOperation.Error;
+            }
+        }
+
+        return RouteRuntimeStateResolver.Resolve(
+            sources.Select(source => source.Route).ToArray(),
+            desired.Digest,
+            desired.ManifestJson,
+            activeDigest,
+            activeRevision?.Id,
+            activeRevision?.ManifestJson,
+            activeContentIsEmpty: activeContent.Length == 0,
+            lastApplyFailed,
+            lastApplyError);
+    }
+}
