@@ -58,7 +58,14 @@ else if (Model.RuntimeState.HasPendingChanges)
         <div>
             <strong>@Model.DomainGroups.Count Domains</strong>
             <span>· @Model.Routes.Count Routen</span>
-            <span>· @Model.RuntimeState.ActiveRouteCount in Caddy aktiv</span>
+            @if (Model.RuntimeState.ActiveStateTracked)
+            {
+                <span>· @Model.RuntimeState.ActiveRouteCount in Caddy aktiv</span>
+            }
+            else
+            {
+                <span>· Aktivstatus unbekannt</span>
+            }
         </div>
         <details class="route-overview-more">
             <summary class="button button--compact button--quiet">Weitere Optionen</summary>
@@ -93,7 +100,14 @@ else if (Model.RuntimeState.HasPendingChanges)
                         {
                             <span>@group.Domain.DisplayName</span>
                         }
-                        <small>@group.Routes.Count Routen · @Model.ActiveRouteCount(group.Routes) in Caddy aktiv</small>
+                        @if (Model.RuntimeState.ActiveStateTracked)
+                        {
+                            <small>@group.Routes.Count Routen · @Model.ActiveRouteCount(group.Routes) in Caddy aktiv</small>
+                        }
+                        else
+                        {
+                            <small>@group.Routes.Count Routen · Aktivstatus unbekannt</small>
+                        }
                     </div>
                     @if (group.Domain.Enabled)
                     {
