@@ -41,6 +41,27 @@ public sealed class DomainFirstRoutingMarkupTests
     }
 
     [Fact]
+    public void RouteOverview_DistinguishesDesiredStateFromActiveCaddyState()
+    {
+        var markup = File.ReadAllText(FindRepositoryFile(
+            "src/CaddyUi.Web/Pages/Routing/Index.cshtml"));
+        var pageModel = File.ReadAllText(FindRepositoryFile(
+            "src/CaddyUi.Web/Pages/Routing/Index.cshtml.cs"));
+
+        Assert.Contains("Model.RuntimeState.ActiveStateTracked", markup, StringComparison.Ordinal);
+        Assert.Contains("IndexModel.StateLabel(runtimeState)", markup, StringComparison.Ordinal);
+        Assert.Contains("Model.RuntimeState.PendingRemovals", markup, StringComparison.Ordinal);
+        Assert.Contains("Aktivstatus unbekannt", markup, StringComparison.Ordinal);
+        Assert.Contains("Entfernung offen", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "@(definition.Enabled ? \"Aktiv\" : \"Deaktiviert\")",
+            markup,
+            StringComparison.Ordinal);
+        Assert.Contains("RouteRuntimeState.PendingRemoval", pageModel, StringComparison.Ordinal);
+        Assert.Contains("remains active in Caddy until", pageModel, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DomainRouteLayout_HasMobileSingleColumnBehavior()
     {
         var css = File.ReadAllText(FindRepositoryFile(
