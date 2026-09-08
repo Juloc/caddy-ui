@@ -38,11 +38,11 @@ Verification evidence for Phase 1: PR #73, GitHub Actions **Verify .NET applicat
 
 Tracking: #71
 
-- [ ] **TODO** Add a Save-only action to the quick route dialog.
-- [ ] **TODO** Keep `Erstellen & aktivieren` as the explicit Save+Apply action.
-- [ ] **TODO** Ensure Save-only does not create/apply a Caddy revision.
-- [ ] **TODO** Use consistent wording and success/error states with the advanced editor.
-- [ ] **TODO** Add behavioral regression tests for both actions.
+- [ ] **IN PROGRESS** Add a Save-only action to the quick route dialog.
+- [ ] **IN PROGRESS** Keep `Erstellen & aktivieren` as the explicit Save+Apply action.
+- [ ] **IN PROGRESS** Ensure Save-only does not create/apply a Caddy revision.
+- [ ] **IN PROGRESS** Use consistent wording and success/error states with the advanced editor.
+- [ ] **IN PROGRESS** Add behavioral regression tests for both actions.
 
 ## Phase 3 - UI/UX contract cleanup
 
