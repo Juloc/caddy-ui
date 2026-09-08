@@ -279,6 +279,24 @@ public sealed class CaddyRouteCompilerTests : IDisposable
     }
 
     [Fact]
+    public void Compile_RouteFingerprintIgnoresAccessGroupDisplayName()
+    {
+        var accessGroupId = Guid.NewGuid();
+        var route = CreateProxy(
+            "mealie.example.com",
+            "/",
+            RouteCertificateMode.Individual,
+            accessGroupId);
+        var compiler = new CaddyRouteCompiler(false, "127.0.0.1:8099");
+
+        var first = compiler.Compile([new CaddyRouteSource(route, "Family")]);
+        var renamed = compiler.Compile([new CaddyRouteSource(route, "Renamed group")]);
+
+        Assert.Equal(first.Content, renamed.Content);
+        Assert.Equal(RouteFingerprint(first), RouteFingerprint(renamed));
+    }
+
+    [Fact]
     public void Compile_ManifestFingerprintIsDeterministicAndTracksRouteChanges()
     {
         var route = CreateProxy(
