@@ -105,6 +105,12 @@ public static class RouteRuntimeStateResolver
                 continue;
             }
 
+            if (!hasPendingChanges)
+            {
+                states[route.Id] = RouteRuntimeState.Applied;
+                continue;
+            }
+
             if (desiredRoute.Fingerprint.Length > 0 && activeRoute.Fingerprint.Length > 0)
             {
                 states[route.Id] = string.Equals(
@@ -166,7 +172,7 @@ public static class RouteRuntimeStateResolver
             var result = new Dictionary<Guid, ManifestRoute>();
             foreach (var route in routes.EnumerateArray())
             {
-                if (!route.TryGetProperty("id", out var idProperty) ||
+                if (!TryGetProperty(route, "id", out var idProperty) ||
                     idProperty.ValueKind != JsonValueKind.String ||
                     !Guid.TryParse(idProperty.GetString(), out var id))
                 {
