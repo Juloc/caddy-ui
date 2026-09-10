@@ -33,7 +33,7 @@ Caddy UI is a compact self-hosted control plane for Caddy. Its primary jobs are 
 - Use one icon family, clear focus states, semantic status colors and accessible contrast.
 - Default density is compact.
 - Theme selector has exactly System, Light and Dark. System is the default.
-- Desktop edit/create flows use dialogs. On small screens the same flows become full-screen.
+- Short, self-contained desktop create/edit flows use dialogs and become full-screen on small screens. Complex multi-section editors may use a dedicated Razor Page with a persistent action bar; the advanced route editor is the reference pattern.
 - Do not turn the application into a marketing-style SaaS dashboard.
 
 ## Verification
