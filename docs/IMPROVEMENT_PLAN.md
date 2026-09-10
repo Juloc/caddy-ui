@@ -48,15 +48,21 @@ Verification evidence for Phase 2: PR #74, GitHub Actions **Verify .NET applicat
 
 ## Phase 3 - UI/UX contract cleanup
 
-- [ ] **TODO** Decide and document the canonical domain-first route layout.
-- [ ] **TODO** Update `docs/UI_DESIGN_CONTRACT.md` where it conflicts with the intended current UI.
-- [ ] **TODO** Audit route, domain, DNS, access and system pages for primary/secondary action consistency.
-- [ ] **TODO** Audit desktop, tablet and mobile layouts against the documented breakpoints.
-- [ ] **TODO** Verify keyboard flow, focus return, 200% text zoom and 400% page zoom.
-- [ ] **TODO** Verify Light, Dark and System themes.
-- [ ] **TODO** Remove redundant actions and inconsistent labels.
+Tracking: #75
+
+- [x] **DONE** Decide and document the canonical domain-first route layout.
+- [x] **DONE** Update `docs/UI_DESIGN_CONTRACT.md` and `AGENTS.md` where they conflicted with the intended current UI.
+- [x] **DONE** Audit route, domain, DNS, access and system pages for primary/secondary action consistency.
+- [x] **DONE** Audit desktop, tablet and mobile layouts against the documented breakpoints.
+- [x] **DONE** Verify keyboard flow, focus return, 200% text scaling and 400%-equivalent 320 px reflow in Chromium acceptance.
+- [x] **DONE** Verify Light, Dark and System themes in Chromium acceptance.
+- [x] **DONE** Remove inconsistent primary styling from repeated Provider Test, DNS Synchronize and DDNS Run-now row actions.
+
+Verification evidence for Phase 3: PR #76, GitHub Actions **Verify .NET application** run #218 passed restore, formatting, Release build, all .NET/PostgreSQL tests, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke tests, Chromium UI/UX browser acceptance, SQLite migration CLI and bundled Caddy module verification. Run #215 independently passed the same implementation-level browser acceptance before the final documentation updates.
 
 ## Phase 4 - Localization cleanup
+
+Tracking: #77
 
 - [ ] **TODO** Choose one canonical default-language policy.
 - [ ] **TODO** Reconcile `MULTILINGUAL_UI.md`, `AGENTS.md`, runtime config and tests.

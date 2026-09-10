@@ -13,6 +13,7 @@ on:
       - "scripts/dotnet-entrypoint.sh"
       - "src/**"
       - "tests/CaddyUi.*/**"
+      - "tests/browser/**"
   push:
     branches: [main]
     paths:
@@ -26,6 +27,7 @@ on:
       - "scripts/dotnet-entrypoint.sh"
       - "src/**"
       - "tests/CaddyUi.*/**"
+      - "tests/browser/**"
 
 permissions:
   contents: read
@@ -177,6 +179,19 @@ jobs:
           grep -F 'data-sidebar-collapse' /tmp/page--.html
           test "$(grep -c 'Phase' /tmp/page--.html || true)" = "0"
           test "$(grep -ci 'Python' /tmp/page--.html || true)" = "0"
+      - name: Verify responsive UI and focus contracts in browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network host \
+            -e CADDY_UI_TEST_BASE_URL=http://127.0.0.1:18098 \
+            -e CADDY_UI_TEST_USERNAME=ci-admin \
+            -e CADDY_UI_TEST_PASSWORD=ci-admin-password-123456789 \
+            -v "$PWD:/work:ro" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.55.0-noble \
+            bash -lc 'npm install --prefix /tmp/pw --no-save --silent playwright@1.55.0 && NODE_PATH=/tmp/pw/node_modules node tests/browser/ui-ux-smoke.cjs'
       - name: Verify SQLite migration CLI
         shell: bash
         run: |
