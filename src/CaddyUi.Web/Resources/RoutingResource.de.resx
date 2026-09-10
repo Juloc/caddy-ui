@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Manage services by domain. New standard routes only need a name and an upstream target." xml:space="preserve"><value>Dienste nach Domain verwalten. Neue Standardrouten brauchen nur einen Namen und ein Upstream-Ziel.</value></data>
+  <data name="Preview and apply" xml:space="preserve"><value>Vorschau und anwenden</value></data>
+  <data name="The active Caddy configuration does not match a known revision. Runtime state cannot be safely assigned to individual routes." xml:space="preserve"><value>Die aktive Caddy-Konfiguration entspricht keiner bekannten Revision. Der Runtime-Status kann nicht sicher einzelnen Routen zugeordnet werden.</value></data>
+  <data name="Review preview" xml:space="preserve"><value>Vorschau prüfen</value></data>
+  <data name="Applying the current changes failed. The previous Caddy configuration remains active." xml:space="preserve"><value>Das letzte Anwenden der aktuellen Änderungen ist fehlgeschlagen. Die vorherige Caddy-Konfiguration bleibt aktiv.</value></data>
+  <data name="Saved changes are not fully active in Caddy yet." xml:space="preserve"><value>Gespeicherte Änderungen sind noch nicht vollständig in Caddy aktiv.</value></data>
+  <data name="Domain routes" xml:space="preserve"><value>Domain-Routen</value></data>
+  <data name="{0} domains" xml:space="preserve"><value>{0} Domains</value></data>
+  <data name="{0} routes" xml:space="preserve"><value>{0} Routen</value></data>
+  <data name="{0} active in Caddy" xml:space="preserve"><value>{0} in Caddy aktiv</value></data>
+  <data name="Active state unknown" xml:space="preserve"><value>Aktivstatus unbekannt</value></data>
+  <data name="More options" xml:space="preserve"><value>Weitere Optionen</value></data>
+  <data name="More routing options" xml:space="preserve"><value>Weitere Routing-Optionen</value></data>
+  <data name="Create advanced route" xml:space="preserve"><value>Erweiterte Route erstellen</value></data>
+  <data name="Import / Export" xml:space="preserve"><value>Import / Export</value></data>
+  <data name="Default" xml:space="preserve"><value>Standard</value></data>
+  <data name="Disabled" xml:space="preserve"><value>Deaktiviert</value></data>
+  <data name="{0} routes · {1} active in Caddy" xml:space="preserve"><value>{0} Routen · {1} in Caddy aktiv</value></data>
+  <data name="{0} routes · active state unknown" xml:space="preserve"><value>{0} Routen · Aktivstatus unbekannt</value></data>
+  <data name="+ Route" xml:space="preserve"><value>+ Route</value></data>
+  <data name="No route exists for this domain yet." xml:space="preserve"><value>Noch keine Route für diese Domain.</value></data>
+  <data name="Custom Caddyfile" xml:space="preserve"><value>Benutzerdefiniertes Caddyfile</value></data>
+  <data name="Public" xml:space="preserve"><value>Öffentlich</value></data>
+  <data name="Active" xml:space="preserve"><value>Aktiv</value></data>
+  <data name="Apply required" xml:space="preserve"><value>Änderung offen</value></data>
+  <data name="New · not active" xml:space="preserve"><value>Neu · nicht aktiv</value></data>
+  <data name="Removal pending" xml:space="preserve"><value>Entfernung offen</value></data>
+  <data name="Status unknown" xml:space="preserve"><value>Status unbekannt</value></data>
+  <data name="Open" xml:space="preserve"><value>Öffnen</value></data>
+  <data name="Edit" xml:space="preserve"><value>Bearbeiten</value></data>
+  <data name="Actions for {0}" xml:space="preserve"><value>Aktionen für {0}</value></data>
+  <data name="Statistics" xml:space="preserve"><value>Statistik</value></data>
+  <data name="Disable" xml:space="preserve"><value>Deaktivieren</value></data>
+  <data name="Enable" xml:space="preserve"><value>Aktivieren</value></data>
+  <data name="Really delete route '{0}'?" xml:space="preserve"><value>Route „{0}“ wirklich löschen?</value></data>
+  <data name="Delete" xml:space="preserve"><value>Löschen</value></data>
+  <data name="+ Add route" xml:space="preserve"><value>+ Route hinzufügen</value></data>
+  <data name="New route for {0}" xml:space="preserve"><value>Neue Route für {0}</value></data>
+  <data name="The subdomain is generated automatically from the route name." xml:space="preserve"><value>Die Subdomain wird automatisch aus dem Routennamen erstellt.</value></data>
+  <data name="Close" xml:space="preserve"><value>Schließen</value></data>
+  <data name="Route name" xml:space="preserve"><value>Routenname</value></data>
+  <data name="Example: “Home Assistant” becomes" xml:space="preserve"><value>Beispiel: „Home Assistant“ wird zu</value></data>
+  <data name="Upstream" xml:space="preserve"><value>Upstream</value></data>
+  <data name="Hostname or internal URL of the service." xml:space="preserve"><value>Hostname oder interne URL des Dienstes.</value></data>
+  <data name="Wildcard automatically" xml:space="preserve"><value>Wildcard automatisch</value></data>
+  <data name="Save leaves the active Caddy configuration unchanged. When activating, the route is fully validated." xml:space="preserve"><value>Speichern lässt die aktive Caddy-Konfiguration unverändert. Beim Aktivieren wird die Route vollständig validiert.</value></data>
+  <data name="Advanced" xml:space="preserve"><value>Erweitert</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Abbrechen</value></data>
+  <data name="Save" xml:space="preserve"><value>Speichern</value></data>
+  <data name="Create and activate" xml:space="preserve"><value>Erstellen und aktivieren</value></data>
+  <data name="No domain configured yet." xml:space="preserve"><value>Noch keine Domain eingerichtet.</value></data>
+  <data name="Create a domain first. Then you can add routes directly below it." xml:space="preserve"><value>Lege zuerst eine Domain an. Danach kannst du Routen direkt darunter hinzufügen.</value></data>
+  <data name="Add domain" xml:space="preserve"><value>Domain hinzufügen</value></data>
+  <data name="Deleted routes still active" xml:space="preserve"><value>Gelöschte, noch aktive Routen</value></data>
+  <data name="Still active in Caddy" xml:space="preserve"><value>Noch in Caddy aktiv</value></data>
+  <data name="These routes were deleted but remain active until the next apply." xml:space="preserve"><value>Diese Routen wurden bereits gelöscht, bleiben aber bis zum nächsten Anwenden aktiv.</value></data>
+  <data name="deleted from database" xml:space="preserve"><value>aus Datenbank gelöscht</value></data>
+  <data name="Apply" xml:space="preserve"><value>Anwenden</value></data>
+</root>
