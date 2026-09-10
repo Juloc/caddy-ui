@@ -48,13 +48,15 @@ Verification evidence for Phase 2: PR #74, GitHub Actions **Verify .NET applicat
 
 ## Phase 3 - UI/UX contract cleanup
 
-- [ ] **TODO** Decide and document the canonical domain-first route layout.
-- [ ] **TODO** Update `docs/UI_DESIGN_CONTRACT.md` where it conflicts with the intended current UI.
-- [ ] **TODO** Audit route, domain, DNS, access and system pages for primary/secondary action consistency.
-- [ ] **TODO** Audit desktop, tablet and mobile layouts against the documented breakpoints.
-- [ ] **TODO** Verify keyboard flow, focus return, 200% text zoom and 400% page zoom.
-- [ ] **TODO** Verify Light, Dark and System themes.
-- [ ] **TODO** Remove redundant actions and inconsistent labels.
+Tracking: #75
+
+- [ ] **IN PROGRESS** Decide and document the canonical domain-first route layout.
+- [ ] **IN PROGRESS** Update `docs/UI_DESIGN_CONTRACT.md` where it conflicts with the intended current UI.
+- [ ] **IN PROGRESS** Audit route, domain, DNS, access and system pages for primary/secondary action consistency.
+- [ ] **IN PROGRESS** Audit desktop, tablet and mobile layouts against the documented breakpoints.
+- [ ] **IN PROGRESS** Verify keyboard flow, focus return, 200% text zoom and 400% page zoom.
+- [ ] **IN PROGRESS** Verify Light, Dark and System themes.
+- [ ] **IN PROGRESS** Remove redundant actions and inconsistent labels.
 
 ## Phase 4 - Localization cleanup
 
