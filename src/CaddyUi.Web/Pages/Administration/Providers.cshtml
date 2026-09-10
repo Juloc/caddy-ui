@@ -73,7 +73,7 @@
                                                 <option value="@domain.Id">@domain.Name</option>
                                             }
                                         </select>
-                                        <button class="button button--compact button--primary" type="submit" disabled="@(!provider.Enabled)">@T["Test"]</button>
+                                        <button class="button button--compact" type="submit" disabled="@(!provider.Enabled)">@T["Test"]</button>
                                     </form>
                                 }
                                 <form method="post" asp-page-handler="Toggle" class="provider-toggle-form">
