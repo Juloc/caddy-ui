@@ -90,10 +90,16 @@ public sealed class RouteRuntimeStateIntegrationTests : IAsyncLifetime
             var state = await runtime.GetAsync();
             Assert.Equal(RouteRuntimeState.NewDraft, state.StateFor(desired.Id));
             Assert.True(state.HasPendingChanges);
+            Assert.Empty(await store.ListRevisionsAsync());
+            Assert.Empty(await store.ListOperationsAsync());
 
             var initialPreview = await apply.CreatePreviewAsync("Initial route", actor);
             var initialApply = await apply.ApplyAsync(initialPreview.Revision.Id, actor);
             Assert.Equal("applied", initialApply.State);
+            Assert.NotEmpty(await store.ListRevisionsAsync());
+            Assert.Contains(
+                await store.ListOperationsAsync(),
+                operation => operation.State == "applied");
 
             state = await runtime.GetAsync();
             Assert.Equal(RouteRuntimeState.Applied, state.StateFor(desired.Id));

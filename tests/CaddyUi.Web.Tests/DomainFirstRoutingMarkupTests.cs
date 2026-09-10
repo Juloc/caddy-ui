@@ -29,6 +29,30 @@ public sealed class DomainFirstRoutingMarkupTests
     }
 
     [Fact]
+    public void QuickCreate_OffersExplicitSaveOnlyAndSaveApplyActions()
+    {
+        var markup = File.ReadAllText(FindRepositoryFile(
+            "src/CaddyUi.Web/Pages/Routing/Index.cshtml"));
+        var pageModel = File.ReadAllText(FindRepositoryFile(
+            "src/CaddyUi.Web/Pages/Routing/Index.cshtml.cs"));
+
+        Assert.Contains("name=\"applyAfterSave\"", markup, StringComparison.Ordinal);
+        Assert.Contains("value=\"false\">Speichern</button>", markup, StringComparison.Ordinal);
+        Assert.Contains("value=\"true\">Erstellen &amp; aktivieren</button>", markup, StringComparison.Ordinal);
+        Assert.Contains("bool? applyAfterSave", pageModel, StringComparison.Ordinal);
+        Assert.Contains("var shouldApply = applyAfterSave ?? true;", pageModel, StringComparison.Ordinal);
+
+        var saveOnlyBranch = pageModel.IndexOf("if (!shouldApply)", StringComparison.Ordinal);
+        var previewCall = pageModel.IndexOf("CreatePreviewAsync", StringComparison.Ordinal);
+        Assert.True(saveOnlyBranch >= 0);
+        Assert.True(previewCall > saveOnlyBranch);
+        Assert.Contains(
+            "Route created. The active Caddy configuration is unchanged.",
+            pageModel,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuickCreate_UsesWildcardAndSafeApplyPipeline()
     {
         var pageModel = File.ReadAllText(FindRepositoryFile(

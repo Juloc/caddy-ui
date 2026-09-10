@@ -2,7 +2,7 @@
 
 Status: active  
 Baseline: main / 2.1.20  
-Last updated: 2026-09-08
+Last updated: 2026-09-10
 
 This is the living implementation plan for the repository audit in `docs/CODE_AUDIT.md`.
 
@@ -38,11 +38,13 @@ Verification evidence for Phase 1: PR #73, GitHub Actions **Verify .NET applicat
 
 Tracking: #71
 
-- [ ] **TODO** Add a Save-only action to the quick route dialog.
-- [ ] **TODO** Keep `Erstellen & aktivieren` as the explicit Save+Apply action.
-- [ ] **TODO** Ensure Save-only does not create/apply a Caddy revision.
-- [ ] **TODO** Use consistent wording and success/error states with the advanced editor.
-- [ ] **TODO** Add behavioral regression tests for both actions.
+- [x] **DONE** Add a Save-only action to the quick route dialog.
+- [x] **DONE** Keep `Erstellen & aktivieren` as the explicit Save+Apply action.
+- [x] **DONE** Ensure Save-only does not create/apply a Caddy revision.
+- [x] **DONE** Use consistent wording and success/error states with the advanced editor.
+- [x] **DONE** Add regression coverage for both actions, including PostgreSQL lifecycle verification that Save-only creates no revision/apply operation.
+
+Verification evidence for Phase 2: PR #74, GitHub Actions **Verify .NET application** run #212 — restore, formatting, Release build, all .NET tests, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke tests, SQLite migration CLI and bundled Caddy module verification all passed.
 
 ## Phase 3 - UI/UX contract cleanup
 

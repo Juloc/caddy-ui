@@ -61,8 +61,9 @@ public sealed class IndexModel : LocalizedPageModel
         await LoadAsync();
     }
 
-    public async Task<IActionResult> OnPostQuickCreateAsync()
+    public async Task<IActionResult> OnPostQuickCreateAsync(bool? applyAfterSave)
     {
+        var shouldApply = applyAfterSave ?? true;
         if (!ModelState.IsValid)
         {
             QuickCreateDialogDomainId = QuickRoute.DomainId == Guid.Empty ? null : QuickRoute.DomainId;
@@ -111,6 +112,13 @@ public sealed class IndexModel : LocalizedPageModel
 
             await _store.CreateRouteAsync(definition, actor, HttpContext.RequestAborted);
             routeSaved = true;
+
+            if (!shouldApply)
+            {
+                StatusMessage = _localizer[
+                    "Route created. The active Caddy configuration is unchanged."];
+                return RedirectToPage();
+            }
 
             var preview = await _applyService.CreatePreviewAsync(
                 $"Create and activate quick route {definition.Name}",
