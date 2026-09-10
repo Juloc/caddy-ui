@@ -1,6 +1,6 @@
 # Caddy UI UI/UX audit
 
-Status: active remediation record  
+Status: completed  
 Date: 2026-09-10  
 Tracking: #75
 
@@ -47,7 +47,11 @@ Status: consistent.
 
 ### DNS providers
 
-Finding: row-level `Test` is visually primary even though `Add provider` is already the page primary action. Row-level diagnostic actions should be secondary. The `Save timing` submit remains primary inside its explicitly opened local form.
+Status: corrected in #76.
+
+- `Add provider` remains the page primary action;
+- repeated row-level `Test` is now secondary;
+- `Save timing` remains primary inside its explicitly opened local form.
 
 ### Access
 
@@ -60,7 +64,10 @@ Status: consistent.
 
 ### DNS / DDNS operations
 
-Finding: `Synchronize` and `Run now` are visually primary in every table row. These are row-local operational actions and should be secondary. `Create record` and `Create DDNS target` remain primary inside their independent creation workbenches.
+Status: corrected in #76.
+
+- repeated `Synchronize` and `Run now` row operations are secondary;
+- `Create record` and `Create DDNS target` remain primary inside their independent creation workbenches.
 
 ### Production readiness / system operations
 
@@ -78,6 +85,8 @@ The advanced route editor is intentionally a dedicated page because it contains 
 
 On screens below 640 px, shared dialogs become full-screen. This keeps the same task and form semantics while avoiding cramped nested scrolling.
 
+`AGENTS.md` and `docs/UI_DESIGN_CONTRACT.md` now describe the same rule so future work does not reintroduce the old all-desktop-editors-are-dialogs constraint.
+
 ## Keyboard and focus review
 
 The shared `dialogs.js` implementation:
@@ -90,11 +99,19 @@ The shared `dialogs.js` implementation:
 
 The route advanced-disclosure script updates `aria-expanded` and moves focus into a panel when it is opened.
 
-Remaining acceptance work: visual/manual or browser-automation verification at 200% text zoom and 400% page zoom. Static CSS review alone is not recorded as proof of those two zoom requirements.
+The mobile navigation:
+
+- makes background application content inert while open;
+- exposes the sidebar as a modal dialog;
+- traps Tab/Shift+Tab inside the drawer;
+- closes on Escape;
+- returns focus to the opening control.
+
+Browser acceptance in GitHub Actions run #215 verified dialog focus transfer/return and mobile drawer focus/Escape behavior in Chromium.
 
 ## Responsive layout review
 
-Current implementation breakpoints are intentional and should remain the canonical CSS implementation points unless a feature has a documented local need:
+Current implementation breakpoints are intentional and remain the canonical CSS implementation points unless a feature has a documented local need:
 
 - `<= 1024 px`: desktop sidebar becomes an overlay/off-canvas navigation;
 - `<= 760 px`: workspaces/forms become one column and page/action layouts stack;
@@ -103,6 +120,8 @@ Current implementation breakpoints are intentional and should remain the canonic
 - coarse pointer: interactive controls use at least 44 px target height.
 
 The domain-first routing layout also collapses its row grid at 1180 px and becomes a single-column route row at 760 px.
+
+Browser acceptance in run #215 loaded representative Routing, Domains, Providers, Access, DNS/DDNS and Cutover pages at a 320 px CSS viewport, the reflow target corresponding to a 1280 px page viewed at 400% zoom, and rejected page-level horizontal overflow. It also applied a deterministic 200% computed-font scaling stress check to the main management pages and rejected page-level horizontal overflow.
 
 ## Theme, contrast and motion review
 
@@ -117,13 +136,29 @@ The implementation also contains:
 - semantic status colors paired with text labels;
 - no dependency on color alone for route runtime state.
 
-Remaining acceptance work: visually verify representative Routing, Domains, Providers, Access and Operations pages in System, Light and Dark before Phase 3 is marked fully complete.
+Browser acceptance in run #215 verified that Light and Dark produce distinct computed foreground/background colors, that the selected theme exposes the correct `aria-pressed` state, and that System follows both simulated light and dark `prefers-color-scheme` values.
 
-## Changes required by this audit
+## Regression coverage
 
-- update `docs/UI_DESIGN_CONTRACT.md` to allow hierarchical semantic lists for domain-first routing;
-- update the dialog rule so complex multi-section editors may use dedicated pages;
-- align documented breakpoints with the implemented 1024/760/639/420 behavior;
-- define primary actions per action scope, not once for an entire page regardless of independent workbenches;
-- demote repeated provider/DNS row diagnostic actions from primary styling;
-- keep zoom/theme checks explicit until they have real acceptance evidence.
+Phase 3 adds two layers of regression protection:
+
+1. `UiUxContractTests` locks the semantic domain-first list, documented breakpoints, theme/accessibility rules, focus contracts and row-action hierarchy.
+2. `tests/browser/ui-ux-smoke.cjs` exercises the built application in Chromium after real login against PostgreSQL-backed Caddy UI.
+
+The browser smoke is part of the standard acceptance workflow and changes under `tests/browser/**` trigger the workflow.
+
+## Verification evidence
+
+GitHub Actions **Verify .NET application** run #215 passed on the Phase-3 implementation before the final documentation-only status commit:
+
+- restore and formatting verification;
+- Release build;
+- all .NET/PostgreSQL tests;
+- production image builds;
+- PostgreSQL and Caddy UI startup;
+- authenticated page smoke tests;
+- Chromium UI/UX browser acceptance;
+- SQLite migration CLI;
+- bundled Caddy module verification.
+
+A final PR run is required after the documentation/status update so the merge candidate itself has matching CI evidence.
