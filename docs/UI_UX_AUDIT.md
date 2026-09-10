@@ -107,7 +107,7 @@ The mobile navigation:
 - closes on Escape;
 - returns focus to the opening control.
 
-Browser acceptance in GitHub Actions run #215 verified dialog focus transfer/return and mobile drawer focus/Escape behavior in Chromium.
+Browser acceptance in GitHub Actions run #218 verified dialog focus transfer/return and mobile drawer focus/Escape behavior in Chromium.
 
 ## Responsive layout review
 
@@ -121,7 +121,7 @@ Current implementation breakpoints are intentional and remain the canonical CSS 
 
 The domain-first routing layout also collapses its row grid at 1180 px and becomes a single-column route row at 760 px.
 
-Browser acceptance in run #215 loaded representative Routing, Domains, Providers, Access, DNS/DDNS and Cutover pages at a 320 px CSS viewport, the reflow target corresponding to a 1280 px page viewed at 400% zoom, and rejected page-level horizontal overflow. It also applied a deterministic 200% computed-font scaling stress check to the main management pages and rejected page-level horizontal overflow.
+Browser acceptance in run #218 loaded representative Routing, Domains, Providers, Access, DNS/DDNS and Cutover pages at a 320 px CSS viewport, the reflow target corresponding to a 1280 px page viewed at 400% zoom, and rejected page-level horizontal overflow. It also applied a deterministic 200% computed-font scaling stress check to the main management pages and rejected page-level horizontal overflow.
 
 ## Theme, contrast and motion review
 
@@ -136,7 +136,7 @@ The implementation also contains:
 - semantic status colors paired with text labels;
 - no dependency on color alone for route runtime state.
 
-Browser acceptance in run #215 verified that Light and Dark produce distinct computed foreground/background colors, that the selected theme exposes the correct `aria-pressed` state, and that System follows both simulated light and dark `prefers-color-scheme` values.
+Browser acceptance in run #218 verified that Light and Dark produce distinct computed foreground/background colors, that the selected theme exposes the correct `aria-pressed` state, and that System follows both simulated light and dark `prefers-color-scheme` values.
 
 ## Regression coverage
 
@@ -149,7 +149,7 @@ The browser smoke is part of the standard acceptance workflow and changes under 
 
 ## Verification evidence
 
-GitHub Actions **Verify .NET application** run #215 passed on the Phase-3 implementation before the final documentation-only status commit:
+GitHub Actions **Verify .NET application** run #218 passed on the final Phase-3 implementation and documentation state before the evidence-only commit:
 
 - restore and formatting verification;
 - Release build;
@@ -161,4 +161,4 @@ GitHub Actions **Verify .NET application** run #215 passed on the Phase-3 implem
 - SQLite migration CLI;
 - bundled Caddy module verification.
 
-A final PR run is required after the documentation/status update so the merge candidate itself has matching CI evidence.
+Run #215 independently passed the same implementation-level browser acceptance before the final documentation updates.
