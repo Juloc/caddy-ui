@@ -257,16 +257,16 @@ public sealed class IndexModel : LocalizedPageModel
         return routes.Count(route => IsActiveState(StateFor(route.Definition.Id)));
     }
 
-    public static string StateLabel(RouteRuntimeState state)
+    public static string StateLabelKey(RouteRuntimeState state)
     {
         return state switch
         {
-            RouteRuntimeState.Applied => "Aktiv",
-            RouteRuntimeState.ApplyRequired => "Änderung offen",
-            RouteRuntimeState.NewDraft => "Neu · nicht aktiv",
-            RouteRuntimeState.PendingRemoval => "Entfernung offen",
-            RouteRuntimeState.Disabled => "Deaktiviert",
-            _ => "Status unbekannt",
+            RouteRuntimeState.Applied => "Active",
+            RouteRuntimeState.ApplyRequired => "Apply required",
+            RouteRuntimeState.NewDraft => "New · not active",
+            RouteRuntimeState.PendingRemoval => "Removal pending",
+            RouteRuntimeState.Disabled => "Disabled",
+            _ => "Status unknown",
         };
     }
 
