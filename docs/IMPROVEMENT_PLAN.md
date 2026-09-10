@@ -58,7 +58,7 @@ Tracking: #75
 - [x] **DONE** Verify Light, Dark and System themes in Chromium acceptance.
 - [x] **DONE** Remove inconsistent primary styling from repeated Provider Test, DNS Synchronize and DDNS Run-now row actions.
 
-Verification evidence for Phase 3: PR #76, GitHub Actions **Verify .NET application** run #215 passed restore, formatting, Release build, all .NET/PostgreSQL tests, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke tests, Chromium UI/UX browser acceptance, SQLite migration CLI and bundled Caddy module verification. A final run is required on the documentation-complete merge candidate.
+Verification evidence for Phase 3: PR #76, GitHub Actions **Verify .NET application** run #218 passed restore, formatting, Release build, all .NET/PostgreSQL tests, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke tests, Chromium UI/UX browser acceptance, SQLite migration CLI and bundled Caddy module verification. Run #215 independently passed the same implementation-level browser acceptance before the final documentation updates.
 
 ## Phase 4 - Localization cleanup
 
