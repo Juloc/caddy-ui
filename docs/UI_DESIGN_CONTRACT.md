@@ -77,14 +77,17 @@ Verboten ist eine Oberfläche, bei der Hintergrund, Panels, Eingaben und Buttons
 
 Primärbutton:
 
-- genau eine dominante Aktion pro Arbeitsbereich
+- genau eine dominante Aktion pro **Aktionskontext**
+- der Seitenkopf besitzt höchstens eine Primäraktion
+- unabhängige Formulare oder Workbenches dürfen jeweils eine eigene Primäraktion besitzen
+- wiederholte Tabellen-/Listenzeilen verwenden für gewöhnliche Diagnose-, Öffnen-, Sync-, Test- oder Toggle-Aktionen keine Primärdarstellung
 - gefüllte Akzentfläche
 - eindeutiger Text, zum Beispiel `Route speichern` oder `Validieren & anwenden`
 
 Sekundärbutton:
 
-- ruhige Fläche mit sichtbarem Rand
-- für Navigation und reversible Nebenaktionen
+- ruhige Fläche mit sichtbarem Rand oder Quiet-Darstellung je nach Hierarchie
+- für Navigation, reversible Nebenaktionen, Zeilenaktionen und Diagnosen
 
 Gefahraktion:
 
@@ -112,7 +115,8 @@ Komponentenmatrix:
 | Aktion | `<button>` mit konkretem Verb | Link, der einen Zustand ändert |
 | Dateneingabe | `<label>` plus natives Feld und feldnaher Fehler | Platzhalter als Label |
 | Auswahl | natives `<select>` für Formulare, klar beschriftete Checkboxen/Radio-Gruppen | unbeschriftete Icon-Auswahl |
-| Datenübersicht | semantisches `<table>` mit Headern und horizontalem Container | Card pro Tabellenzeile oder eine JS-Pflicht-Grid-Komponente |
+| Flache Datenübersicht | semantisches `<table>` mit Headern und horizontalem Container | Card pro Tabellenzeile oder eine JS-Pflicht-Grid-Komponente |
+| Hierarchische Arbeitsliste | semantisch gruppierte Sections/Listen mit stabiler Informationshierarchie; z. B. Domain → Routes | künstlich flachgezogene Tabelle, wenn dadurch Hierarchie und Aktionen schlechter erfassbar werden |
 | Status | Badge/Text/Icon mit semantischer Farbe | Farbe oder Icon allein |
 | Rückmeldung | Feldfehler, Message Bar oder Toast je nach Dringlichkeit | Dialog für gewöhnliches Feedback |
 | Zusatzinformation | sichtbarer Hilfetext, Tooltip nur ergänzend | essenzielle Information nur im Tooltip |
@@ -121,13 +125,16 @@ Buttons reagieren mit ihrer Beschriftung auf die Aufgabe. `Abbrechen` verwirft e
 
 ## Tabellen und Listen
 
-- Tabellen für Requests, Routen, Benutzer und Revisionen
-- wichtigste Spalte links, Aktionen rechts
+- Tabellen sind Standard für flache Datensätze wie Requests, Benutzer, Revisionen, DNS-Einträge und Provider-Inventare
+- die Routing-Übersicht ist bewusst **domain-first**: jede Domain ist eine Gruppe, darunter liegen semantische Routenlisten mit Adresse, Ziel, Zugriff/Runtime-Status und Aktionen
+- wichtigste Information steht links, Aktionen rechts beziehungsweise auf kleinen Screens darunter
 - Zeilenhover, klare Header und kompakte Metadaten
-- Status als semantisches Badge
+- Status als semantisches Badge plus Text
 - deaktivierte Einträge bleiben lesbar und werden nur gedämpft
-- keine eigene Card pro Tabellenzeile
-- breite Inhalte bleiben horizontal scrollbar
+- keine eigene Card pro flacher Tabellenzeile
+- gruppierte Listen dürfen eine gemeinsame Panel-/Gruppenfläche verwenden, aber keine dekorative Card pro Route erzeugen
+- breite Tabelleninhalte bleiben horizontal scrollbar
+- domain-first Routen werden auf kleinen Screens bewusst einspaltig statt horizontal scrollbar
 
 ## Navigation und Anwendungsshell
 
@@ -143,15 +150,17 @@ Buttons reagieren mit ihrer Beschriftung auf die Aufgabe. `Abbrechen` verwirft e
 - Laufzeit- und Produktinformationen gehören auf die Seite `Über Caddy UI`
 - keine dauerhafte Topbar und keine Statusanzeige mit erfundenem Bereitschaftszustand
 
-Die Shell nutzt `<aside>`, `<nav>` und `<main>` sowie einen Skip-Link. Die Desktop-Navigation ist 260 px breit und kann kompakt werden. Unterhalb der 1024-px-Desktopklasse wird sie als Overlay geöffnet, damit der dichte Arbeitsbereich ausreichend Breite behält; Escape schließt das Overlay und der Fokus kehrt zum Auslöser zurück. Aktionen, die nur bei Hover sichtbar sind, bleiben im DOM und zusätzlich über Menü oder Toolbar erreichbar.
+Die Shell nutzt `<aside>`, `<nav>` und `<main>` sowie einen Skip-Link. Die Desktop-Navigation ist 260 px breit und kann kompakt werden. Bis einschließlich 1024 px wird sie als Overlay geöffnet, damit der dichte Arbeitsbereich ausreichend Breite behält; Escape schließt das Overlay und der Fokus kehrt zum Auslöser zurück. Aktionen, die nur bei Hover sichtbar sind, bleiben im DOM und zusätzlich über Menü oder Toolbar erreichbar.
 
 ## Dialoge, Meldungen und Zustände
 
-- Erstellen und Bearbeiten erfolgt auf Desktop in einem Dialog mit Titel, Inhalt und höchstens drei Footer-Aktionen. Kleine Bildschirme verwenden dieselbe Aufgabe als Vollbildoberfläche.
-- Beim Öffnen erhält das erste sinnvolle Bedienelement den Fokus; modale Dialoge halten den Fokus; beim Schließen kehrt er zum Auslöser zurück. Dialoge dürfen nicht verschachtelt werden.
-- Zerstörerische Aktionen nutzen eine explizite Bestätigung mit konkreter Objektbezeichnung und einem sicheren Abbruchweg.
+- kurze, in sich geschlossene Erstellen-/Bearbeiten-Aufgaben verwenden auf Desktop einen Dialog mit Titel, Inhalt und höchstens drei Footer-Aktionen
+- komplexe mehrteilige Editoren mit mehreren Sektionen, bedingten Bereichen oder dauerhaftem Save/Apply-Kontext dürfen eine eigene Razor Page verwenden; der erweiterte Routen-Editor ist das Referenzmuster dafür
+- Dialogaufgaben werden bis einschließlich 639 px als Vollbildoberfläche dargestellt; dedizierte Editor-Seiten bleiben normale Seiten und stapeln ihre Bereiche responsiv
+- beim Öffnen erhält das erste sinnvolle Bedienelement den Fokus; modale Dialoge halten den Fokus; beim Schließen kehrt er zum Auslöser zurück. Dialoge dürfen nicht verschachtelt werden.
+- zerstörerische Aktionen nutzen eine explizite Bestätigung mit konkreter Objektbezeichnung und einem sicheren Abbruchweg
 - Validierungsfehler stehen direkt am Feld. Page- oder bereichsweite Fehler erscheinen als Message Bar; nichtkritische Bestätigungen dürfen als kurzlebiger Toast erscheinen.
-- Jede Seite gestaltet leere, ladende, teilweise fehlerhafte, nicht berechtigte und offline/unterbrochene Zustände bewusst. Skeletons oder Live-Regionen dürfen den Tastaturfokus nicht stören.
+- jede Seite gestaltet leere, ladende, teilweise fehlerhafte, nicht berechtigte und offline/unterbrochene Zustände bewusst. Skeletons oder Live-Regionen dürfen den Tastaturfokus nicht stören.
 
 ## Bewegung und Leistung
 
@@ -164,17 +173,23 @@ Die Shell nutzt `<aside>`, `<nav>` und `<main>` sowie einen Skip-Link. Die Deskt
 
 ## Responsive Verhalten
 
-- Desktop: volle oder kompakte Sidebar und dichte Tabellen
-- Tablet: einspaltige Arbeitsbereiche, Navigation bei Bedarf als Overlay
-- Mobil: Off-Canvas-Navigation, einspaltige Inhalte und umbrechende Aktionen
-- Primäraktionen bleiben sichtbar und mit Tastatur oder Touch erreichbar
-- Tabellen und Diffs dürfen horizontal scrollen, ohne die Seite zu verbreitern
+Die aktuellen Implementierungs-Breakpoints sind verbindlich, sofern ein Feature keinen dokumentierten lokalen Grund für eine zusätzliche Stufe hat:
 
-Die Fluent-2-Größenklassen geben die Orientierung: klein 320–479 px, mittel 480–639 px, groß 640–1023 px und Desktop ab 1024 px. Die Anwendung muss bei 320 px beziehungsweise 400 % Zoom ohne Informationsverlust oder Seiten-Scrollen in der Breite funktionieren; Text-Zoom bis 200 % darf nichts abschneiden. Kompakte Desktop-Controls dürfen 30/36 px hoch sein, interaktive Touch-Ziele erhalten auf Mobilgeräten mindestens 44 × 44 px.
+- `> 1024 px`: Desktop-Shell mit voller oder kompakter Sidebar
+- `<= 1024 px`: Sidebar als Off-Canvas/Overlay
+- `<= 760 px`: Seite, Workspaces, mehrspaltige Formulare und Editor-Aktionsleisten stapeln einspaltig
+- `<= 639 px`: Shared Dialogs werden Vollbild
+- `<= 420 px`: enge Sidebar-Footer-Controls stapeln
+- `pointer: coarse`: interaktive Controls erhalten mindestens 44 px Zielhöhe
+
+Zusätzlich darf eine komplexe Komponente einen dokumentierten lokalen Zwischen-Breakpoint besitzen. Die domain-first Routenliste reduziert beispielsweise bei 1180 px ihre Spaltenzahl und wird bei 760 px vollständig einspaltig.
+
+Die Fluent-2-Größenklassen bleiben als Orientierung erhalten: klein 320–479 px, mittel 480–639 px, groß 640–1023 px und Desktop ab 1024 px. Die Anwendung muss bei 320 px beziehungsweise 400 % Zoom ohne Informationsverlust oder horizontalen Seiten-Scroll funktionieren; Text-Zoom bis 200 % darf nichts abschneiden. Tabellen und Diffs dürfen innerhalb ihres eigenen Containers horizontal scrollen. Kompakte Desktop-Controls dürfen 30/36 px hoch sein, interaktive Touch-Ziele erhalten auf Mobilgeräten mindestens 44 × 44 px.
 
 ## Semantik und Zugänglichkeit
 
 - Verwende echte HTML-Landmarks, logische Überschriftenebenen, Tabellen-Header, Formularlabels und `button`/`a` entsprechend ihrer Funktion.
+- Hierarchische Arbeitslisten verwenden `<section>`, `<ul>/<li>` oder vergleichbare native Semantik statt generischer klickbarer `<div>`-Grids.
 - Jeder Tastaturfokus ist deutlich sichtbar. Fokus folgt einer nachvollziehbaren Reihenfolge und geht beim Schließen temporärer Oberflächen nicht verloren.
 - Reine Icons haben einen deutschen zugänglichen Namen; redundante dekorative Icons werden vor Assistenztechnologien verborgen.
 - Tooltipps enthalten nur ergänzende Klarstellung und sind per Fokus erreichbar; ihr Inhalt wird über `aria-describedby` verknüpft.
@@ -184,13 +199,13 @@ Die Fluent-2-Größenklassen geben die Orientierung: klein 320–479 px, mittel 
 
 Eine Seite ist nur fertig, wenn:
 
-1. Primäraktion und Nebenaktionen eindeutig erkennbar sind.
+1. Primäraktion und Nebenaktionen pro Aktionskontext eindeutig erkennbar sind.
 2. Inputs, Buttons und Panels in Light und Dark klar abgegrenzt sind.
 3. Keyboard-Fokus sichtbar ist.
 4. die Seite ohne unnötiges JavaScript funktioniert.
 5. System-, Hell- und Dunkelmodus funktionieren.
 6. reduzierte Bewegung respektiert wird.
-7. Tabellen und Formulare bei 760 Pixel Breite bedienbar bleiben.
+7. Tabellen und Formulare bei 760 Pixel Breite bedienbar bleiben; domain-first Arbeitslisten stapeln sinnvoll.
 8. leere, fehlerhafte und ladende Zustände verständlich sind.
 9. keine dekorativen Effekte oder unnötigen Popups eingeführt wurden.
 10. semantisches HTML, Labels, Landmarks, Fokus-Rückgabe und Textalternativen geprüft sind.
