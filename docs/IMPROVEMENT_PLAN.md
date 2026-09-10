@@ -64,10 +64,10 @@ Verification evidence for Phase 3: PR #76, GitHub Actions **Verify .NET applicat
 
 Tracking: #77
 
-- [ ] **TODO** Choose one canonical default-language policy.
-- [ ] **TODO** Reconcile `MULTILINGUAL_UI.md`, `AGENTS.md`, runtime config and tests.
-- [ ] **TODO** Move hard-coded product UI strings into the localization resource path where required.
-- [ ] **TODO** Add a regression rule/test preventing new localization drift.
+- [ ] **IN PROGRESS** Choose one canonical default-language policy: German (`de`) UI default, English source-key fallback, supported UI cultures `de` and `en`.
+- [ ] **IN PROGRESS** Reconcile `MULTILINGUAL_UI.md`, `AGENTS.md`, runtime config and tests.
+- [ ] **IN PROGRESS** Move hard-coded product UI strings on the audited routing/settings surfaces into the localization resource path.
+- [ ] **IN PROGRESS** Add regression rules/tests preventing new localization drift and verify default/preferred culture behavior.
 
 ## Phase 5 - Infrastructure decomposition
 
