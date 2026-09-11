@@ -588,7 +588,8 @@ public sealed class AccessAdministrationStore
                 action, object_type, object_id, before_json, after_json,
                 result, revision_id, correlation_id)
             VALUES(
-                @occurred_at, @actor_user_id, @actor_username, @remote_address,
+                @occurred_at, @actor_user_id, @actor_username,
+                NULLIF(@remote_address, '')::inet,
                 @action, @object_type, @object_id,
                 CAST(@before_json AS jsonb), CAST(@after_json AS jsonb),
                 'success', NULL, @correlation_id)
