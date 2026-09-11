@@ -37,12 +37,8 @@ public sealed class IndexModel : LocalizedPageModel
     public async Task<IActionResult> OnGetAsync()
     {
         var userId = UserId();
-        var storedLanguage = await _preferences.GetLanguageAsync(
-            userId,
-            HttpContext.RequestAborted);
-        Input.Language = _cultures.TryNormalize(storedLanguage, out var language)
-            ? language
-            : _cultures.DefaultCulture;
+        Input.Language = _cultures.ResolvePreference(
+            await _preferences.GetLanguageAsync(userId, HttpContext.RequestAborted));
         return Page();
     }
 
