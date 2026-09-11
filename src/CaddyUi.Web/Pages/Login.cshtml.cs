@@ -137,7 +137,7 @@ public sealed class LoginModel : LocalizedPageModel
             remoteAddress,
             Request.Headers.UserAgent.ToString(),
             HttpContext.RequestAborted);
-        var language = _cultures.Normalize(
+        var language = _cultures.ResolvePreference(
             await _preferences.GetLanguageAsync(user.Id, HttpContext.RequestAborted));
         Response.Cookies.Append(
             UiCultureCatalog.LanguageCookieName,
