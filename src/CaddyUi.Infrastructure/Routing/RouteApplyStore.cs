@@ -1,4 +1,3 @@
-using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -7,6 +6,7 @@ using System.Text.Json;
 using CaddyUi.Application.Routing;
 using CaddyUi.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using static CaddyUi.Infrastructure.Persistence.RelationalStoreSupport;
 
 namespace CaddyUi.Infrastructure.Routing;
 
@@ -175,7 +175,8 @@ public sealed class RouteApplyStore
         var id = Guid.NewGuid();
         var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
         var contentJson = JsonSerializer.Serialize(new { format = "caddyfile", content }, JsonOptions);
-        await ExecuteAsync(
+        await ExecuteNonQueryAsync(
+            _contextFactory,
             """
             INSERT INTO caddy_ui.caddy_snapshots(id, created_at, digest, manifest_json, content_json, reason)
             VALUES(@id, @now, @digest, '{}'::jsonb, CAST(@content_json AS jsonb), @reason)
@@ -237,7 +238,8 @@ public sealed class RouteApplyStore
         CancellationToken cancellationToken = default)
     {
         var id = Guid.NewGuid();
-        await ExecuteAsync(
+        await ExecuteNonQueryAsync(
+            _contextFactory,
             """
             INSERT INTO caddy_ui.apply_operations(
                 id, route_revision_id, actor_user_id, correlation_id, state,
@@ -268,7 +270,8 @@ public sealed class RouteApplyStore
         string error,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(
+        return ExecuteNonQueryAsync(
+            _contextFactory,
             """
             INSERT INTO caddy_ui.apply_operation_steps(
                 operation_id, sequence, name, state, started_at, completed_at, details_json, error)
@@ -463,19 +466,6 @@ public sealed class RouteApplyStore
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task ExecuteAsync(
-        string sql,
-        Action<DbCommand> bind,
-        CancellationToken cancellationToken)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var connection = await OpenConnectionAsync(context, cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        bind(command);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
     private static string NormalizeObjectJson(string value)
     {
         try
@@ -507,19 +497,6 @@ public sealed class RouteApplyStore
         return value.Length <= maximum ? value : value[..maximum];
     }
 
-    private static async Task<DbConnection> OpenConnectionAsync(
-        CaddyUiDbContext context,
-        CancellationToken cancellationToken)
-    {
-        var connection = context.Database.GetDbConnection();
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(cancellationToken);
-        }
-
-        return connection;
-    }
-
     private static DateTimeOffset ReadTimestamp(DbDataReader reader, int ordinal)
     {
         var value = reader.GetValue(ordinal);
@@ -531,13 +508,5 @@ public sealed class RouteApplyStore
                 Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
                 CultureInfo.InvariantCulture),
         };
-    }
-
-    private static void AddParameter(DbCommand command, string name, object? value)
-    {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value ?? DBNull.Value;
-        command.Parameters.Add(parameter);
     }
 }
