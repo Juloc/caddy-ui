@@ -53,16 +53,16 @@ public sealed class RouteRuntimePresentationTests
     }
 
     [Theory]
-    [InlineData(RouteRuntimeState.Applied, "Aktiv")]
-    [InlineData(RouteRuntimeState.ApplyRequired, "Änderung offen")]
-    [InlineData(RouteRuntimeState.NewDraft, "Neu · nicht aktiv")]
-    [InlineData(RouteRuntimeState.PendingRemoval, "Entfernung offen")]
-    [InlineData(RouteRuntimeState.Disabled, "Deaktiviert")]
-    [InlineData(RouteRuntimeState.Unknown, "Status unbekannt")]
-    public void StateLabel_DescribesRuntimeState(
+    [InlineData(RouteRuntimeState.Applied, "Active")]
+    [InlineData(RouteRuntimeState.ApplyRequired, "Apply required")]
+    [InlineData(RouteRuntimeState.NewDraft, "New · not active")]
+    [InlineData(RouteRuntimeState.PendingRemoval, "Removal pending")]
+    [InlineData(RouteRuntimeState.Disabled, "Disabled")]
+    [InlineData(RouteRuntimeState.Unknown, "Status unknown")]
+    public void StateLabelKey_DescribesRuntimeState(
         RouteRuntimeState state,
         string expected)
     {
-        Assert.Equal(expected, IndexModel.StateLabel(state));
+        Assert.Equal(expected, IndexModel.StateLabelKey(state));
     }
 }
