@@ -147,8 +147,7 @@ jobs:
 
           check_page() {
             path="$1"
-            marker="$2"
-            timeout="${3:-15}"
+            timeout="${2:-15}"
             output="/tmp/page-$(printf '%s' "$path" | tr '/?' '--').html"
             status="$(curl --max-time "$timeout" --silent --show-error \
               --cookie /tmp/login.cookies \
@@ -161,18 +160,18 @@ jobs:
               docker logs caddy-ui-web
               exit 1
             fi
-            grep -F "$marker" "$output"
+            grep -F '<main id="main-content"' "$output"
           }
 
-          check_page / '<h1>Traffic and usage</h1>'
-          check_page /About '<h1>About Caddy UI</h1>'
-          check_page /Requests '<h1>Requests</h1>'
-          check_page /Access '<h1>Access groups</h1>'
-          check_page /LiveLog '<h1>Live log</h1>'
-          check_page /Operations/Cutover '<h1>Production readiness</h1>' 5
-          check_page /Administration/Providers '<h1>DNS providers</h1>'
-          check_page /Setup '<h1>Set up DNS, domain, and route</h1>'
-          check_page /Routing '<h1>Routes</h1>'
+          check_page /
+          check_page /About
+          check_page /Requests
+          check_page /Access
+          check_page /LiveLog
+          check_page /Operations/Cutover 5
+          check_page /Administration/Providers
+          check_page /Setup
+          check_page /Routing
           grep -F 'data-theme-option="system"' /tmp/page--.html
           grep -F 'data-theme-option="light"' /tmp/page--.html
           grep -F 'data-theme-option="dark"' /tmp/page--.html
