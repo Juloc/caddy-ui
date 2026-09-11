@@ -6,16 +6,19 @@ namespace CaddyUi.Infrastructure.Routing;
 
 public sealed class RouteRuntimeStateService
 {
-    private readonly RouteManagementStore _store;
+    private readonly RouteManagementStore _routeStore;
+    private readonly RouteApplyStore _applyStore;
     private readonly CaddyApplyService _applyService;
     private readonly RoutingOptions _options;
 
     public RouteRuntimeStateService(
-        RouteManagementStore store,
+        RouteManagementStore routeStore,
+        RouteApplyStore applyStore,
         CaddyApplyService applyService,
         RoutingOptions options)
     {
-        _store = store;
+        _routeStore = routeStore;
+        _applyStore = applyStore;
         _applyService = applyService;
         _options = options;
     }
@@ -23,7 +26,7 @@ public sealed class RouteRuntimeStateService
     public async Task<RoutingRuntimeState> GetAsync(
         CancellationToken cancellationToken = default)
     {
-        var sources = await _store.LoadCompilerSourcesAsync(cancellationToken);
+        var sources = await _routeStore.LoadCompilerSourcesAsync(cancellationToken);
         var compiler = new CaddyRouteCompiler(
             _options.AllowCustomRoutes,
             _options.PortalUpstream);
@@ -35,15 +38,15 @@ public sealed class RouteRuntimeStateService
             SHA256.HashData(Encoding.UTF8.GetBytes(normalizedActiveContent)));
         var activeRevision = activeContent.Length == 0
             ? null
-            : await _store.GetRevisionByDigestAsync(activeDigest, cancellationToken);
+            : await _applyStore.GetRevisionByDigestAsync(activeDigest, cancellationToken);
 
-        var latestOperation = (await _store.ListOperationsAsync(1, cancellationToken))
+        var latestOperation = (await _applyStore.ListOperationsAsync(1, cancellationToken))
             .FirstOrDefault();
         var lastApplyFailed = false;
         var lastApplyError = string.Empty;
         if (latestOperation is { State: "failed", RouteRevisionId: Guid failedRevisionId })
         {
-            var failedRevision = await _store.GetRevisionAsync(failedRevisionId, cancellationToken);
+            var failedRevision = await _applyStore.GetRevisionAsync(failedRevisionId, cancellationToken);
             if (failedRevision is not null &&
                 string.Equals(
                     failedRevision.Digest,

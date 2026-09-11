@@ -11,10 +11,10 @@ namespace CaddyUi.Web.Pages.Routing;
 [Authorize(Policy = "Editor")]
 public sealed class PreviewModel : LocalizedPageModel
 {
-    private readonly RouteManagementStore _store;
+    private readonly RouteApplyStore _store;
     private readonly CaddyApplyService _applyService;
 
-    public PreviewModel(RouteManagementStore store, CaddyApplyService applyService)
+    public PreviewModel(RouteApplyStore store, CaddyApplyService applyService)
     {
         _store = store;
         _applyService = applyService;

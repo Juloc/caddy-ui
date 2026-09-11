@@ -78,10 +78,12 @@ No large rewrite. Split by responsibility while preserving behavior and tests.
 ### Route persistence
 
 - [x] **DONE** Split route CRUD from access-group/credential persistence.
-- [ ] **TODO** Split revision/snapshot/apply-operation persistence from route CRUD.
+- [x] **DONE** Split revision/snapshot/apply-operation persistence from route CRUD.
 - [ ] **TODO** Remove duplicated transaction/command boilerplate where a focused helper improves clarity.
 
-Verification evidence for the access-persistence slice: PR #79, GitHub Actions **Verify .NET application** run #244 — restore, formatting, Release build, all .NET/PostgreSQL tests including the access-group/credential lifecycle and ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated/browser acceptance, SQLite migration CLI and bundled Caddy module verification all passed.
+Verification evidence for the access-persistence slice: PR #79, GitHub Actions **Verify .NET application** run #244 — restore, formatting, Release build, all .NET/PostgreSQL tests including the access-group/credential lifecycle and ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated/browser acceptance, SQLite migration CLI and bundled Caddy module verification all passed. Final documentation head was re-verified by run #245; its initial mobile-focus browser attempt was flaky and the unchanged-head retry passed the complete acceptance suite.
+
+Verification evidence for the route-apply persistence slice: PR #80, GitHub Actions **Verify .NET application** run #249 — restore, formatting, Release build, all .NET/PostgreSQL tests including the route/apply ownership boundary and apply lifecycle, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, stabilized Chromium focus/UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. The browser contract now waits for the asynchronous mobile-navigation focus transfer and focus return within a bounded interval instead of sampling the same event tick; the accessibility requirement itself is unchanged.
 
 ### Operations
 

@@ -62,10 +62,11 @@ public sealed class RouteRuntimeStateIntegrationTests : IAsyncLifetime
                 RootConfigPath = rootPath,
                 PortalUpstream = "127.0.0.1:8099",
             };
-            var store = new RouteManagementStore(factory);
+            var routeStore = new RouteManagementStore(factory);
+            var applyStore = new RouteApplyStore(factory);
             var runner = new ControlledCaddyCommandRunner();
-            var apply = new CaddyApplyService(store, options, runner);
-            var runtime = new RouteRuntimeStateService(store, apply, options);
+            var apply = new CaddyApplyService(routeStore, applyStore, options, runner);
+            var runtime = new RouteRuntimeStateService(routeStore, applyStore, apply, options);
             var domains = new DomainProviderStore(factory);
             var actor = new ManagementActor(null, "route-state-test", "127.0.0.1");
 
@@ -85,20 +86,20 @@ public sealed class RouteRuntimeStateIntegrationTests : IAsyncLifetime
                 RouteCertificateMode.Individual,
                 null,
                 RouteConfigurationDocument.Empty with { Upstream = "app:8080" });
-            await store.CreateRouteAsync(desired, actor);
+            await routeStore.CreateRouteAsync(desired, actor);
 
             var state = await runtime.GetAsync();
             Assert.Equal(RouteRuntimeState.NewDraft, state.StateFor(desired.Id));
             Assert.True(state.HasPendingChanges);
-            Assert.Empty(await store.ListRevisionsAsync());
-            Assert.Empty(await store.ListOperationsAsync());
+            Assert.Empty(await applyStore.ListRevisionsAsync());
+            Assert.Empty(await applyStore.ListOperationsAsync());
 
             var initialPreview = await apply.CreatePreviewAsync("Initial route", actor);
             var initialApply = await apply.ApplyAsync(initialPreview.Revision.Id, actor);
             Assert.Equal("applied", initialApply.State);
-            Assert.NotEmpty(await store.ListRevisionsAsync());
+            Assert.NotEmpty(await applyStore.ListRevisionsAsync());
             Assert.Contains(
-                await store.ListOperationsAsync(),
+                await applyStore.ListOperationsAsync(),
                 operation => operation.State == "applied");
 
             state = await runtime.GetAsync();
@@ -110,7 +111,7 @@ public sealed class RouteRuntimeStateIntegrationTests : IAsyncLifetime
             {
                 Configuration = desired.Configuration with { Upstream = "app-v2:8080" },
             };
-            await store.UpdateRouteAsync(desired, actor);
+            await routeStore.UpdateRouteAsync(desired, actor);
 
             state = await runtime.GetAsync();
             Assert.Equal(RouteRuntimeState.ApplyRequired, state.StateFor(desired.Id));
@@ -128,7 +129,7 @@ public sealed class RouteRuntimeStateIntegrationTests : IAsyncLifetime
             Assert.NotEmpty(state.LastApplyError);
 
             desired = desired with { Enabled = false };
-            await store.UpdateRouteAsync(desired, actor);
+            await routeStore.UpdateRouteAsync(desired, actor);
 
             state = await runtime.GetAsync();
             Assert.False(state.LastApplyFailed);
@@ -142,7 +143,7 @@ public sealed class RouteRuntimeStateIntegrationTests : IAsyncLifetime
             Assert.False(state.HasPendingChanges);
 
             desired = desired with { Enabled = true };
-            await store.UpdateRouteAsync(desired, actor);
+            await routeStore.UpdateRouteAsync(desired, actor);
             state = await runtime.GetAsync();
             Assert.Equal(RouteRuntimeState.NewDraft, state.StateFor(desired.Id));
 
@@ -150,7 +151,7 @@ public sealed class RouteRuntimeStateIntegrationTests : IAsyncLifetime
             await apply.ApplyAsync(enablePreview.Revision.Id, actor);
             Assert.Equal(RouteRuntimeState.Applied, (await runtime.GetAsync()).StateFor(desired.Id));
 
-            await store.DeleteRouteAsync(desired.Id, actor);
+            await routeStore.DeleteRouteAsync(desired.Id, actor);
 
             state = await runtime.GetAsync();
             var pendingRemoval = Assert.Single(state.PendingRemovals);

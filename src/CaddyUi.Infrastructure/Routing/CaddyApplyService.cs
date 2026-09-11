@@ -136,16 +136,19 @@ public sealed class CaddyApplyService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly SemaphoreSlim ApplyLock = new(1, 1);
-    private readonly RouteManagementStore _store;
+    private readonly RouteManagementStore _routeStore;
+    private readonly RouteApplyStore _applyStore;
     private readonly RoutingOptions _options;
     private readonly ICaddyCommandRunner _commandRunner;
 
     public CaddyApplyService(
-        RouteManagementStore store,
+        RouteManagementStore routeStore,
+        RouteApplyStore applyStore,
         RoutingOptions options,
         ICaddyCommandRunner commandRunner)
     {
-        _store = store;
+        _routeStore = routeStore;
+        _applyStore = applyStore;
         _options = options;
         _commandRunner = commandRunner;
     }
@@ -157,11 +160,11 @@ public sealed class CaddyApplyService
         ManagementActor actor,
         CancellationToken cancellationToken = default)
     {
-        var sources = await _store.LoadCompilerSourcesAsync(cancellationToken);
+        var sources = await _routeStore.LoadCompilerSourcesAsync(cancellationToken);
         var compiler = new CaddyRouteCompiler(_options.AllowCustomRoutes, _options.PortalUpstream);
         var compilation = compiler.Compile(sources);
         var current = await ReadCurrentContentAsync(cancellationToken);
-        var revision = await _store.CreateRevisionAsync(compilation, reason, actor, cancellationToken);
+        var revision = await _applyStore.CreateRevisionAsync(compilation, reason, actor, cancellationToken);
         return new RoutePreviewResult(
             revision,
             current,
@@ -224,7 +227,7 @@ public sealed class CaddyApplyService
                 "Route writes are disabled. Set Routing:WriteMode to shadow or active after the deployment paths have been verified.");
         }
 
-        var revision = await _store.GetRevisionAsync(revisionId, cancellationToken) ??
+        var revision = await _applyStore.GetRevisionAsync(revisionId, cancellationToken) ??
             throw new InvalidOperationException("The selected route revision does not exist.");
         if (_options.WriteMode == RouteWriteMode.Active && RequiresWildcardRenderer(revision.ManifestJson))
         {
@@ -239,13 +242,13 @@ public sealed class CaddyApplyService
         if (_options.WriteMode == RouteWriteMode.Active)
         {
             VerifyActiveContract();
-            snapshotId = await _store.CreateSnapshotAsync(
+            snapshotId = await _applyStore.CreateSnapshotAsync(
                 previousContent,
                 $"Before applying route revision {revision.Id:D}",
                 cancellationToken);
         }
 
-        var operationId = await _store.StartOperationAsync(
+        var operationId = await _applyStore.StartOperationAsync(
             revision.Id,
             actor,
             Guid.NewGuid().ToString("N"),
@@ -281,7 +284,7 @@ public sealed class CaddyApplyService
 
             if (_options.WriteMode == RouteWriteMode.Shadow)
             {
-                await _store.CompleteOperationAsync(
+                await _applyStore.CompleteOperationAsync(
                     operationId,
                     revision.Id,
                     "shadowed",
@@ -316,7 +319,7 @@ public sealed class CaddyApplyService
                 "Post-reload validation failed.",
                 cancellationToken);
 
-            await _store.CompleteOperationAsync(
+            await _applyStore.CompleteOperationAsync(
                 operationId,
                 revision.Id,
                 "applied",
@@ -345,7 +348,7 @@ public sealed class CaddyApplyService
             var error = rollbackError.Length == 0
                 ? exception.Message
                 : $"{exception.Message} Rollback issue: {rollbackError}";
-            await _store.CompleteOperationAsync(
+            await _applyStore.CompleteOperationAsync(
                 operationId,
                 revision.Id,
                 "failed",
@@ -374,18 +377,18 @@ public sealed class CaddyApplyService
         }
 
         VerifyActiveContract();
-        var previousOperation = await _store.GetLatestAppliedOperationAsync(cancellationToken) ??
+        var previousOperation = await _applyStore.GetLatestAppliedOperationAsync(cancellationToken) ??
             throw new InvalidOperationException("No applied route operation with a previous snapshot exists.");
-        var snapshot = await _store.GetSnapshotAsync(
+        var snapshot = await _applyStore.GetSnapshotAsync(
             previousOperation.PreviousSnapshotId!.Value,
             cancellationToken) ?? throw new InvalidOperationException("The rollback snapshot is missing.");
         var targetPath = TargetPath();
         var current = await ReadFileIfExistsAsync(targetPath, cancellationToken);
-        var currentSnapshot = await _store.CreateSnapshotAsync(
+        var currentSnapshot = await _applyStore.CreateSnapshotAsync(
             current,
             $"Before rollback: {reason}",
             cancellationToken);
-        var operationId = await _store.StartOperationAsync(
+        var operationId = await _applyStore.StartOperationAsync(
             null,
             actor,
             Guid.NewGuid().ToString("N"),
@@ -414,7 +417,7 @@ public sealed class CaddyApplyService
                 ["reload", "--config", _options.RootConfigPath, "--adapter", "caddyfile"],
                 "Caddy reload failed during rollback.",
                 cancellationToken);
-            await _store.CompleteOperationAsync(
+            await _applyStore.CompleteOperationAsync(
                 operationId,
                 null,
                 "rolled_back",
@@ -429,7 +432,7 @@ public sealed class CaddyApplyService
         catch (Exception exception)
         {
             await WriteAtomicallyAsync(targetPath, current, cancellationToken);
-            await _store.CompleteOperationAsync(
+            await _applyStore.CompleteOperationAsync(
                 operationId,
                 null,
                 "failed",
@@ -460,7 +463,7 @@ public sealed class CaddyApplyService
         object details,
         CancellationToken cancellationToken)
     {
-        await _store.RecordOperationStepAsync(
+        await _applyStore.RecordOperationStepAsync(
             operationId,
             sequence,
             name,
@@ -518,7 +521,7 @@ public sealed class CaddyApplyService
             var reload = await RunCaddyAsync(
                 ["reload", "--config", _options.RootConfigPath, "--adapter", "caddyfile"],
                 cancellationToken);
-            await _store.RecordOperationStepAsync(
+            await _applyStore.RecordOperationStepAsync(
                 operationId,
                 sequence,
                 "Automatic rollback",

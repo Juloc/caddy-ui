@@ -11,7 +11,8 @@ public sealed class ManagedRouteReconciliationWorker : BackgroundService
     private static readonly TimeSpan ReconciliationRetryInterval = TimeSpan.FromSeconds(5);
     private const int MaximumReconciliationAttempts = 12;
 
-    private readonly RouteManagementStore _store;
+    private readonly RouteManagementStore _routeStore;
+    private readonly RouteApplyStore _applyStore;
     private readonly CaddyApplyService _applyService;
     private readonly RoutingOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -20,7 +21,8 @@ public sealed class ManagedRouteReconciliationWorker : BackgroundService
     private readonly Uri _caddyConfigurationUri;
 
     public ManagedRouteReconciliationWorker(
-        RouteManagementStore store,
+        RouteManagementStore routeStore,
+        RouteApplyStore applyStore,
         CaddyApplyService applyService,
         RoutingOptions options,
         IHttpClientFactory httpClientFactory,
@@ -28,7 +30,8 @@ public sealed class ManagedRouteReconciliationWorker : BackgroundService
         IHostApplicationLifetime applicationLifetime,
         ILogger<ManagedRouteReconciliationWorker> logger)
     {
-        _store = store;
+        _routeStore = routeStore;
+        _applyStore = applyStore;
         _applyService = applyService;
         _options = options;
         _httpClientFactory = httpClientFactory;
@@ -84,7 +87,7 @@ public sealed class ManagedRouteReconciliationWorker : BackgroundService
 
     private async Task<bool> TryReconcileAsync(CancellationToken cancellationToken)
     {
-        var sources = await _store.LoadCompilerSourcesAsync(cancellationToken);
+        var sources = await _routeStore.LoadCompilerSourcesAsync(cancellationToken);
         var compiler = new CaddyRouteCompiler(
             _options.AllowCustomRoutes,
             _options.PortalUpstream);
@@ -103,7 +106,7 @@ public sealed class ManagedRouteReconciliationWorker : BackgroundService
             return true;
         }
 
-        var revision = await _store.CreateRevisionAsync(
+        var revision = await _applyStore.CreateRevisionAsync(
             compilation,
             "Automatic startup reconciliation after a Caddy UI renderer update",
             ManagementActor.System,
