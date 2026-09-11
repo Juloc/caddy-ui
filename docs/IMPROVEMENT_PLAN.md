@@ -77,7 +77,7 @@ No large rewrite. Split by responsibility while preserving behavior and tests.
 
 ### Route persistence
 
-- [ ] **TODO** Split route CRUD from access-group/credential persistence.
+- [ ] **IN PROGRESS** Split route CRUD from access-group/credential persistence.
 - [ ] **TODO** Split revision/snapshot/apply-operation persistence from route CRUD.
 - [ ] **TODO** Remove duplicated transaction/command boilerplate where a focused helper improves clarity.
 
