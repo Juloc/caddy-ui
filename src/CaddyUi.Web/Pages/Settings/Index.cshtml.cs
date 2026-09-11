@@ -37,8 +37,12 @@ public sealed class IndexModel : LocalizedPageModel
     public async Task<IActionResult> OnGetAsync()
     {
         var userId = UserId();
-        Input.Language = _cultures.Normalize(
-            await _preferences.GetLanguageAsync(userId, HttpContext.RequestAborted));
+        var storedLanguage = await _preferences.GetLanguageAsync(
+            userId,
+            HttpContext.RequestAborted);
+        Input.Language = _cultures.TryNormalize(storedLanguage, out var language)
+            ? language
+            : _cultures.DefaultCulture;
         return Page();
     }
 
@@ -81,6 +85,6 @@ public sealed class IndexModel : LocalizedPageModel
     {
         [Required]
         [MaxLength(16)]
-        public string Language { get; set; } = UiCultureCatalog.FallbackCulture;
+        public string Language { get; set; } = string.Empty;
     }
 }
