@@ -58,11 +58,12 @@ public sealed class LocalizationContractTests
     }
 
     [Fact]
-    public void LoginAndSettingsWithoutStoredPreference_UseCentralPreferenceResolution()
+    public void LoginSettingsAndPersistence_DoNotInventEnglishPreference()
     {
         var loginModel = ReadRepositoryFile("src/CaddyUi.Web/Pages/Login.cshtml.cs");
         var settingsModel = ReadRepositoryFile("src/CaddyUi.Web/Pages/Settings/Index.cshtml.cs");
         var middleware = ReadRepositoryFile("src/CaddyUi.Web/Localization/UserCultureMiddleware.cs");
+        var preferenceStore = ReadRepositoryFile("src/CaddyUi.Infrastructure/Security/UserPreferenceStore.cs");
         var page = ReadRepositoryFile("src/CaddyUi.Web/Pages/Settings/Index.cshtml");
 
         Assert.Contains("_cultures.ResolvePreference(", loginModel, StringComparison.Ordinal);
@@ -70,11 +71,25 @@ public sealed class LocalizationContractTests
         Assert.Contains("catalog.ResolvePreference(requested)", middleware, StringComparison.Ordinal);
         Assert.DoesNotContain("_cultures.Normalize(", loginModel, StringComparison.Ordinal);
         Assert.DoesNotContain("_cultures.Normalize(", settingsModel, StringComparison.Ordinal);
+        Assert.Contains("Task<string?> GetLanguageAsync", preferenceStore, StringComparison.Ordinal);
+        Assert.Contains("? language\n            : null;", preferenceStore, StringComparison.Ordinal);
+        Assert.DoesNotContain("? language\n            : \"en\";", preferenceStore, StringComparison.Ordinal);
         Assert.Contains("IStringLocalizer<CaddyUi.Web.SettingsResource>", page, StringComparison.Ordinal);
         Assert.Contains(
             "German is the default. The preference is stored with your user account.",
             page,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DatabaseDefaultCulture_IsGermanWithoutRewritingExistingPreferences()
+    {
+        var migration = ReadRepositoryFile(
+            "src/CaddyUi.Infrastructure/Persistence/Migrations/20260911070000_GermanDefaultCulture.cs");
+
+        Assert.Contains("ALTER COLUMN language SET DEFAULT 'de'", migration, StringComparison.Ordinal);
+        Assert.DoesNotContain("UPDATE caddy_ui.users", migration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("German is the product default", migration, StringComparison.Ordinal);
     }
 
     [Fact]
