@@ -1,4 +1,6 @@
 using System.Xml.Linq;
+using CaddyUi.Web.Localization;
+using Microsoft.Extensions.Configuration;
 
 namespace CaddyUi.Web.Tests;
 
@@ -17,10 +19,6 @@ public sealed class LocalizationContractTests
         Assert.Contains("\"de\"", settings, StringComparison.Ordinal);
         Assert.Contains("FallbackCulture = \"en\"", catalog, StringComparison.Ordinal);
         Assert.Contains(
-            "return TryNormalize(value, out var normalized) ? normalized : DefaultCulture;",
-            catalog,
-            StringComparison.Ordinal);
-        Assert.Contains(
             "German as the configured default and English as the neutral source-key fallback",
             guide,
             StringComparison.Ordinal);
@@ -34,15 +32,42 @@ public sealed class LocalizationContractTests
             StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(null, "de")]
+    [InlineData("", "de")]
+    [InlineData("unsupported", "de")]
+    [InlineData("de-DE", "de")]
+    [InlineData("en-US", "en")]
+    public void ResolvePreference_UsesConfiguredDefaultForMissingOrUnsupportedValues(
+        string? preference,
+        string expected)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Localization:DefaultCulture"] = "de",
+                    ["Localization:SupportedCultures:0"] = "en",
+                    ["Localization:SupportedCultures:1"] = "de",
+                })
+            .Build();
+        var catalog = new UiCultureCatalog(configuration);
+
+        Assert.Equal("de", catalog.DefaultCulture);
+        Assert.Equal(expected, catalog.ResolvePreference(preference));
+    }
+
     [Fact]
-    public void LoginAndSettingsWithoutStoredPreference_UseConfiguredDefaultCulture()
+    public void LoginAndSettingsWithoutStoredPreference_UseCentralPreferenceResolution()
     {
         var loginModel = ReadRepositoryFile("src/CaddyUi.Web/Pages/Login.cshtml.cs");
         var settingsModel = ReadRepositoryFile("src/CaddyUi.Web/Pages/Settings/Index.cshtml.cs");
+        var middleware = ReadRepositoryFile("src/CaddyUi.Web/Localization/UserCultureMiddleware.cs");
         var page = ReadRepositoryFile("src/CaddyUi.Web/Pages/Settings/Index.cshtml");
 
         Assert.Contains("_cultures.ResolvePreference(", loginModel, StringComparison.Ordinal);
         Assert.Contains("_cultures.ResolvePreference(", settingsModel, StringComparison.Ordinal);
+        Assert.Contains("catalog.ResolvePreference(requested)", middleware, StringComparison.Ordinal);
         Assert.DoesNotContain("_cultures.Normalize(", loginModel, StringComparison.Ordinal);
         Assert.DoesNotContain("_cultures.Normalize(", settingsModel, StringComparison.Ordinal);
         Assert.Contains("IStringLocalizer<CaddyUi.Web.SettingsResource>", page, StringComparison.Ordinal);
