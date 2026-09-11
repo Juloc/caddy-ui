@@ -17,6 +17,10 @@ public sealed class LocalizationContractTests
         Assert.Contains("\"de\"", settings, StringComparison.Ordinal);
         Assert.Contains("FallbackCulture = \"en\"", catalog, StringComparison.Ordinal);
         Assert.Contains(
+            "return TryNormalize(value, out var normalized) ? normalized : DefaultCulture;",
+            catalog,
+            StringComparison.Ordinal);
+        Assert.Contains(
             "German as the configured default and English as the neutral source-key fallback",
             guide,
             StringComparison.Ordinal);
@@ -31,14 +35,16 @@ public sealed class LocalizationContractTests
     }
 
     [Fact]
-    public void SettingsWithoutStoredPreference_UseConfiguredDefaultCulture()
+    public void LoginAndSettingsWithoutStoredPreference_UseConfiguredDefaultCulture()
     {
-        var pageModel = ReadRepositoryFile("src/CaddyUi.Web/Pages/Settings/Index.cshtml.cs");
+        var loginModel = ReadRepositoryFile("src/CaddyUi.Web/Pages/Login.cshtml.cs");
+        var settingsModel = ReadRepositoryFile("src/CaddyUi.Web/Pages/Settings/Index.cshtml.cs");
         var page = ReadRepositoryFile("src/CaddyUi.Web/Pages/Settings/Index.cshtml");
 
-        Assert.Contains("_cultures.TryNormalize(storedLanguage, out var language)", pageModel, StringComparison.Ordinal);
-        Assert.Contains(": _cultures.DefaultCulture;", pageModel, StringComparison.Ordinal);
-        Assert.DoesNotContain("_cultures.Normalize(", pageModel, StringComparison.Ordinal);
+        Assert.Contains("_cultures.ResolvePreference(", loginModel, StringComparison.Ordinal);
+        Assert.Contains("_cultures.ResolvePreference(", settingsModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("_cultures.Normalize(", loginModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("_cultures.Normalize(", settingsModel, StringComparison.Ordinal);
         Assert.Contains("IStringLocalizer<CaddyUi.Web.SettingsResource>", page, StringComparison.Ordinal);
         Assert.Contains(
             "German is the default. The preference is stored with your user account.",
