@@ -33,15 +33,18 @@ public sealed class RouteTransferService
         WriteIndented = true,
     };
     private readonly RouteManagementStore _routeStore;
+    private readonly AccessAdministrationStore _accessStore;
     private readonly RouteImportStore _importStore;
     private readonly RoutingOptions _options;
 
     public RouteTransferService(
         RouteManagementStore routeStore,
+        AccessAdministrationStore accessStore,
         RouteImportStore importStore,
         RoutingOptions options)
     {
         _routeStore = routeStore;
+        _accessStore = accessStore;
         _importStore = importStore;
         _options = options;
     }
@@ -105,7 +108,7 @@ public sealed class RouteTransferService
         }
 
         var domains = await _routeStore.ListDomainsAsync(cancellationToken);
-        var groups = await _routeStore.ListAccessGroupsAsync(cancellationToken);
+        var groups = await _accessStore.ListAccessGroupsAsync(cancellationToken);
         var definitions = new List<ManagedRouteDefinition>(document.Routes.Count);
         foreach (var item in document.Routes)
         {

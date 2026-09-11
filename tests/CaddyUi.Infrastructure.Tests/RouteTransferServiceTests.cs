@@ -40,6 +40,7 @@ public sealed class RouteTransferServiceTests : IAsyncLifetime
             "Example",
             dnsProviderId: null);
         var routes = new RouteManagementStore(factory);
+        var access = new AccessAdministrationStore(factory);
         var actor = new ManagementActor(null, "route-transfer-test", "127.0.0.1");
         var route = ManagedRouteDefinition.Create(
             Guid.NewGuid(),
@@ -61,6 +62,7 @@ public sealed class RouteTransferServiceTests : IAsyncLifetime
 
         var transfer = new RouteTransferService(
             routes,
+            access,
             new RouteImportStore(factory),
             new RoutingOptions());
         var exported = await transfer.ExportAsync();
@@ -96,6 +98,7 @@ public sealed class RouteTransferServiceTests : IAsyncLifetime
             "Atomic",
             dnsProviderId: null);
         var routes = new RouteManagementStore(factory);
+        var access = new AccessAdministrationStore(factory);
         var actor = new ManagementActor(null, "route-transfer-test", "127.0.0.1");
         var existing = ManagedRouteDefinition.Create(
             Guid.NewGuid(),
@@ -112,6 +115,7 @@ public sealed class RouteTransferServiceTests : IAsyncLifetime
         await routes.CreateRouteAsync(existing, actor);
         var transfer = new RouteTransferService(
             routes,
+            access,
             new RouteImportStore(factory),
             new RoutingOptions());
         var json =

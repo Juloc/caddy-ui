@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Text.Json;
 using CaddyUi.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,173 @@ public sealed class AccessAdministrationStore
     public AccessAdministrationStore(IDbContextFactory<CaddyUiDbContext> contextFactory)
     {
         _contextFactory = contextFactory;
+    }
+
+    public async Task<IReadOnlyList<AccessGroupRecord>> ListAccessGroupsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT groups.id,
+                   groups.name,
+                   groups.description,
+                   groups.enabled,
+                   COUNT(DISTINCT credentials.id)::integer,
+                   COUNT(DISTINCT routes.id)::integer,
+                   groups.config_json::text,
+                   groups.updated_at
+            FROM caddy_ui.access_groups AS groups
+            LEFT JOIN caddy_ui.access_credentials AS credentials ON credentials.group_id = groups.id
+            LEFT JOIN caddy_ui.managed_routes AS routes ON routes.access_group_id = groups.id
+            GROUP BY groups.id
+            ORDER BY groups.enabled DESC, lower(groups.name)
+            """;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<AccessGroupRecord>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var presentation = AccessGroupPresentation.FromJson(reader.GetString(6));
+            result.Add(new AccessGroupRecord(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                presentation.AccentColor,
+                presentation.IconUrl,
+                reader.GetBoolean(3),
+                reader.GetInt32(4),
+                reader.GetInt32(5),
+                ReadTimestamp(reader, 7)));
+        }
+
+        return result;
+    }
+
+    public async Task<IReadOnlyList<AccessCredentialRecord>> ListCredentialsAsync(
+        Guid? groupId = null,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT id, group_id, username, enabled, created_at, updated_at
+            FROM caddy_ui.access_credentials
+            WHERE (CAST(@group_id AS uuid) IS NULL OR group_id = @group_id)
+            ORDER BY lower(username), id
+            """;
+        AddParameter(command, "group_id", groupId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<AccessCredentialRecord>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(new AccessCredentialRecord(
+                reader.GetGuid(0),
+                reader.GetGuid(1),
+                reader.GetString(2),
+                reader.GetBoolean(3),
+                ReadTimestamp(reader, 4),
+                ReadTimestamp(reader, 5)));
+        }
+
+        return result;
+    }
+
+    public Task<Guid> CreateAccessGroupAsync(
+        string name,
+        string description,
+        ManagementActor actor,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateAccessGroupAsync(
+            name,
+            description,
+            accentColor: null,
+            iconUrl: null,
+            actor,
+            cancellationToken);
+    }
+
+    public async Task<Guid> CreateAccessGroupAsync(
+        string name,
+        string description,
+        string? accentColor,
+        string? iconUrl,
+        ManagementActor actor,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        var normalizedName = Required(name, 120, "Group name");
+        var normalizedDescription = Limit(description?.Trim() ?? string.Empty, 500);
+        var presentation = AccessGroupPresentation.Create(accentColor, iconUrl);
+        var id = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText =
+                """
+                INSERT INTO caddy_ui.access_groups(
+                    id, name, config_json, created_at, updated_at, enabled, description)
+                VALUES(
+                    @id, @name, CAST(@config_json AS jsonb),
+                    @now, @now, true, @description)
+                """;
+            AddParameter(command, "id", id);
+            AddParameter(command, "name", normalizedName);
+            AddParameter(command, "description", normalizedDescription);
+            AddParameter(command, "config_json", presentation.ToJson());
+            AddParameter(command, "now", now);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            await InsertAuditAsync(
+                connection,
+                transaction,
+                actor,
+                "access-group.create",
+                "access_group",
+                id.ToString("D"),
+                "{}",
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        name = normalizedName,
+                        description = normalizedDescription,
+                        presentation.AccentColor,
+                        presentation.IconUrl,
+                    },
+                    JsonOptions),
+                cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return id;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public Task SetAccessGroupEnabledAsync(
+        Guid groupId,
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        return ExecuteAsync(
+            "UPDATE caddy_ui.access_groups SET enabled = @enabled, updated_at = @now WHERE id = @id",
+            command =>
+            {
+                AddParameter(command, "enabled", enabled);
+                AddParameter(command, "now", DateTimeOffset.UtcNow);
+                AddParameter(command, "id", groupId);
+            },
+            cancellationToken);
     }
 
     public Task UpdateGroupAsync(
@@ -149,6 +317,79 @@ public sealed class AccessAdministrationStore
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    public async Task<Guid> CreateCredentialAsync(
+        Guid groupId,
+        string username,
+        string passwordHash,
+        ManagementActor actor,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        var normalizedUsername = Required(username, 120, "Username");
+        ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
+        var id = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText =
+                """
+                INSERT INTO caddy_ui.access_credentials(
+                    id, group_id, username, password_hash, enabled, created_at, updated_at)
+                SELECT @id, groups.id, @username, @password_hash, true, @now, @now
+                FROM caddy_ui.access_groups AS groups
+                WHERE groups.id = @group_id AND groups.enabled
+                """;
+            AddParameter(command, "id", id);
+            AddParameter(command, "group_id", groupId);
+            AddParameter(command, "username", normalizedUsername);
+            AddParameter(command, "password_hash", passwordHash);
+            AddParameter(command, "now", now);
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+            {
+                throw new InvalidOperationException("The selected access group does not exist or is disabled.");
+            }
+
+            await InsertAuditAsync(
+                connection,
+                transaction,
+                actor,
+                "access-credential.create",
+                "access_credential",
+                id.ToString("D"),
+                "{}",
+                JsonSerializer.Serialize(new { groupId, username = normalizedUsername, enabled = true }, JsonOptions),
+                cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return id;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public Task SetCredentialEnabledAsync(
+        Guid credentialId,
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        return ExecuteAsync(
+            "UPDATE caddy_ui.access_credentials SET enabled = @enabled, updated_at = @now WHERE id = @id",
+            command =>
+            {
+                AddParameter(command, "enabled", enabled);
+                AddParameter(command, "now", DateTimeOffset.UtcNow);
+                AddParameter(command, "id", credentialId);
+            },
+            cancellationToken);
     }
 
     public async Task UpdateCredentialAsync(
@@ -347,7 +588,8 @@ public sealed class AccessAdministrationStore
                 action, object_type, object_id, before_json, after_json,
                 result, revision_id, correlation_id)
             VALUES(
-                @occurred_at, @actor_user_id, @actor_username, @remote_address,
+                @occurred_at, @actor_user_id, @actor_username,
+                NULLIF(@remote_address, '')::inet,
                 @action, @object_type, @object_id,
                 CAST(@before_json AS jsonb), CAST(@after_json AS jsonb),
                 'success', NULL, @correlation_id)
@@ -365,6 +607,19 @@ public sealed class AccessAdministrationStore
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private async Task ExecuteAsync(
+        string sql,
+        Action<DbCommand> bind,
+        CancellationToken cancellationToken)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        bind(command);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task<DbConnection> OpenConnectionAsync(
         CaddyUiDbContext context,
         CancellationToken cancellationToken)
@@ -376,6 +631,19 @@ public sealed class AccessAdministrationStore
         }
 
         return connection;
+    }
+
+    private static DateTimeOffset ReadTimestamp(DbDataReader reader, int ordinal)
+    {
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            DateTimeOffset timestamp => timestamp,
+            DateTime timestamp => new DateTimeOffset(DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)),
+            _ => DateTimeOffset.Parse(
+                Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+                CultureInfo.InvariantCulture),
+        };
     }
 
     private static void AddParameter(DbCommand command, string name, object? value)

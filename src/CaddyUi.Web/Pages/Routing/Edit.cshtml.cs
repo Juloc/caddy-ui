@@ -13,17 +13,20 @@ namespace CaddyUi.Web.Pages.Routing;
 public sealed class EditModel : LocalizedPageModel
 {
     private readonly RouteManagementStore _store;
+    private readonly AccessAdministrationStore _accessStore;
     private readonly CaddyApplyService _applyService;
     private readonly IStringLocalizer<SharedResource> _localizer;
     private readonly ILogger<EditModel> _logger;
 
     public EditModel(
         RouteManagementStore store,
+        AccessAdministrationStore accessStore,
         CaddyApplyService applyService,
         IStringLocalizer<SharedResource> localizer,
         ILogger<EditModel> logger)
     {
         _store = store;
+        _accessStore = accessStore;
         _applyService = applyService;
         _localizer = localizer;
         _logger = logger;
@@ -235,7 +238,7 @@ public sealed class EditModel : LocalizedPageModel
     private async Task LoadOptionsAsync()
     {
         Domains = await _store.ListDomainsAsync(HttpContext.RequestAborted);
-        AccessGroups = (await _store.ListAccessGroupsAsync(HttpContext.RequestAborted))
+        AccessGroups = (await _accessStore.ListAccessGroupsAsync(HttpContext.RequestAborted))
             .Where(group => group.Enabled)
             .ToArray();
     }
