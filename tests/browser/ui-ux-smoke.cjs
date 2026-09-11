@@ -155,6 +155,10 @@ async function verifyMobileNavigationFocus(page) {
     await opener.focus();
     await opener.click();
     await page.waitForFunction(() => document.querySelector("[data-shell]")?.classList.contains("is-navigation-open"));
+    await page.waitForFunction(() => {
+        const sidebar = document.querySelector("[data-sidebar]");
+        return Boolean(sidebar && document.activeElement && sidebar.contains(document.activeElement));
+    }, undefined, { timeout: 2_000 }).catch(() => {});
 
     const openState = await page.evaluate(() => {
         const sidebar = document.querySelector("[data-sidebar]");
@@ -172,6 +176,9 @@ async function verifyMobileNavigationFocus(page) {
 
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => !document.querySelector("[data-shell]")?.classList.contains("is-navigation-open"));
+    await page.waitForFunction(() => document.activeElement?.hasAttribute("data-mobile-navigation"), undefined, {
+        timeout: 2_000,
+    }).catch(() => {});
     if (await opener.getAttribute("aria-expanded") !== "false") {
         fail("Mobile navigation opener remained expanded after Escape.");
     }
