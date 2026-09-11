@@ -56,9 +56,9 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             "20260809113000_OptimizeAnalyticsIngestion",
             appliedMigrations);
 
-        var routeStore = new RouteManagementStore(
-            new RuntimeDbContextFactory(_postgres.GetConnectionString()));
-        Assert.Empty(await routeStore.ListCredentialsAsync());
+        var factory = new RuntimeDbContextFactory(_postgres.GetConnectionString());
+        var accessStore = new AccessAdministrationStore(factory);
+        Assert.Empty(await accessStore.ListCredentialsAsync());
 
         var requiredTables = new[]
         {
@@ -141,8 +141,7 @@ public sealed class PostgreSqlMigrationTests : IAsyncLifetime
             .SingleAsync();
         Assert.True(loginScopeColumnsAreText);
 
-        var authenticationStore = new AuthenticationStore(
-            new RuntimeDbContextFactory(_postgres.GetConnectionString()));
+        var authenticationStore = new AuthenticationStore(factory);
         await authenticationStore.RecordLoginAttemptAsync(
             $"portal:{Guid.NewGuid():D}",
             "portal-test",
