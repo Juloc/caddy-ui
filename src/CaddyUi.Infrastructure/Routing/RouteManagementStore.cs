@@ -1,4 +1,3 @@
-using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text.Json;
@@ -6,6 +5,7 @@ using CaddyUi.Application.Routing;
 using CaddyUi.Domain.Routing;
 using CaddyUi.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using static CaddyUi.Infrastructure.Persistence.RelationalStoreSupport;
 
 namespace CaddyUi.Infrastructure.Routing;
 
@@ -400,19 +400,6 @@ public sealed class RouteManagementStore
         return value.Length <= maximum ? value : value[..maximum];
     }
 
-    private static async Task<DbConnection> OpenConnectionAsync(
-        CaddyUiDbContext context,
-        CancellationToken cancellationToken)
-    {
-        var connection = context.Database.GetDbConnection();
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(cancellationToken);
-        }
-
-        return connection;
-    }
-
     private static DateTimeOffset ReadTimestamp(DbDataReader reader, int ordinal)
     {
         var value = reader.GetValue(ordinal);
@@ -424,14 +411,6 @@ public sealed class RouteManagementStore
                 Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
                 CultureInfo.InvariantCulture),
         };
-    }
-
-    private static void AddParameter(DbCommand command, string name, object? value)
-    {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value ?? DBNull.Value;
-        command.Parameters.Add(parameter);
     }
 
     private const string RouteSelectSql =
