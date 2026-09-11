@@ -75,9 +75,10 @@ Localization rules currently conflict:
 - runtime configuration and tests use German as the default;
 - `AGENTS.md` says product UI text is German;
 - several newer Razor pages contain directly hard-coded German text instead of localization resources;
-- the user-settings page normalizes a missing stored preference through the technical English fallback, so it can preselect `en` even though the request itself correctly renders with configured default culture `de`.
+- the settings page normalizes a missing stored preference through the technical English fallback, so it can preselect `en` even though the configured product default is `de`;
+- the login flow uses the same normalization path and then writes `en` into the culture cookie and authentication claim for users with no saved preference, overriding the configured German default for the entire session.
 
-One canonical language policy must be chosen and enforced. Product UI should use localization resources where multilingual support is intended, and a missing/unsupported user preference must resolve to the configured default culture rather than the source-key fallback.
+One canonical language policy must be chosen and enforced. Product UI should use localization resources where multilingual support is intended, and a missing/unsupported user preference must resolve to the configured default culture rather than the source-key fallback in login, settings and request culture resolution.
 
 Tracking: #77
 
