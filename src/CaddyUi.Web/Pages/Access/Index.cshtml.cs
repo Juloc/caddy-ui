@@ -12,18 +12,15 @@ namespace CaddyUi.Web.Pages.Access;
 [Authorize(Policy = "Administrator")]
 public sealed class IndexModel : LocalizedPageModel
 {
-    private readonly RouteManagementStore _store;
     private readonly AccessAdministrationStore _administrationStore;
     private readonly PasswordHashService _passwordHashService;
     private readonly IStringLocalizer<SharedResource> _localizer;
 
     public IndexModel(
-        RouteManagementStore store,
         AccessAdministrationStore administrationStore,
         PasswordHashService passwordHashService,
         IStringLocalizer<SharedResource> localizer)
     {
-        _store = store;
         _administrationStore = administrationStore;
         _passwordHashService = passwordHashService;
         _localizer = localizer;
@@ -96,7 +93,7 @@ public sealed class IndexModel : LocalizedPageModel
 
         try
         {
-            await _store.CreateAccessGroupAsync(
+            await _administrationStore.CreateAccessGroupAsync(
                 NewGroup.Name,
                 NewGroup.Description,
                 NewGroup.AccentColor,
@@ -184,7 +181,7 @@ public sealed class IndexModel : LocalizedPageModel
         try
         {
             var passwordHash = _passwordHashService.HashPassword(NewCredential.Password);
-            await _store.CreateCredentialAsync(
+            await _administrationStore.CreateCredentialAsync(
                 NewCredential.GroupId,
                 NewCredential.Username,
                 passwordHash,
@@ -276,7 +273,7 @@ public sealed class IndexModel : LocalizedPageModel
     {
         try
         {
-            await _store.SetAccessGroupEnabledAsync(id, enabled, HttpContext.RequestAborted);
+            await _administrationStore.SetAccessGroupEnabledAsync(id, enabled, HttpContext.RequestAborted);
             StatusMessage = enabled
                 ? _localizer["Access group enabled."]
                 : _localizer["Access group disabled."];
@@ -293,7 +290,7 @@ public sealed class IndexModel : LocalizedPageModel
     {
         try
         {
-            await _store.SetCredentialEnabledAsync(id, enabled, HttpContext.RequestAborted);
+            await _administrationStore.SetCredentialEnabledAsync(id, enabled, HttpContext.RequestAborted);
             StatusMessage = enabled
                 ? _localizer["Portal credential enabled."]
                 : _localizer["Portal credential disabled."];
@@ -310,8 +307,8 @@ public sealed class IndexModel : LocalizedPageModel
     {
         try
         {
-            Groups = await _store.ListAccessGroupsAsync(HttpContext.RequestAborted);
-            Credentials = await _store.ListCredentialsAsync(cancellationToken: HttpContext.RequestAborted);
+            Groups = await _administrationStore.ListAccessGroupsAsync(HttpContext.RequestAborted);
+            Credentials = await _administrationStore.ListCredentialsAsync(cancellationToken: HttpContext.RequestAborted);
             LoadError = null;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
