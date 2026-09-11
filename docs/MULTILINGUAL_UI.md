@@ -20,7 +20,9 @@ The currently supported cultures are configured under `Localization:SupportedCul
 
 Authenticated users select their interface language under **User settings**. The preference is stored on the user account and mirrored to an essential HTTP-only culture cookie after saving.
 
-Until a user saves a valid preference, the settings page must show the configured default culture as selected. Saving a supported preference takes effect on the redirected request and subsequent sessions.
+New user rows use German as the database default so bootstrap-created accounts begin consistently with the configured product default. The migration that changes this database default does not rewrite existing user preferences: an existing explicit `en` remains `en`.
+
+If a stored preference is absent or cannot be read, the application still resolves through `Localization:DefaultCulture`; the persistence layer does not invent an English preference. Until a user saves a valid preference, the settings page must therefore show the configured default culture as selected. Saving a supported preference takes effect on the redirected request and subsequent sessions.
 
 ## Resource ownership
 
