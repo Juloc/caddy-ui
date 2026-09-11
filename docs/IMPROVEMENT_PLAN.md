@@ -79,7 +79,7 @@ No large rewrite. Split by responsibility while preserving behavior and tests.
 
 - [x] **DONE** Split route CRUD from access-group/credential persistence.
 - [x] **DONE** Split revision/snapshot/apply-operation persistence from route CRUD.
-- [ ] **TODO** Remove duplicated transaction/command boilerplate where a focused helper improves clarity.
+- [ ] **IN PROGRESS** Remove duplicated transaction/command boilerplate where a focused helper improves clarity. Tracking: #81
 
 Verification evidence for the access-persistence slice: PR #79, GitHub Actions **Verify .NET application** run #244 — restore, formatting, Release build, all .NET/PostgreSQL tests including the access-group/credential lifecycle and ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated/browser acceptance, SQLite migration CLI and bundled Caddy module verification all passed. Final documentation head was re-verified by run #245; its initial mobile-focus browser attempt was flaky and the unchanged-head retry passed the complete acceptance suite.
 
