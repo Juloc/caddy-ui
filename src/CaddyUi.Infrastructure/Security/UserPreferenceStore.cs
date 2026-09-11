@@ -14,7 +14,7 @@ public sealed class UserPreferenceStore
         _contextFactory = contextFactory;
     }
 
-    public async Task<string> GetLanguageAsync(
+    public async Task<string?> GetLanguageAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
@@ -32,7 +32,7 @@ public sealed class UserPreferenceStore
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is string language && !string.IsNullOrWhiteSpace(language)
             ? language
-            : "en";
+            : null;
     }
 
     public async Task SetLanguageAsync(
