@@ -29,7 +29,7 @@ public sealed class DomainFirstRoutingMarkupTests
     }
 
     [Fact]
-    public void QuickCreate_OffersExplicitSaveOnlyAndSaveApplyActions()
+    public void QuickCreate_OffersExplicitLocalizedSaveOnlyAndSaveApplyActions()
     {
         var markup = File.ReadAllText(FindRepositoryFile(
             "src/CaddyUi.Web/Pages/Routing/Index.cshtml"));
@@ -37,8 +37,8 @@ public sealed class DomainFirstRoutingMarkupTests
             "src/CaddyUi.Web/Pages/Routing/Index.cshtml.cs"));
 
         Assert.Contains("name=\"applyAfterSave\"", markup, StringComparison.Ordinal);
-        Assert.Contains("value=\"false\">Speichern</button>", markup, StringComparison.Ordinal);
-        Assert.Contains("value=\"true\">Erstellen &amp; aktivieren</button>", markup, StringComparison.Ordinal);
+        Assert.Contains("@R[\"Save\"]", markup, StringComparison.Ordinal);
+        Assert.Contains("@R[\"Create and activate\"]", markup, StringComparison.Ordinal);
         Assert.Contains("bool? applyAfterSave", pageModel, StringComparison.Ordinal);
         Assert.Contains("var shouldApply = applyAfterSave ?? true;", pageModel, StringComparison.Ordinal);
 
@@ -73,16 +73,35 @@ public sealed class DomainFirstRoutingMarkupTests
             "src/CaddyUi.Web/Pages/Routing/Index.cshtml.cs"));
 
         Assert.Contains("Model.RuntimeState.ActiveStateTracked", markup, StringComparison.Ordinal);
-        Assert.Contains("IndexModel.StateLabel(runtimeState)", markup, StringComparison.Ordinal);
+        Assert.Contains("IndexModel.StateLabelKey(runtimeState)", markup, StringComparison.Ordinal);
         Assert.Contains("Model.RuntimeState.PendingRemovals", markup, StringComparison.Ordinal);
-        Assert.Contains("Aktivstatus unbekannt", markup, StringComparison.Ordinal);
-        Assert.Contains("Entfernung offen", markup, StringComparison.Ordinal);
+        Assert.Contains("R[\"Active state unknown\"]", markup, StringComparison.Ordinal);
+        Assert.Contains("R[\"Removal pending\"]", markup, StringComparison.Ordinal);
         Assert.DoesNotContain(
-            "@(definition.Enabled ? \"Aktiv\" : \"Deaktiviert\")",
+            "@(definition.Enabled ? \"Active\" : \"Disabled\")",
             markup,
             StringComparison.Ordinal);
         Assert.Contains("RouteRuntimeState.PendingRemoval", pageModel, StringComparison.Ordinal);
         Assert.Contains("remains active in Caddy until", pageModel, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RouteOverview_UsesDedicatedLocalizationResource()
+    {
+        var markup = File.ReadAllText(FindRepositoryFile(
+            "src/CaddyUi.Web/Pages/Routing/Index.cshtml"));
+
+        Assert.Contains(
+            "@inject IStringLocalizer<CaddyUi.Web.RoutingResource> R",
+            markup,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "R[\"Manage services by domain. New standard routes only need a name and an upstream target.\"]",
+            markup,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Dienste nach Domain verwalten", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vorschau &amp; anwenden", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Entfernung offen", markup, StringComparison.Ordinal);
     }
 
     [Fact]

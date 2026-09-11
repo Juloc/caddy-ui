@@ -17,7 +17,7 @@ Caddy UI is a compact self-hosted control plane for Caddy. Its primary jobs are 
 - The legacy SQLite database is read-only migration input, not an active persistence backend.
 - Validate the complete Caddy configuration before activation. Apply changes atomically and restore the previous revision if reload fails.
 - Never render secrets back to the browser or persist plaintext secret values in PostgreSQL, logs, reports, diffs or generated Caddy files.
-- Use English for code, technical documentation, tests, logs and commit messages. Product UI text is German.
+- Use English for code, technical documentation, tests, logs and commit messages. Product UI is localized with German as the configured default and English as the neutral source-key fallback.
 - Format C# with `dotnet format` and Go with `gofmt`.
 - State-changing requests require authorization and CSRF protection.
 - Treat `docs/CODE_AUDIT.md` as the active audit problem ledger and `docs/IMPROVEMENT_PLAN.md` as the living remediation plan.

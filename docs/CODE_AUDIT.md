@@ -2,7 +2,8 @@
 
 Status: active  
 Baseline: main / 2.1.20  
-Audit date: 2026-09-08
+Audit date: 2026-09-08  
+Last updated: 2026-09-11
 
 This document records concrete problems found during the full repository audit. It is the problem ledger; implementation order and progress are tracked in `docs/IMPROVEMENT_PLAN.md`.
 
@@ -73,9 +74,13 @@ Localization rules currently conflict:
 - `docs/MULTILINGUAL_UI.md` says English-first and default `en`;
 - runtime configuration and tests use German as the default;
 - `AGENTS.md` says product UI text is German;
-- several newer Razor pages contain directly hard-coded German text instead of localization resources.
+- several newer Razor pages contain directly hard-coded German text instead of localization resources;
+- the settings page normalizes a missing stored preference through the technical English fallback, so it can preselect `en` even though the configured product default is `de`;
+- the login flow uses the same normalization path and then writes `en` into the culture cookie and authentication claim for users with no saved preference, overriding the configured German default for the entire session.
 
-One canonical language policy must be chosen and enforced. Razor UI text should consistently use the shared localization mechanism where multilingual support is intended.
+One canonical language policy must be chosen and enforced. Product UI should use localization resources where multilingual support is intended, and a missing/unsupported user preference must resolve to the configured default culture rather than the source-key fallback in login, settings and request culture resolution.
+
+Tracking: #77
 
 ## P2 - Documentation drift
 

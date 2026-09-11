@@ -24,9 +24,7 @@ public sealed class UserCultureMiddleware
             requested = context.User.FindFirstValue(UiCultureCatalog.LanguageClaimType);
         }
 
-        var cultureName = catalog.TryNormalize(requested, out var normalized)
-            ? normalized
-            : catalog.DefaultCulture;
+        var cultureName = catalog.ResolvePreference(requested);
         var culture = CultureInfo.GetCultureInfo(cultureName);
         CultureInfo.CurrentCulture = culture;
         CultureInfo.CurrentUICulture = culture;

@@ -6,7 +6,7 @@ public sealed record UiCultureOption(string Name, string DisplayName, string Nat
 
 /// <summary>
 /// Defines the cultures offered by Caddy UI. Adding another language only requires
-/// adding its culture code to configuration and a matching SharedResource resource file.
+/// adding its culture code to configuration and matching localization resource files.
 /// </summary>
 public sealed class UiCultureCatalog
 {
@@ -57,6 +57,11 @@ public sealed class UiCultureCatalog
     public string Normalize(string? value)
     {
         return TryNormalize(value, out var normalized) ? normalized : FallbackCulture;
+    }
+
+    public string ResolvePreference(string? value)
+    {
+        return TryNormalize(value, out var normalized) ? normalized : DefaultCulture;
     }
 
     public bool TryNormalize(string? value, out string normalized)

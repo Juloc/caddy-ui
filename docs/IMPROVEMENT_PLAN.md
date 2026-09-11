@@ -2,7 +2,7 @@
 
 Status: active  
 Baseline: main / 2.1.20  
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 
 This is the living implementation plan for the repository audit in `docs/CODE_AUDIT.md`.
 
@@ -64,10 +64,12 @@ Verification evidence for Phase 3: PR #76, GitHub Actions **Verify .NET applicat
 
 Tracking: #77
 
-- [ ] **TODO** Choose one canonical default-language policy.
-- [ ] **TODO** Reconcile `MULTILINGUAL_UI.md`, `AGENTS.md`, runtime config and tests.
-- [ ] **TODO** Move hard-coded product UI strings into the localization resource path where required.
-- [ ] **TODO** Add a regression rule/test preventing new localization drift.
+- [x] **DONE** Choose one canonical default-language policy: German (`de`) UI default, English source-key fallback, supported UI cultures `de` and `en`.
+- [x] **DONE** Reconcile `MULTILINGUAL_UI.md`, `AGENTS.md`, runtime config, persistence defaults and tests.
+- [x] **DONE** Move hard-coded product UI strings on the audited routing/settings surfaces into the localization resource path.
+- [x] **DONE** Add regression rules/tests preventing new localization drift and verify default/preferred culture behavior.
+
+Verification evidence for Phase 4: PR #78, GitHub Actions **Verify .NET application** run #237 — restore, formatting, Release build, all .NET tests, production image builds, PostgreSQL/Caddy UI startup, locale-neutral authenticated page smoke, Chromium default German plus `de → en → de` preference/rendering acceptance, SQLite migration CLI and bundled Caddy module verification all passed.
 
 ## Phase 5 - Infrastructure decomposition
 
