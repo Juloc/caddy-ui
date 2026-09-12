@@ -4,7 +4,7 @@ namespace CaddyUi.Infrastructure.Operations;
 
 public sealed class OperationsCommandService
 {
-    private readonly OperationsStore _store;
+    private readonly ScheduledJobOperationsStore _jobStore;
     private readonly DdnsService _ddns;
     private readonly DnsProviderRuntimeService _providers;
     private readonly HealthProbeService _health;
@@ -12,14 +12,14 @@ public sealed class OperationsCommandService
     private readonly NotificationDispatcher _notifications;
 
     public OperationsCommandService(
-        OperationsStore store,
+        ScheduledJobOperationsStore jobStore,
         DdnsService ddns,
         DnsProviderRuntimeService providers,
         HealthProbeService health,
         BackupDiagnosticsService backups,
         NotificationDispatcher notifications)
     {
-        _store = store;
+        _jobStore = jobStore;
         _ddns = ddns;
         _providers = providers;
         _health = health;
@@ -29,10 +29,10 @@ public sealed class OperationsCommandService
 
     public async Task<ProviderOperationResult> RunJobAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
-        var job = (await _store.ListJobsAsync(cancellationToken)).FirstOrDefault(item => item.Id == jobId) ??
+        var job = (await _jobStore.ListJobsAsync(cancellationToken)).FirstOrDefault(item => item.Id == jobId) ??
             throw new InvalidOperationException("The scheduled job does not exist.");
         var correlationId = Guid.NewGuid().ToString("N");
-        var runId = await _store.StartJobRunAsync(job.Id, correlationId, cancellationToken);
+        var runId = await _jobStore.StartJobRunAsync(job.Id, correlationId, cancellationToken);
         ProviderOperationResult result;
         var details = "{}";
         try
@@ -53,7 +53,7 @@ public sealed class OperationsCommandService
             result = ProviderOperationResult.Failure(exception.Message);
         }
 
-        await _store.CompleteJobRunAsync(job.Id, runId, result, details, cancellationToken);
+        await _jobStore.CompleteJobRunAsync(job.Id, runId, result, details, cancellationToken);
         if (!result.Succeeded)
         {
             await _notifications.NotifyAsync(

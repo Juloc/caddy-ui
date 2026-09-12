@@ -91,14 +91,16 @@ Verification evidence for the route-persistence plumbing slice: PR #82, GitHub A
 
 - [x] **DONE** Split DNS provider runtime state, managed DNS records and DDNS persistence out of `OperationsStore` into `DnsOperationsStore`. Tracking: #83
 - [x] **DONE** Split notification persistence out of `OperationsStore` into `NotificationOperationsStore`. Tracking: #85
-- [ ] **TODO** Split scheduled-job persistence out of `OperationsStore`.
+- [x] **DONE** Split scheduled-job persistence out of `OperationsStore` into `ScheduledJobOperationsStore`. Tracking: #87
 - [ ] **TODO** Split health-check persistence out of `OperationsStore`.
 - [ ] **TODO** Split backup persistence out of `OperationsStore`.
 - [ ] **TODO** Keep transaction boundaries explicit across all focused operations stores.
 
 Verification evidence for the DNS/DDNS operations slice: PR #84, GitHub Actions **Verify .NET application** runs #256 and #257 plus post-merge main run #258 — restore, formatting, Release build, all .NET/PostgreSQL tests including DNS provider-assignment validation, exclusive DDNS claiming and the DNS persistence ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `DnsOperationsStore` owns the complete DNS/DDNS persistence surface; the DDNS claim retains its explicit `ReadCommitted` transaction and `FOR UPDATE ... SKIP LOCKED` behavior.
 
-Verification evidence for the notification operations slice: PR #86, GitHub Actions **Verify .NET application** run #259 — restore, formatting, Release build, all .NET/PostgreSQL tests including notification channel lifecycle, durable notification insertion and the notification persistence ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `NotificationOperationsStore` owns the complete notification persistence surface and reuses only the focused relational plumbing helper; no forwarding APIs remain on `OperationsStore`.
+Verification evidence for the notification operations slice: PR #86, GitHub Actions **Verify .NET application** runs #259 and #260 plus post-merge main run #261 — restore, formatting, Release build, all .NET/PostgreSQL tests including notification channel lifecycle, durable notification insertion and the notification persistence ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `NotificationOperationsStore` owns the complete notification persistence surface and reuses only the focused relational plumbing helper; no forwarding APIs remain on `OperationsStore`.
+
+Verification evidence for the scheduled-job operations slice: PR #88, GitHub Actions **Verify .NET application** run #262 — restore, formatting, Release build, all .NET/PostgreSQL tests including exclusive scheduled-job claiming, job-run completion and the scheduled-job persistence ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `ScheduledJobOperationsStore` owns the complete scheduled-job/job-run persistence surface; its claim retains the explicit `ReadCommitted` transaction with `FOR UPDATE SKIP LOCKED`, and job-run completion remains an explicit atomic transaction across run and job state.
 
 ### Analytics
 

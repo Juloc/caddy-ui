@@ -9,10 +9,10 @@ namespace CaddyUi.Web.Pages.Operations;
 [Authorize(Policy = "Administrator")]
 public sealed class JobsModel : LocalizedPageModel
 {
-    private readonly OperationsStore _store;
+    private readonly ScheduledJobOperationsStore _store;
     private readonly OperationsCommandService _commands;
 
-    public JobsModel(OperationsStore store, OperationsCommandService commands)
+    public JobsModel(ScheduledJobOperationsStore store, OperationsCommandService commands)
     {
         _store = store;
         _commands = commands;
