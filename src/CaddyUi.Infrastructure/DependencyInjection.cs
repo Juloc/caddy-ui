@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddSingleton<DnsOperationsStore>();
         services.AddSingleton<NotificationOperationsStore>();
         services.AddSingleton<ScheduledJobOperationsStore>();
+        services.AddSingleton<HealthOperationsStore>();
         services.AddSingleton<SecretReferenceResolver>();
         services.AddSingleton<ISecretReferenceResolver>(serviceProvider =>
             serviceProvider.GetRequiredService<SecretReferenceResolver>());

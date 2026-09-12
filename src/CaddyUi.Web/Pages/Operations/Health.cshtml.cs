@@ -9,10 +9,10 @@ namespace CaddyUi.Web.Pages.Operations;
 [Authorize(Policy = "Administrator")]
 public sealed class HealthModel : LocalizedPageModel
 {
-    private readonly OperationsStore _store;
+    private readonly HealthOperationsStore _store;
     private readonly HealthProbeService _health;
 
-    public HealthModel(OperationsStore store, HealthProbeService health)
+    public HealthModel(HealthOperationsStore store, HealthProbeService health)
     {
         _store = store;
         _health = health;
