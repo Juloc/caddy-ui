@@ -90,13 +90,13 @@ Verification evidence for the route-persistence plumbing slice: PR #82, GitHub A
 ### Operations
 
 - [x] **DONE** Split DNS provider runtime state, managed DNS records and DDNS persistence out of `OperationsStore` into `DnsOperationsStore`. Tracking: #83
-- [ ] **TODO** Split notification persistence out of `OperationsStore`.
+- [ ] **IN PROGRESS** Split notification persistence out of `OperationsStore` into `NotificationOperationsStore`. Tracking: #85
 - [ ] **TODO** Split scheduled-job persistence out of `OperationsStore`.
 - [ ] **TODO** Split health-check persistence out of `OperationsStore`.
 - [ ] **TODO** Split backup persistence out of `OperationsStore`.
 - [ ] **TODO** Keep transaction boundaries explicit across all focused operations stores.
 
-Verification evidence for the DNS/DDNS operations slice: PR #84, GitHub Actions **Verify .NET application** run #256 — restore, formatting, Release build, all .NET/PostgreSQL tests including DNS provider-assignment validation, exclusive DDNS claiming and the DNS persistence ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `DnsOperationsStore` owns the complete DNS/DDNS persistence surface; the DDNS claim retains its explicit `ReadCommitted` transaction and `FOR UPDATE ... SKIP LOCKED` behavior.
+Verification evidence for the DNS/DDNS operations slice: PR #84, GitHub Actions **Verify .NET application** runs #256 and #257 plus post-merge main run #258 — restore, formatting, Release build, all .NET/PostgreSQL tests including DNS provider-assignment validation, exclusive DDNS claiming and the DNS persistence ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `DnsOperationsStore` owns the complete DNS/DDNS persistence surface; the DDNS claim retains its explicit `ReadCommitted` transaction and `FOR UPDATE ... SKIP LOCKED` behavior.
 
 ### Analytics
 
