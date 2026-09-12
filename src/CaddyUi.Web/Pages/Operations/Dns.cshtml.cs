@@ -11,14 +11,14 @@ namespace CaddyUi.Web.Pages.Operations;
 [Authorize(Policy = "Administrator")]
 public sealed class DnsModel : LocalizedPageModel
 {
-    private readonly OperationsStore _store;
+    private readonly DnsOperationsStore _store;
     private readonly DomainProviderStore _management;
     private readonly DnsProviderRuntimeService _providers;
     private readonly DdnsService _ddns;
     private readonly IStringLocalizer<SharedResource> _localizer;
 
     public DnsModel(
-        OperationsStore store,
+        DnsOperationsStore store,
         DomainProviderStore management,
         DnsProviderRuntimeService providers,
         DdnsService ddns,

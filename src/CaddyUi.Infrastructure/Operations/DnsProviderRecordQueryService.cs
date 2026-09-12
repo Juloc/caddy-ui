@@ -16,12 +16,12 @@ public interface IDnsProviderRecordReader
 
 public sealed class DnsProviderRecordQueryService
 {
-    private readonly OperationsStore _store;
+    private readonly DnsOperationsStore _store;
     private readonly ISecretReferenceResolver _secrets;
     private readonly IReadOnlyList<IDnsProviderRecordReader> _readers;
 
     public DnsProviderRecordQueryService(
-        OperationsStore store,
+        DnsOperationsStore store,
         ISecretReferenceResolver secrets,
         IEnumerable<IDnsProviderRecordReader> readers)
     {

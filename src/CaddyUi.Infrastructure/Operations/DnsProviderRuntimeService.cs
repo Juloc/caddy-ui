@@ -22,13 +22,13 @@ public interface IDnsProviderAdapter
 
 public sealed class DnsProviderRuntimeService
 {
-    private readonly OperationsStore _store;
+    private readonly DnsOperationsStore _store;
     private readonly ISecretReferenceResolver _secrets;
     private readonly IReadOnlyList<IDnsProviderAdapter> _adapters;
     private readonly OperationsOptions _options;
 
     public DnsProviderRuntimeService(
-        OperationsStore store,
+        DnsOperationsStore store,
         ISecretReferenceResolver secrets,
         IEnumerable<IDnsProviderAdapter> adapters,
         OperationsOptions options)

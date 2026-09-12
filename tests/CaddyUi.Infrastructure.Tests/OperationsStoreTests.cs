@@ -10,6 +10,21 @@ namespace CaddyUi.Infrastructure.Tests;
 
 public sealed class OperationsStoreTests : IAsyncLifetime
 {
+    private static readonly string[] DnsPersistenceMethods =
+    [
+        "GetProviderAsync",
+        "RecordProviderTestAsync",
+        "ListDnsRecordsAsync",
+        "CreateDnsRecordAsync",
+        "SetDnsRecordEnabledAsync",
+        "MarkDnsRecordSyncAsync",
+        "ListDdnsTargetsAsync",
+        "CreateDdnsTargetAsync",
+        "SetDdnsTargetEnabledAsync",
+        "ClaimDueDdnsTargetAsync",
+        "CompleteDdnsTargetAsync",
+    ];
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("caddy_ui_operations_tests")
         .WithUsername("caddy_ui")
@@ -19,6 +34,25 @@ public sealed class OperationsStoreTests : IAsyncLifetime
     public Task InitializeAsync() => _postgres.StartAsync();
 
     public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
+
+    [Fact]
+    public void DnsOperationsStore_OwnsDnsPersistenceBoundary()
+    {
+        var operationsMethods = typeof(OperationsStore)
+            .GetMethods()
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var dnsMethods = typeof(DnsOperationsStore)
+            .GetMethods()
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var method in DnsPersistenceMethods)
+        {
+            Assert.DoesNotContain(method, operationsMethods);
+            Assert.Contains(method, dnsMethods);
+        }
+    }
 
     [Fact]
     public async Task DnsRecord_RequiresTheDomainsAssignedProvider()
@@ -45,7 +79,7 @@ public sealed class OperationsStoreTests : IAsyncLifetime
             "Example",
             netcupId,
             CertificateMode.Wildcard);
-        var store = new OperationsStore(factory);
+        var store = new DnsOperationsStore(factory);
 
         await store.CreateDnsRecordAsync(
             domainId,
@@ -88,7 +122,7 @@ public sealed class OperationsStoreTests : IAsyncLifetime
             "ddns.example",
             "DDNS",
             providerId);
-        var store = new OperationsStore(factory);
+        var store = new DnsOperationsStore(factory);
         await store.CreateDdnsTargetAsync(
             domainId,
             providerId,

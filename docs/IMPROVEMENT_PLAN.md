@@ -85,12 +85,18 @@ Verification evidence for the access-persistence slice: PR #79, GitHub Actions *
 
 Verification evidence for the route-apply persistence slice: PR #80, GitHub Actions **Verify .NET application** run #249 passed the implementation head. Final documentation head run #250 and post-merge main run #251 passed restore, formatting, Release build, all .NET/PostgreSQL tests including the route/apply ownership boundary and apply lifecycle, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, stabilized Chromium focus/UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification. The browser contract waits for the asynchronous mobile-navigation focus transfer and focus return within a bounded interval instead of sampling the same event tick; the accessibility requirement itself is unchanged.
 
-Verification evidence for the route-persistence plumbing slice: PR #82, GitHub Actions **Verify .NET application** run #252 — restore, formatting, Release build, all .NET/PostgreSQL tests including the plumbing ownership guard and existing route/apply lifecycle, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `RelationalStoreSupport` now owns only EF-backed connection opening, parameter binding and simple non-query execution; domain SQL, audit semantics and transaction boundaries remain explicit in the owning stores.
+Verification evidence for the route-persistence plumbing slice: PR #82, GitHub Actions **Verify .NET application** runs #252 and #253 plus post-merge main run #254 — restore, formatting, Release build, all .NET/PostgreSQL tests including the plumbing ownership guard and existing route/apply lifecycle, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `RelationalStoreSupport` owns only EF-backed connection opening, parameter binding and simple non-query execution; domain SQL, audit semantics and transaction boundaries remain explicit in the owning stores.
 
 ### Operations
 
-- [ ] **TODO** Split DNS/DDNS, notifications, jobs, health checks and backups out of `OperationsStore`.
-- [ ] **TODO** Keep transaction boundaries explicit.
+- [x] **DONE** Split DNS provider runtime state, managed DNS records and DDNS persistence out of `OperationsStore` into `DnsOperationsStore`. Tracking: #83
+- [ ] **TODO** Split notification persistence out of `OperationsStore`.
+- [ ] **TODO** Split scheduled-job persistence out of `OperationsStore`.
+- [ ] **TODO** Split health-check persistence out of `OperationsStore`.
+- [ ] **TODO** Split backup persistence out of `OperationsStore`.
+- [ ] **TODO** Keep transaction boundaries explicit across all focused operations stores.
+
+Verification evidence for the DNS/DDNS operations slice: PR #84, GitHub Actions **Verify .NET application** run #256 — restore, formatting, Release build, all .NET/PostgreSQL tests including DNS provider-assignment validation, exclusive DDNS claiming and the DNS persistence ownership boundary, production image builds, PostgreSQL/Caddy UI startup, authenticated page smoke, Chromium UI/UX/localization acceptance, SQLite migration CLI and bundled Caddy module verification all passed. `DnsOperationsStore` owns the complete DNS/DDNS persistence surface; the DDNS claim retains its explicit `ReadCommitted` transaction and `FOR UPDATE ... SKIP LOCKED` behavior.
 
 ### Analytics
 
