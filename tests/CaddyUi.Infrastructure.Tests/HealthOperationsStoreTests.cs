@@ -29,10 +29,6 @@ public sealed class HealthOperationsStoreTests : IAsyncLifetime
     [Fact]
     public void HealthOperationsStore_OwnsHealthPersistenceBoundary()
     {
-        var operationsMethods = typeof(OperationsStore)
-            .GetMethods()
-            .Select(method => method.Name)
-            .ToHashSet(StringComparer.Ordinal);
         var healthMethods = typeof(HealthOperationsStore)
             .GetMethods()
             .Select(method => method.Name)
@@ -40,7 +36,6 @@ public sealed class HealthOperationsStoreTests : IAsyncLifetime
 
         foreach (var method in HealthPersistenceMethods)
         {
-            Assert.DoesNotContain(method, operationsMethods);
             Assert.Contains(method, healthMethods);
         }
     }

@@ -70,7 +70,7 @@ public static class DependencyInjection
         services.AddSingleton<ICaddyCommandRunner, ProcessCaddyCommandRunner>();
 
         services.AddSingleton(operationsOptions);
-        services.AddSingleton<OperationsStore>();
+        services.AddSingleton<BackupOperationsStore>();
         services.AddSingleton<DnsOperationsStore>();
         services.AddSingleton<NotificationOperationsStore>();
         services.AddSingleton<ScheduledJobOperationsStore>();
