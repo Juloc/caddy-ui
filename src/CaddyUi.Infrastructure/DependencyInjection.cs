@@ -129,7 +129,7 @@ public static class DependencyInjection
         services.AddHostedService<AnalyticsIngestionWorker>();
         services.AddHostedService<AnalyticsMaintenanceWorker>();
         services.AddSingleton(ipSecurityOptions);
-        services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IpAddressClassifier>();
         services.AddSingleton<ClientRiskEngine>();
         services.AddSingleton<IpIntelligenceStore>();
