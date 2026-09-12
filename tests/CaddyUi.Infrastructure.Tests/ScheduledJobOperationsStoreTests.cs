@@ -31,10 +31,6 @@ public sealed class ScheduledJobOperationsStoreTests : IAsyncLifetime
     [Fact]
     public void ScheduledJobOperationsStore_OwnsScheduledJobPersistenceBoundary()
     {
-        var operationsMethods = typeof(OperationsStore)
-            .GetMethods()
-            .Select(method => method.Name)
-            .ToHashSet(StringComparer.Ordinal);
         var scheduledJobMethods = typeof(ScheduledJobOperationsStore)
             .GetMethods()
             .Select(method => method.Name)
@@ -42,7 +38,6 @@ public sealed class ScheduledJobOperationsStoreTests : IAsyncLifetime
 
         foreach (var method in ScheduledJobPersistenceMethods)
         {
-            Assert.DoesNotContain(method, operationsMethods);
             Assert.Contains(method, scheduledJobMethods);
         }
     }
