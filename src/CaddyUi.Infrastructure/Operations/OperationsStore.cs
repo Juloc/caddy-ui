@@ -16,94 +16,6 @@ public sealed class OperationsStore
         _contextFactory = contextFactory;
     }
 
-    public async Task<IReadOnlyList<NotificationChannelRecord>> ListNotificationChannelsAsync(CancellationToken cancellationToken = default)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var connection = await OpenConnectionAsync(context, cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT id, name, channel_type, enabled, config_json::text,
-                   secret_references_json::text, last_tested_at,
-                   last_test_status, last_test_error, updated_at
-            FROM caddy_ui.notification_channels
-            ORDER BY enabled DESC, lower(name)
-            """;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var result = new List<NotificationChannelRecord>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            result.Add(new NotificationChannelRecord(
-                reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetBoolean(3),
-                reader.GetString(4), reader.GetString(5), reader.IsDBNull(6) ? null : ReadTimestamp(reader, 6),
-                reader.GetString(7), reader.GetString(8), ReadTimestamp(reader, 9)));
-        }
-
-        return result;
-    }
-
-    public async Task<Guid> CreateNotificationChannelAsync(string name, string channelType, string configJson, string secretReferencesJson, CancellationToken cancellationToken = default)
-    {
-        var type = channelType.Trim().ToLowerInvariant();
-        if (type is not ("email" or "webhook" or "discord" or "telegram"))
-        {
-            throw new ArgumentException("Unsupported notification channel type.", nameof(channelType));
-        }
-
-        var id = Guid.NewGuid();
-        await ExecuteAsync(
-            """
-            INSERT INTO caddy_ui.notification_channels(
-                id, name, channel_type, enabled, config_json, secret_references_json,
-                created_at, updated_at)
-            VALUES(@id, @name, @channel_type, true, CAST(@config_json AS jsonb),
-                   CAST(@secret_references_json AS jsonb), @now, @now)
-            """,
-            command =>
-            {
-                AddParameter(command, "id", id);
-                AddParameter(command, "name", Required(name, 120, "Channel name"));
-                AddParameter(command, "channel_type", type);
-                AddParameter(command, "config_json", NormalizeObjectJson(configJson));
-                AddParameter(command, "secret_references_json", NormalizeObjectJson(secretReferencesJson));
-                AddParameter(command, "now", DateTimeOffset.UtcNow);
-            },
-            cancellationToken);
-        return id;
-    }
-
-    public Task SetNotificationChannelEnabledAsync(Guid channelId, bool enabled, CancellationToken cancellationToken = default)
-    {
-        return ExecuteAsync(
-            "UPDATE caddy_ui.notification_channels SET enabled = @enabled, updated_at = @now WHERE id = @id",
-            command =>
-            {
-                AddParameter(command, "enabled", enabled);
-                AddParameter(command, "now", DateTimeOffset.UtcNow);
-                AddParameter(command, "id", channelId);
-            },
-            cancellationToken);
-    }
-
-    public Task RecordNotificationChannelTestAsync(Guid channelId, ProviderOperationResult result, CancellationToken cancellationToken = default)
-    {
-        return ExecuteAsync(
-            """
-            UPDATE caddy_ui.notification_channels
-            SET last_tested_at = @now, last_test_status = @status,
-                last_test_error = @error, updated_at = @now
-            WHERE id = @id
-            """,
-            command =>
-            {
-                AddParameter(command, "now", DateTimeOffset.UtcNow);
-                AddParameter(command, "status", result.Succeeded ? "ok" : "failed");
-                AddParameter(command, "error", result.Succeeded ? string.Empty : Limit(result.Message, 2000));
-                AddParameter(command, "id", channelId);
-            },
-            cancellationToken);
-    }
-
     public async Task<IReadOnlyList<ScheduledJobRecord>> ListJobsAsync(CancellationToken cancellationToken = default)
     {
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
@@ -436,27 +348,6 @@ public sealed class OperationsStore
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
-    }
-
-    public Task InsertNotificationAsync(SystemNotification notification, CancellationToken cancellationToken = default)
-    {
-        return ExecuteAsync(
-            """
-            INSERT INTO caddy_ui.notifications(
-                created_at, severity, event_type, title, message, object_type, object_id)
-            VALUES(@now, @severity, @event_type, @title, @message, @object_type, @object_id)
-            """,
-            command =>
-            {
-                AddParameter(command, "now", DateTimeOffset.UtcNow);
-                AddParameter(command, "severity", Limit(notification.Severity, 16));
-                AddParameter(command, "event_type", Limit(notification.EventType, 120));
-                AddParameter(command, "title", Limit(notification.Title, 300));
-                AddParameter(command, "message", Limit(notification.Message, 4000));
-                AddParameter(command, "object_type", Limit(notification.ObjectType, 120));
-                AddParameter(command, "object_id", Limit(notification.ObjectId, 300));
-            },
-            cancellationToken);
     }
 
     public async Task<IReadOnlyList<BackupArtifactRecord>> ListBackupsAsync(CancellationToken cancellationToken = default)

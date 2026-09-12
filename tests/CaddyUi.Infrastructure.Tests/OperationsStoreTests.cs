@@ -25,6 +25,15 @@ public sealed class OperationsStoreTests : IAsyncLifetime
         "CompleteDdnsTargetAsync",
     ];
 
+    private static readonly string[] NotificationPersistenceMethods =
+    [
+        "ListNotificationChannelsAsync",
+        "CreateNotificationChannelAsync",
+        "SetNotificationChannelEnabledAsync",
+        "RecordNotificationChannelTestAsync",
+        "InsertNotificationAsync",
+    ];
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("caddy_ui_operations_tests")
         .WithUsername("caddy_ui")
@@ -51,6 +60,25 @@ public sealed class OperationsStoreTests : IAsyncLifetime
         {
             Assert.DoesNotContain(method, operationsMethods);
             Assert.Contains(method, dnsMethods);
+        }
+    }
+
+    [Fact]
+    public void NotificationOperationsStore_OwnsNotificationPersistenceBoundary()
+    {
+        var operationsMethods = typeof(OperationsStore)
+            .GetMethods()
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var notificationMethods = typeof(NotificationOperationsStore)
+            .GetMethods()
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var method in NotificationPersistenceMethods)
+        {
+            Assert.DoesNotContain(method, operationsMethods);
+            Assert.Contains(method, notificationMethods);
         }
     }
 
@@ -138,6 +166,67 @@ public sealed class OperationsStoreTests : IAsyncLifetime
         Assert.NotNull(claimed);
         Assert.Null(second);
         Assert.Equal("running", (await store.ListDdnsTargetsAsync()).Single().LastStatus);
+    }
+
+    [Fact]
+    public async Task NotificationStore_PersistsChannelStateAndDurableNotification()
+    {
+        var factory = new RuntimeDbContextFactory(_postgres.GetConnectionString());
+        await using (var database = factory.CreateDbContext())
+        {
+            await database.Database.MigrateAsync();
+        }
+
+        var store = new NotificationOperationsStore(factory);
+        var channelId = await store.CreateNotificationChannelAsync(
+            "Operations webhook",
+            "webhook",
+            "{\"url\":\"https://example.com/hook\"}",
+            "{}");
+
+        var channel = Assert.Single(await store.ListNotificationChannelsAsync());
+        Assert.Equal(channelId, channel.Id);
+        Assert.Equal("webhook", channel.ChannelType);
+        Assert.True(channel.Enabled);
+
+        await store.RecordNotificationChannelTestAsync(
+            channelId,
+            ProviderOperationResult.Failure("test failure"));
+        channel = Assert.Single(await store.ListNotificationChannelsAsync());
+        Assert.Equal("failed", channel.LastTestStatus);
+        Assert.Equal("test failure", channel.LastTestError);
+
+        await store.SetNotificationChannelEnabledAsync(channelId, false);
+        channel = Assert.Single(await store.ListNotificationChannelsAsync());
+        Assert.False(channel.Enabled);
+
+        await store.InsertNotificationAsync(new SystemNotification(
+            "warning",
+            "persistence.test",
+            "Persistence test",
+            "Stored message",
+            "test",
+            "notification-1"));
+
+        await using var verification = factory.CreateDbContext();
+        var connection = verification.Database.GetDbConnection();
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT severity, event_type, title, message, object_type, object_id
+            FROM caddy_ui.notifications
+            WHERE event_type = 'persistence.test'
+            LIMIT 1
+            """;
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal("warning", reader.GetString(0));
+        Assert.Equal("persistence.test", reader.GetString(1));
+        Assert.Equal("Persistence test", reader.GetString(2));
+        Assert.Equal("Stored message", reader.GetString(3));
+        Assert.Equal("test", reader.GetString(4));
+        Assert.Equal("notification-1", reader.GetString(5));
     }
 
     [Fact]

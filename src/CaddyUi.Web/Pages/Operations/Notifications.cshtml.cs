@@ -9,10 +9,10 @@ namespace CaddyUi.Web.Pages.Operations;
 [Authorize(Policy = "Administrator")]
 public sealed class NotificationsModel : LocalizedPageModel
 {
-    private readonly OperationsStore _store;
+    private readonly NotificationOperationsStore _store;
     private readonly NotificationDispatcher _notifications;
 
-    public NotificationsModel(OperationsStore store, NotificationDispatcher notifications)
+    public NotificationsModel(NotificationOperationsStore store, NotificationDispatcher notifications)
     {
         _store = store;
         _notifications = notifications;
