@@ -45,13 +45,13 @@ public sealed class PublicIpAddressResolver
 
 public sealed class DdnsService
 {
-    private readonly OperationsStore _store;
+    private readonly DnsOperationsStore _store;
     private readonly DnsProviderRuntimeService _providers;
     private readonly PublicIpAddressResolver _addresses;
     private readonly NotificationDispatcher _notifications;
 
     public DdnsService(
-        OperationsStore store,
+        DnsOperationsStore store,
         DnsProviderRuntimeService providers,
         PublicIpAddressResolver addresses,
         NotificationDispatcher notifications)
