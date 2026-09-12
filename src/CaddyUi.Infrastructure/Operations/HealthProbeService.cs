@@ -4,12 +4,12 @@ namespace CaddyUi.Infrastructure.Operations;
 
 public sealed class HealthProbeService
 {
-    private readonly OperationsStore _store;
+    private readonly HealthOperationsStore _store;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly NotificationDispatcher _notifications;
 
     public HealthProbeService(
-        OperationsStore store,
+        HealthOperationsStore store,
         IHttpClientFactory httpClientFactory,
         NotificationDispatcher notifications)
     {
