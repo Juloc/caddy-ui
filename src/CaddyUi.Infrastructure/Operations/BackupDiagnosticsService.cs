@@ -16,6 +16,7 @@ public sealed class BackupDiagnosticsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private readonly OperationsStore _store;
+    private readonly DnsOperationsStore _dnsStore;
     private readonly IDbContextFactory<CaddyUiDbContext> _contextFactory;
     private readonly OperationsOptions _options;
     private readonly RoutingOptions _routingOptions;
@@ -23,12 +24,14 @@ public sealed class BackupDiagnosticsService
 
     public BackupDiagnosticsService(
         OperationsStore store,
+        DnsOperationsStore dnsStore,
         IDbContextFactory<CaddyUiDbContext> contextFactory,
         OperationsOptions options,
         RoutingOptions routingOptions,
         IConfiguration configuration)
     {
         _store = store;
+        _dnsStore = dnsStore;
         _contextFactory = contextFactory;
         _options = options;
         _routingOptions = routingOptions;
@@ -170,7 +173,7 @@ public sealed class BackupDiagnosticsService
 
         var jobs = await _store.ListJobsAsync(cancellationToken);
         var health = await _store.ListHealthTargetsAsync(cancellationToken);
-        var ddns = await _store.ListDdnsTargetsAsync(cancellationToken);
+        var ddns = await _dnsStore.ListDdnsTargetsAsync(cancellationToken);
         var payload = new
         {
             schema = "caddy-ui-diagnostics-v1",
