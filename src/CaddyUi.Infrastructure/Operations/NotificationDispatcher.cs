@@ -7,12 +7,12 @@ namespace CaddyUi.Infrastructure.Operations;
 
 public sealed class NotificationDispatcher
 {
-    private readonly OperationsStore _store;
+    private readonly NotificationOperationsStore _store;
     private readonly ISecretReferenceResolver _secretResolver;
     private readonly IHttpClientFactory _httpClientFactory;
 
     public NotificationDispatcher(
-        OperationsStore store,
+        NotificationOperationsStore store,
         ISecretReferenceResolver secretResolver,
         IHttpClientFactory httpClientFactory)
     {
