@@ -8,6 +8,7 @@ public sealed class SystemJobWorker : BackgroundService
 {
     private readonly OperationsOptions _options;
     private readonly OperationsStore _store;
+    private readonly DnsOperationsStore _dnsStore;
     private readonly DdnsService _ddns;
     private readonly DnsProviderRuntimeService _providers;
     private readonly HealthProbeService _health;
@@ -19,6 +20,7 @@ public sealed class SystemJobWorker : BackgroundService
     public SystemJobWorker(
         OperationsOptions options,
         OperationsStore store,
+        DnsOperationsStore dnsStore,
         DdnsService ddns,
         DnsProviderRuntimeService providers,
         HealthProbeService health,
@@ -28,6 +30,7 @@ public sealed class SystemJobWorker : BackgroundService
     {
         _options = options;
         _store = store;
+        _dnsStore = dnsStore;
         _ddns = ddns;
         _providers = providers;
         _health = health;
@@ -63,7 +66,7 @@ public sealed class SystemJobWorker : BackgroundService
 
     private async Task ProcessDdnsAsync(CancellationToken cancellationToken)
     {
-        var target = await _store.ClaimDueDdnsTargetAsync(_workerId, cancellationToken);
+        var target = await _dnsStore.ClaimDueDdnsTargetAsync(_workerId, cancellationToken);
         if (target is not null)
         {
             await _ddns.RunAsync(target, cancellationToken);
