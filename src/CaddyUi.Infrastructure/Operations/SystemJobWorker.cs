@@ -7,7 +7,7 @@ namespace CaddyUi.Infrastructure.Operations;
 public sealed class SystemJobWorker : BackgroundService
 {
     private readonly OperationsOptions _options;
-    private readonly OperationsStore _store;
+    private readonly ScheduledJobOperationsStore _jobStore;
     private readonly DnsOperationsStore _dnsStore;
     private readonly DdnsService _ddns;
     private readonly DnsProviderRuntimeService _providers;
@@ -19,7 +19,7 @@ public sealed class SystemJobWorker : BackgroundService
 
     public SystemJobWorker(
         OperationsOptions options,
-        OperationsStore store,
+        ScheduledJobOperationsStore jobStore,
         DnsOperationsStore dnsStore,
         DdnsService ddns,
         DnsProviderRuntimeService providers,
@@ -29,7 +29,7 @@ public sealed class SystemJobWorker : BackgroundService
         ILogger<SystemJobWorker> logger)
     {
         _options = options;
-        _store = store;
+        _jobStore = jobStore;
         _dnsStore = dnsStore;
         _ddns = ddns;
         _providers = providers;
@@ -75,14 +75,14 @@ public sealed class SystemJobWorker : BackgroundService
 
     private async Task ProcessJobAsync(CancellationToken cancellationToken)
     {
-        var job = await _store.ClaimDueJobAsync(_workerId, cancellationToken);
+        var job = await _jobStore.ClaimDueJobAsync(_workerId, cancellationToken);
         if (job is null)
         {
             return;
         }
 
         var correlationId = Guid.NewGuid().ToString("N");
-        var runId = await _store.StartJobRunAsync(job.Id, correlationId, cancellationToken);
+        var runId = await _jobStore.StartJobRunAsync(job.Id, correlationId, cancellationToken);
         ProviderOperationResult result;
         var details = "{}";
         try
@@ -103,7 +103,7 @@ public sealed class SystemJobWorker : BackgroundService
             result = ProviderOperationResult.Failure(exception.Message);
         }
 
-        await _store.CompleteJobRunAsync(job.Id, runId, result, details, cancellationToken);
+        await _jobStore.CompleteJobRunAsync(job.Id, runId, result, details, cancellationToken);
         if (!result.Succeeded)
         {
             await _notifications.NotifyAsync(
