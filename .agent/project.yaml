@@ -1,0 +1,26 @@
+project: Caddy UI
+repository: Juloc/caddy-ui
+coordination:
+  repository: Juloc/agent-control
+  issue: 1
+  hubUrl: null
+relatedRepositories:
+  - Juloc/docker
+validation:
+  - dotnet restore
+  - dotnet format --verify-no-changes
+  - dotnet build CaddyUi.slnx -c Release
+  - dotnet test CaddyUi.slnx -c Release
+protectedPaths:
+  - VERSION_DOTNET
+  - Dockerfile.dotnet
+legacyWorkState:
+  migrationIssue: 93
+  files:
+    - docs/CODE_AUDIT.md
+    - docs/IMPROVEMENT_PLAN.md
+  newWork: GitHub Issues
+notes:
+  - Root AGENTS.md remains the authoritative Caddy UI-specific engineering, UI, security and verification guide.
+  - Existing legacy plan items may remain synchronized until issue #93 completes; do not add newly discovered work there.
+  - Full verification requirements in AGENTS.md still apply even when this file lists only the primary commands.
