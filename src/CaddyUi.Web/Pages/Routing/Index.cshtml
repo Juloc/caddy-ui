@@ -137,12 +137,14 @@ else if (Model.RuntimeState.HasPendingChanges)
                                 ManagedRouteKind.Proxy => definition.Configuration.Upstream,
                                 ManagedRouteKind.Redirect => definition.Configuration.RedirectTarget,
                                 ManagedRouteKind.StaticResponse => $"HTTP {definition.Configuration.StaticStatusCode}",
+                                ManagedRouteKind.StaticSite => "Mini-Site",
                                 ManagedRouteKind.Custom => R["Custom Caddyfile"].Value,
                                 _ => string.Empty,
                             };
                             var runtimeState = Model.StateFor(definition.Id);
                             var actionsLabel = R["Actions for {0}", definition.Name];
                             var deleteConfirmation = R["Really delete route '{0}'?", definition.Name];
+                            var editPage = definition.Kind == ManagedRouteKind.StaticSite ? "/StaticSites/Edit" : "/Routing/Edit";
                             <li class="domain-route-row @(definition.Enabled ? null : "domain-route-row--disabled")">
                                 <div class="domain-route-address">
                                     <strong>@definition.Host</strong>
@@ -173,7 +175,7 @@ else if (Model.RuntimeState.HasPendingChanges)
                                            target="_blank"
                                            rel="noopener noreferrer">@R["Open"] ↗</a>
                                     }
-                                    <a class="button button--compact button--quiet" asp-page="/Routing/Edit" asp-route-id="@definition.Id">@R["Edit"]</a>
+                                    <a class="button button--compact button--quiet" asp-page="@editPage" asp-route-id="@definition.Id">@R["Edit"]</a>
                                     <details class="route-row-menu">
                                         <summary class="button button--compact button--quiet" aria-label="@actionsLabel">⋯</summary>
                                         <div class="route-row-menu-items">
