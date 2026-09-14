@@ -1,0 +1,96 @@
+@page
+@using CaddyUi.Domain.Routing
+@using Microsoft.Extensions.Localization
+@model CaddyUi.Web.Pages.StaticSites.IndexModel
+@inject IStringLocalizer<CaddyUi.Web.StaticSitesResource> S
+@{
+    ViewData["Title"] = S["Mini sites"];
+}
+
+<section class="page-heading page-heading--compact">
+    <div>
+        <p class="eyebrow">@S["Static content"]</p>
+        <h1>@S["Mini sites"]</h1>
+        <p class="page-description">@S["Publish small public pages directly through Caddy without another web container."]</p>
+    </div>
+    <div class="page-actions">
+        <a class="button button--quiet" asp-page="/Routing/Preview">@S["Preview and apply"]</a>
+        <a class="button button--primary" asp-page="/StaticSites/Edit">@S["New mini site"]</a>
+    </div>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
+}
+
+@if (!Model.RuntimeState.ActiveStateTracked)
+{
+    <div class="notice notice--warning" role="status">
+        @S["The active Caddy state cannot be matched safely. Review the preview before applying changes."]
+        <a asp-page="/Routing/Preview">@S["Review preview"]</a>
+    </div>
+}
+else if (Model.RuntimeState.HasPendingChanges)
+{
+    <div class="notice notice--warning" role="status">
+        @S["Saved changes are not fully active in Caddy yet."]
+        <a asp-page="/Routing/Preview">@S["Preview and apply"]</a>
+    </div>
+}
+
+@if (Model.Sites.Count == 0)
+{
+    <section class="empty-state">
+        <strong>@S["No mini site exists yet."]</strong>
+        <span>@S["Create one for a small public landing page, privacy policy, and terms page."]</span>
+        <a class="button button--primary" asp-page="/StaticSites/Edit">@S["Create mini site"]</a>
+    </section>
+}
+else
+{
+    <section class="route-overview" aria-label="@S["Managed mini sites"]">
+        <header class="route-overview-header">
+            <div><strong>@S["{0} mini sites", Model.Sites.Count]</strong></div>
+        </header>
+        <ul class="domain-route-list">
+            @foreach (var site in Model.Sites)
+            {
+                var route = site.Definition;
+                var state = Model.StateFor(route.Id);
+                var deleteConfirmation = S["Really delete mini site '{0}'?", route.Configuration.StaticSiteTitle];
+                <li class="domain-route-row @(route.Enabled ? null : "domain-route-row--disabled")">
+                    <div class="domain-route-address">
+                        <strong>@route.Host</strong>
+                        <small>@route.Configuration.StaticSiteTitle</small>
+                    </div>
+                    <div class="domain-route-target">
+                        <span aria-hidden="true">→</span>
+                        <code>/ · /privacy · /terms</code>
+                    </div>
+                    <div class="domain-route-state">
+                        <span class="status-badge status-badge--neutral">@S["Public"]</span>
+                        <span class="status-badge @IndexModel.StateBadgeClass(state)">@S[IndexModel.StateLabelKey(state)]</span>
+                    </div>
+                    <div class="domain-route-actions">
+                        @if (IndexModel.CanOpen(route, state))
+                        {
+                            <a class="button button--compact button--quiet"
+                               href="@IndexModel.PublicUrl(route)"
+                               target="_blank"
+                               rel="noopener noreferrer">@S["Open"] ↗</a>
+                        }
+                        <a class="button button--compact button--quiet" asp-page="/StaticSites/Edit" asp-route-id="@route.Id">@S["Edit"]</a>
+                        <form method="post"
+                              asp-page-handler="Delete"
+                              asp-antiforgery="true"
+                              data-confirm="@deleteConfirmation">
+                            <input type="hidden" name="id" value="@route.Id" />
+                            <button class="button button--compact button--quiet" type="submit">@S["Delete"]</button>
+                        </form>
+                    </div>
+                </li>
+            }
+        </ul>
+    </section>
+}
