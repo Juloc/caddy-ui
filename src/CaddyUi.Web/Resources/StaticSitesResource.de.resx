@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Mini sites" xml:space="preserve"><value>Mini-Sites</value></data>
+  <data name="Static content" xml:space="preserve"><value>Statische Inhalte</value></data>
+  <data name="Publish small public pages directly through Caddy without another web container." xml:space="preserve"><value>Kleine öffentliche Seiten direkt über Caddy veröffentlichen – ohne zusätzlichen Web-Container.</value></data>
+  <data name="Preview and apply" xml:space="preserve"><value>Vorschau &amp; anwenden</value></data>
+  <data name="New mini site" xml:space="preserve"><value>Neue Mini-Site</value></data>
+  <data name="The active Caddy state cannot be matched safely. Review the preview before applying changes." xml:space="preserve"><value>Der aktive Caddy-Stand kann nicht sicher zugeordnet werden. Prüfe vor dem Anwenden die Vorschau.</value></data>
+  <data name="Review preview" xml:space="preserve"><value>Vorschau prüfen</value></data>
+  <data name="Saved changes are not fully active in Caddy yet." xml:space="preserve"><value>Gespeicherte Änderungen sind in Caddy noch nicht vollständig aktiv.</value></data>
+  <data name="No mini site exists yet." xml:space="preserve"><value>Noch keine Mini-Site vorhanden.</value></data>
+  <data name="Create one for a small public landing page, privacy policy, and terms page." xml:space="preserve"><value>Erstelle eine kleine öffentliche Startseite mit Datenschutz und Nutzungsbedingungen.</value></data>
+  <data name="Create mini site" xml:space="preserve"><value>Mini-Site erstellen</value></data>
+  <data name="Managed mini sites" xml:space="preserve"><value>Verwaltete Mini-Sites</value></data>
+  <data name="{0} mini sites" xml:space="preserve"><value>{0} Mini-Sites</value></data>
+  <data name="Really delete mini site '{0}'?" xml:space="preserve"><value>Mini-Site „{0}“ wirklich löschen?</value></data>
+  <data name="Public" xml:space="preserve"><value>Öffentlich</value></data>
+  <data name="Open" xml:space="preserve"><value>Öffnen</value></data>
+  <data name="Edit" xml:space="preserve"><value>Bearbeiten</value></data>
+  <data name="Delete" xml:space="preserve"><value>Löschen</value></data>
+  <data name="Active" xml:space="preserve"><value>Aktiv</value></data>
+  <data name="Apply required" xml:space="preserve"><value>Anwenden erforderlich</value></data>
+  <data name="New · not active" xml:space="preserve"><value>Neu · nicht aktiv</value></data>
+  <data name="Removal pending" xml:space="preserve"><value>Entfernung ausstehend</value></data>
+  <data name="Disabled" xml:space="preserve"><value>Deaktiviert</value></data>
+  <data name="Status unknown" xml:space="preserve"><value>Status unbekannt</value></data>
+  <data name="Static site deleted. Review and apply the saved configuration to remove it from Caddy." xml:space="preserve"><value>Mini-Site gelöscht. Prüfe und wende die gespeicherte Konfiguration an, um sie aus Caddy zu entfernen.</value></data>
+  <data name="Static site deleted. It remains active until the saved changes are applied." xml:space="preserve"><value>Mini-Site gelöscht. Sie bleibt aktiv, bis die gespeicherten Änderungen angewendet werden.</value></data>
+  <data name="Static site deleted." xml:space="preserve"><value>Mini-Site gelöscht.</value></data>
+  <data name="Edit mini site" xml:space="preserve"><value>Mini-Site bearbeiten</value></data>
+  <data name="Caddy serves the generated page directly. No additional container or file mount is required." xml:space="preserve"><value>Caddy liefert die erzeugte Seite direkt aus. Kein zusätzlicher Container und kein Datei-Mount erforderlich.</value></data>
+  <data name="Back to mini sites" xml:space="preserve"><value>Zurück zu Mini-Sites</value></data>
+  <data name="Address" xml:space="preserve"><value>Adresse</value></data>
+  <data name="Choose where the public mini site should be reachable." xml:space="preserve"><value>Lege fest, unter welcher Adresse die öffentliche Mini-Site erreichbar ist.</value></data>
+  <data name="Domain" xml:space="preserve"><value>Domain</value></data>
+  <data name="Subdomain" xml:space="preserve"><value>Subdomain</value></data>
+  <data name="Leave empty to use the base domain." xml:space="preserve"><value>Leer lassen, um die Basis-Domain zu verwenden.</value></data>
+  <data name="Public address" xml:space="preserve"><value>Öffentliche Adresse</value></data>
+  <data name="Page" xml:space="preserve"><value>Seite</value></data>
+  <data name="The same compact page is available at /, /privacy, and /terms. The matching section opens automatically." xml:space="preserve"><value>Die kompakte Seite ist unter /, /privacy und /terms erreichbar. Der passende Bereich wird automatisch geöffnet.</value></data>
+  <data name="Use Google OAuth template" xml:space="preserve"><value>Google-OAuth-Vorlage einsetzen</value></data>
+  <data name="Site title" xml:space="preserve"><value>Seitentitel</value></data>
+  <data name="Contact email" xml:space="preserve"><value>Kontakt-E-Mail</value></data>
+  <data name="Optional. Shown below the legal information." xml:space="preserve"><value>Optional. Wird unter den rechtlichen Informationen angezeigt.</value></data>
+  <data name="Home page text" xml:space="preserve"><value>Text der Startseite</value></data>
+  <data name="Briefly describe what the application does." xml:space="preserve"><value>Beschreibe kurz, was die Anwendung macht.</value></data>
+  <data name="Privacy policy" xml:space="preserve"><value>Datenschutzerklärung</value></data>
+  <data name="Terms of use" xml:space="preserve"><value>Nutzungsbedingungen</value></data>
+  <data name="HTTPS" xml:space="preserve"><value>HTTPS</value></data>
+  <data name="Usually the domain setting is sufficient. Choose an individual certificate only when this host should not use the domain wildcard." xml:space="preserve"><value>Normalerweise reicht die Domain-Einstellung. Wähle ein Einzelzertifikat nur, wenn dieser Host nicht das Wildcard-Zertifikat der Domain verwenden soll.</value></data>
+  <data name="Certificate" xml:space="preserve"><value>Zertifikat</value></data>
+  <data name="Inherit from domain" xml:space="preserve"><value>Von Domain übernehmen</value></data>
+  <data name="Wildcard" xml:space="preserve"><value>Wildcard</value></data>
+  <data name="Individual certificate" xml:space="preserve"><value>Einzelzertifikat</value></data>
+  <data name="Always public" xml:space="preserve"><value>Immer öffentlich</value></data>
+  <data name="Privacy and OAuth pages are intentionally not protected by an access group." xml:space="preserve"><value>Datenschutz- und OAuth-Seiten werden bewusst nicht durch eine Zugriffsgruppe geschützt.</value></data>
+  <data name="Changes are validated before they are applied." xml:space="preserve"><value>Änderungen werden vor dem Anwenden validiert.</value></data>
+  <data name="Save keeps Caddy unchanged. Save and activate validates the generated Caddy configuration and rolls back on failure." xml:space="preserve"><value>Speichern lässt Caddy unverändert. Speichern und aktivieren validiert die erzeugte Caddy-Konfiguration und führt bei einem Fehler ein Rollback aus.</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Abbrechen</value></data>
+  <data name="Save" xml:space="preserve"><value>Speichern</value></data>
+  <data name="Save and update" xml:space="preserve"><value>Speichern &amp; aktualisieren</value></data>
+  <data name="Save and activate" xml:space="preserve"><value>Speichern &amp; aktivieren</value></data>
+  <data name="The selected domain does not exist or is disabled." xml:space="preserve"><value>Die ausgewählte Domain existiert nicht oder ist deaktiviert.</value></data>
+  <data name="Mini site saved. Caddy is unchanged until you apply the saved configuration." xml:space="preserve"><value>Mini-Site gespeichert. Caddy bleibt unverändert, bis die gespeicherte Konfiguration angewendet wird.</value></data>
+  <data name="Mini site updated. Caddy is unchanged until you apply the saved configuration." xml:space="preserve"><value>Mini-Site aktualisiert. Caddy bleibt unverändert, bis die gespeicherte Konfiguration angewendet wird.</value></data>
+  <data name="Mini site saved and activated: {0}" xml:space="preserve"><value>Mini-Site gespeichert und aktiviert: {0}</value></data>
+  <data name="The mini site was saved, but activation failed: {0}" xml:space="preserve"><value>Die Mini-Site wurde gespeichert, aber die Aktivierung ist fehlgeschlagen: {0}</value></data>
+  <data name="OAuth template home" xml:space="preserve"><value>Diese Website informiert über eine private Anwendung und deren Nutzung.</value></data>
+  <data name="OAuth template privacy" xml:space="preserve"><value>Diese Anwendung verwendet Google APIs ausschließlich für die beschriebene Funktion. Google-Nutzerdaten werden nicht verkauft, für Werbung verwendet oder an Dritte weitergegeben. OAuth-Zugriffsdaten werden nur zur Authentifizierung gegenüber Google verwendet.</value></data>
+  <data name="OAuth template terms" xml:space="preserve"><value>Diese Anwendung ist für den privaten Gebrauch vorgesehen. Die Nutzung erfolgt ohne Gewähr auf dauerhafte Verfügbarkeit, Fehlerfreiheit oder Vollständigkeit. Google-Dienste unterliegen den jeweiligen Bedingungen von Google.</value></data>
+</root>
