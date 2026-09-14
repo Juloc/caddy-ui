@@ -62,6 +62,7 @@
                 {
                     <span class="nav-section">@T["Configuration"]</span>
                     <a class="nav-item @(path.StartsWithSegments("/Routing") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Routing") ? "page" : null)" asp-page="/Routing/Index" title="@T["Routes"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#route"></use></svg><span class="nav-label">@T["Routes"]</span></a>
+                    <a class="nav-item @(path.StartsWithSegments("/StaticSites") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/StaticSites") ? "page" : null)" asp-page="/StaticSites/Index" title="Mini-Sites"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#domain"></use></svg><span class="nav-label">Mini-Sites</span></a>
                 }
                 @if (User.IsInRole("admin"))
                 {

@@ -7,6 +7,7 @@ public enum ManagedRouteKind
     Proxy,
     Redirect,
     StaticResponse,
+    StaticSite,
     Custom,
 }
 
@@ -29,7 +30,12 @@ public sealed record RouteConfigurationDocument(
     int StaticStatusCode,
     string StaticBody,
     string CustomSnippet,
-    bool SkipUpstreamTlsVerification = false)
+    bool SkipUpstreamTlsVerification = false,
+    string StaticSiteTitle = "",
+    string StaticSiteContact = "",
+    string StaticSiteHomeText = "",
+    string StaticSitePrivacyText = "",
+    string StaticSiteTermsText = "")
 {
     public static RouteConfigurationDocument Empty { get; } = new(
         "route-v1",
@@ -83,6 +89,11 @@ public sealed partial record ManagedRouteDefinition(
             throw new ArgumentException("A managed domain is required.", nameof(domainId));
         }
 
+        if (kind == ManagedRouteKind.StaticSite && accessGroupId is not null)
+        {
+            throw new ArgumentException("A static site must remain publicly accessible.", nameof(accessGroupId));
+        }
+
         ArgumentNullException.ThrowIfNull(configuration);
         var normalizedName = Required(name, 120, "Route name");
         var normalizedDomain = NormalizeHost(domainName, "Domain");
@@ -114,6 +125,7 @@ public sealed partial record ManagedRouteDefinition(
             ManagedRouteKind.Proxy => "proxy",
             ManagedRouteKind.Redirect => "redirect",
             ManagedRouteKind.StaticResponse => "static",
+            ManagedRouteKind.StaticSite => "static_site",
             ManagedRouteKind.Custom => "custom",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
@@ -126,6 +138,7 @@ public sealed partial record ManagedRouteDefinition(
             "proxy" => ManagedRouteKind.Proxy,
             "redirect" => ManagedRouteKind.Redirect,
             "static" or "static_response" => ManagedRouteKind.StaticResponse,
+            "static_site" or "static-site" => ManagedRouteKind.StaticSite,
             "custom" => ManagedRouteKind.Custom,
             _ => throw new ArgumentException("Unsupported route kind.", nameof(value)),
         };
@@ -170,6 +183,11 @@ public sealed partial record ManagedRouteDefinition(
 
         var upstream = string.Empty;
         var redirectTarget = string.Empty;
+        var staticSiteTitle = string.Empty;
+        var staticSiteContact = string.Empty;
+        var staticSiteHomeText = string.Empty;
+        var staticSitePrivacyText = string.Empty;
+        var staticSiteTermsText = string.Empty;
         switch (kind)
         {
             case ManagedRouteKind.Proxy:
@@ -179,6 +197,21 @@ public sealed partial record ManagedRouteDefinition(
                 redirectTarget = NormalizeRedirect(configuration.RedirectTarget);
                 break;
             case ManagedRouteKind.StaticResponse:
+                break;
+            case ManagedRouteKind.StaticSite:
+                if (pathPrefix != "/")
+                {
+                    throw new ArgumentException("A static site must use the root path '/'.", nameof(configuration));
+                }
+
+                staticSiteTitle = Required(configuration.StaticSiteTitle, 160, "Static site title");
+                staticSiteContact = Bounded(
+                    configuration.StaticSiteContact?.Trim() ?? string.Empty,
+                    320,
+                    "Static site contact");
+                staticSiteHomeText = Required(configuration.StaticSiteHomeText, 6_000, "Static site home text");
+                staticSitePrivacyText = Required(configuration.StaticSitePrivacyText, 6_000, "Static site privacy text");
+                staticSiteTermsText = Required(configuration.StaticSiteTermsText, 6_000, "Static site terms text");
                 break;
             case ManagedRouteKind.Custom:
                 if (customSnippet.Length == 0)
@@ -214,10 +247,15 @@ public sealed partial record ManagedRouteDefinition(
             HealthIntervalSeconds = healthInterval,
             RedirectTarget = redirectTarget,
             StaticStatusCode = staticStatus,
-            StaticBody = staticBody,
-            CustomSnippet = customSnippet,
+            StaticBody = kind == ManagedRouteKind.StaticSite ? string.Empty : staticBody,
+            CustomSnippet = kind == ManagedRouteKind.StaticSite ? string.Empty : customSnippet,
             SkipUpstreamTlsVerification =
                 kind == ManagedRouteKind.Proxy && configuration.SkipUpstreamTlsVerification,
+            StaticSiteTitle = staticSiteTitle,
+            StaticSiteContact = staticSiteContact,
+            StaticSiteHomeText = staticSiteHomeText,
+            StaticSitePrivacyText = staticSitePrivacyText,
+            StaticSiteTermsText = staticSiteTermsText,
         };
     }
 

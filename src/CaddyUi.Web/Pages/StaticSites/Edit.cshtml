@@ -1,0 +1,168 @@
+@page
+@using Microsoft.Extensions.Localization
+@model CaddyUi.Web.Pages.StaticSites.EditModel
+@inject IStringLocalizer<CaddyUi.Web.StaticSitesResource> S
+@{
+    ViewData["Title"] = Model.IsEdit ? S["Edit mini site"] : S["New mini site"];
+}
+
+<section class="page-heading page-heading--compact">
+    <div>
+        <p class="eyebrow">@S["Static content"]</p>
+        <h1>@ViewData["Title"]</h1>
+        <p class="page-description">@S["Caddy serves the generated page directly. No additional container or file mount is required."]</p>
+    </div>
+    <a class="button button--quiet" asp-page="/StaticSites/Index">@S["Back to mini sites"]</a>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <div class="notice notice--ok" role="status">@Model.StatusMessage</div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="notice notice--danger" role="alert">@Model.ErrorMessage</div>
+}
+<div asp-validation-summary="All" class="validation-summary" role="alert"></div>
+
+<form method="post" asp-page="/StaticSites/Edit" asp-antiforgery="true" class="feature-route-editor" data-static-site-editor>
+    <input asp-for="Input.Id" type="hidden" />
+
+    <section class="workspace-section">
+        <header class="section-header">
+            <div>
+                <h2>@S["Address"]</h2>
+                <p>@S["Choose where the public mini site should be reachable."]</p>
+            </div>
+        </header>
+        <div class="form-grid form-grid--three">
+            <label class="field">
+                <span class="field-label">@S["Domain"]</span>
+                <select asp-for="Input.DomainId" data-site-domain>
+                    @foreach (var domain in Model.Domains.Where(item => item.Enabled))
+                    {
+                        <option value="@domain.Id" data-domain-name="@domain.Name">@domain.DisplayName · @domain.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="Input.DomainId" class="field-error"></span>
+            </label>
+            <label class="field field--wide">
+                <span class="field-label">@S["Subdomain"]</span>
+                <input asp-for="Input.Subdomain" data-site-subdomain autocomplete="off" placeholder="paperless-backup" />
+                <small>@S["Leave empty to use the base domain."]</small>
+                <span asp-validation-for="Input.Subdomain" class="field-error"></span>
+            </label>
+        </div>
+        <div class="safe-apply-note">
+            <strong>@S["Public address"]</strong>
+            <span data-site-url>https://…/</span>
+        </div>
+    </section>
+
+    <section class="workspace-section">
+        <header class="section-header">
+            <div>
+                <h2>@S["Page"]</h2>
+                <p>@S["The same compact page is available at /, /privacy, and /terms. The matching section opens automatically."]</p>
+            </div>
+            @if (!Model.IsEdit)
+            {
+                <button class="button button--quiet" type="button" data-oauth-template>@S["Use Google OAuth template"]</button>
+            }
+        </header>
+        <div class="form-grid form-grid--two">
+            <label class="field">
+                <span class="field-label">@S["Site title"]</span>
+                <input asp-for="Input.Title" data-site-title autocomplete="off" placeholder="Paperless Backup" />
+                <span asp-validation-for="Input.Title" class="field-error"></span>
+            </label>
+            <label class="field">
+                <span class="field-label">@S["Contact email"]</span>
+                <input asp-for="Input.Contact" type="email" autocomplete="email" placeholder="name@example.com" />
+                <small>@S["Optional. Shown below the legal information."]</small>
+                <span asp-validation-for="Input.Contact" class="field-error"></span>
+            </label>
+            <label class="field field--wide">
+                <span class="field-label">@S["Home page text"]</span>
+                <textarea asp-for="Input.HomeText" data-site-home rows="6" maxlength="6000" placeholder="@S["Briefly describe what the application does."]"></textarea>
+                <span asp-validation-for="Input.HomeText" class="field-error"></span>
+            </label>
+            <label class="field field--wide">
+                <span class="field-label">@S["Privacy policy"]</span>
+                <textarea asp-for="Input.PrivacyText" data-site-privacy rows="8" maxlength="6000"></textarea>
+                <small>https://…/privacy</small>
+                <span asp-validation-for="Input.PrivacyText" class="field-error"></span>
+            </label>
+            <label class="field field--wide">
+                <span class="field-label">@S["Terms of use"]</span>
+                <textarea asp-for="Input.TermsText" data-site-terms rows="8" maxlength="6000"></textarea>
+                <small>https://…/terms</small>
+                <span asp-validation-for="Input.TermsText" class="field-error"></span>
+            </label>
+        </div>
+    </section>
+
+    <section class="workspace-section">
+        <header class="section-header">
+            <div>
+                <h2>@S["HTTPS"]</h2>
+                <p>@S["Usually the domain setting is sufficient. Choose an individual certificate only when this host should not use the domain wildcard."]</p>
+            </div>
+        </header>
+        <div class="form-grid form-grid--two">
+            <label class="field">
+                <span class="field-label">@S["Certificate"]</span>
+                <select asp-for="Input.CertificateMode">
+                    <option value="inherit">@S["Inherit from domain"]</option>
+                    <option value="wildcard">@S["Wildcard"]</option>
+                    <option value="individual">@S["Individual certificate"]</option>
+                </select>
+            </label>
+            <div class="safe-apply-note">
+                <strong>@S["Always public"]</strong>
+                <span>@S["Privacy and OAuth pages are intentionally not protected by an access group."]</span>
+            </div>
+        </div>
+    </section>
+
+    <footer class="editor-actionbar">
+        <div>
+            <strong>@S["Changes are validated before they are applied."]</strong>
+            <span>@S["Save keeps Caddy unchanged. Save and activate validates the generated Caddy configuration and rolls back on failure."]</span>
+        </div>
+        <div class="page-actions">
+            <a class="button button--quiet" asp-page="/StaticSites/Index">@S["Cancel"]</a>
+            <button class="button button--quiet" type="submit" asp-page-handler="Save">@S["Save"]</button>
+            <button class="button button--primary" type="submit" asp-page-handler="SaveApply">@(Model.IsEdit ? S["Save and update"] : S["Save and activate"])</button>
+        </div>
+    </footer>
+</form>
+
+<script>
+(() => {
+    const editor = document.querySelector('[data-static-site-editor]');
+    if (!editor) return;
+
+    const domain = editor.querySelector('[data-site-domain]');
+    const subdomain = editor.querySelector('[data-site-subdomain]');
+    const output = editor.querySelector('[data-site-url]');
+    const updateUrl = () => {
+        const option = domain?.selectedOptions?.[0];
+        const base = option?.dataset.domainName || '';
+        const sub = (subdomain?.value || '').trim().replace(/^\.+|\.+$/g, '');
+        output.textContent = base ? `https://${sub ? `${sub}.` : ''}${base}/` : 'https://…/';
+    };
+    domain?.addEventListener('change', updateUrl);
+    subdomain?.addEventListener('input', updateUrl);
+    updateUrl();
+
+    editor.querySelector('[data-oauth-template]')?.addEventListener('click', () => {
+        const home = editor.querySelector('[data-site-home]');
+        const privacy = editor.querySelector('[data-site-privacy]');
+        const terms = editor.querySelector('[data-site-terms]');
+        if (home && !home.value.trim()) home.value = '@Html.Raw(S["OAuth template home"].Value.Replace("'", "\\'"))';
+        if (privacy && !privacy.value.trim()) privacy.value = '@Html.Raw(S["OAuth template privacy"].Value.Replace("'", "\\'"))';
+        if (terms && !terms.value.trim()) terms.value = '@Html.Raw(S["OAuth template terms"].Value.Replace("'", "\\'"))';
+    });
+})();
+</script>

@@ -583,6 +583,16 @@ public sealed class CaddyRouteCompiler
                     .Append(route.Configuration.StaticStatusCode)
                     .AppendLine();
                 break;
+            case ManagedRouteKind.StaticSite:
+                builder.AppendLine("        header {");
+                builder.AppendLine("            Content-Type \"text/html; charset=utf-8\"");
+                builder.AppendLine("            X-Content-Type-Options nosniff");
+                builder.AppendLine("            Referrer-Policy no-referrer");
+                builder.AppendLine("        }");
+                builder.Append("        respond ")
+                    .Append(CaddyQuote(StaticSiteRenderer.Render(route.Configuration)))
+                    .AppendLine(" 200");
+                break;
             case ManagedRouteKind.Custom:
                 if (!_allowCustomRoutes)
                 {
