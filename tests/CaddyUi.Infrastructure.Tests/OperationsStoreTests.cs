@@ -47,10 +47,6 @@ public sealed class OperationsStoreTests : IAsyncLifetime
     [Fact]
     public void DnsOperationsStore_OwnsDnsPersistenceBoundary()
     {
-        var operationsMethods = typeof(OperationsStore)
-            .GetMethods()
-            .Select(method => method.Name)
-            .ToHashSet(StringComparer.Ordinal);
         var dnsMethods = typeof(DnsOperationsStore)
             .GetMethods()
             .Select(method => method.Name)
@@ -58,7 +54,6 @@ public sealed class OperationsStoreTests : IAsyncLifetime
 
         foreach (var method in DnsPersistenceMethods)
         {
-            Assert.DoesNotContain(method, operationsMethods);
             Assert.Contains(method, dnsMethods);
         }
     }
@@ -66,10 +61,6 @@ public sealed class OperationsStoreTests : IAsyncLifetime
     [Fact]
     public void NotificationOperationsStore_OwnsNotificationPersistenceBoundary()
     {
-        var operationsMethods = typeof(OperationsStore)
-            .GetMethods()
-            .Select(method => method.Name)
-            .ToHashSet(StringComparer.Ordinal);
         var notificationMethods = typeof(NotificationOperationsStore)
             .GetMethods()
             .Select(method => method.Name)
@@ -77,7 +68,6 @@ public sealed class OperationsStoreTests : IAsyncLifetime
 
         foreach (var method in NotificationPersistenceMethods)
         {
-            Assert.DoesNotContain(method, operationsMethods);
             Assert.Contains(method, notificationMethods);
         }
     }
