@@ -92,7 +92,7 @@ public sealed class RouteNameUniquenessMigrationTests : IAsyncLifetime
             "WWW",
             "www.example.net");
 
-        await Assert.ThrowsAsync<DbException>(() =>
+        await Assert.ThrowsAnyAsync<DbException>(() =>
             InsertRouteAsync(
                 database,
                 Guid.NewGuid(),
