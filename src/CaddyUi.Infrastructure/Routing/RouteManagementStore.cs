@@ -89,6 +89,7 @@ public sealed class RouteManagementStore
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
+            await EnsureRouteNameAvailableAsync(connection, transaction, route, cancellationToken);
             await EnsureRouteTargetAvailableAsync(connection, transaction, route, cancellationToken);
             var now = DateTimeOffset.UtcNow;
             await using var command = connection.CreateCommand();
@@ -141,6 +142,7 @@ public sealed class RouteManagementStore
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
+            await EnsureRouteNameAvailableAsync(connection, transaction, route, cancellationToken);
             await EnsureRouteTargetAvailableAsync(connection, transaction, route, cancellationToken);
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -274,6 +276,35 @@ public sealed class RouteManagementStore
         catch (JsonException)
         {
             return RouteConfigurationDocument.Empty;
+        }
+    }
+
+    private static async Task EnsureRouteNameAvailableAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        ManagedRouteDefinition route,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT COUNT(*)
+            FROM caddy_ui.managed_routes
+            WHERE id <> @id
+              AND domain_id = @domain_id
+              AND lower(name) = lower(@name)
+            """;
+        AddParameter(command, "id", route.Id);
+        AddParameter(command, "domain_id", route.DomainId);
+        AddParameter(command, "name", route.Name);
+        var count = Convert.ToInt32(
+            await command.ExecuteScalarAsync(cancellationToken),
+            CultureInfo.InvariantCulture);
+        if (count > 0)
+        {
+            throw new InvalidOperationException(
+                $"A route named '{route.Name}' already exists in {route.DomainName}.");
         }
     }
 
