@@ -1,5 +1,7 @@
 using System.Data.Common;
+using CaddyUi.Domain.Routing;
 using CaddyUi.Infrastructure.Persistence;
+using CaddyUi.Infrastructure.Routing;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 
@@ -97,6 +99,29 @@ public sealed class RouteNameUniquenessMigrationTests : IAsyncLifetime
                 firstDomainId,
                 "WWW",
                 "other.example.com"));
+
+        var routeStore = new RouteManagementStore(new TestDbContextFactory(options));
+        var duplicateRoute = ManagedRouteDefinition.Create(
+            Guid.NewGuid(),
+            "WWW",
+            firstDomainId,
+            firstDomainName,
+            "other",
+            ManagedRouteKind.Proxy,
+            false,
+            0,
+            RouteCertificateMode.Inherit,
+            null,
+            RouteConfigurationDocument.Empty with
+            {
+                Upstream = "127.0.0.1:8080",
+            });
+
+        var validationError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            routeStore.CreateRouteAsync(duplicateRoute, ManagementActor.System));
+        Assert.Equal(
+            "A route named 'WWW' already exists in example.com.",
+            validationError.Message);
     }
 
     private static Task InsertRouteAsync(
@@ -115,5 +140,14 @@ public sealed class RouteNameUniquenessMigrationTests : IAsyncLifetime
                 {id}, {name}, {host}, 'proxy', false, jsonb_build_object(),
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, {domainId}, 'www', 'inherit')
             """);
+    }
+
+    private sealed class TestDbContextFactory(DbContextOptions<CaddyUiDbContext> options)
+        : IDbContextFactory<CaddyUiDbContext>
+    {
+        public CaddyUiDbContext CreateDbContext()
+        {
+            return new CaddyUiDbContext(options);
+        }
     }
 }
