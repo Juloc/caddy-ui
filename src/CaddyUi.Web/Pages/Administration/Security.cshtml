@@ -50,7 +50,7 @@
             </div>
         </header>
         <div class="panel-body">
-            @if (string.IsNullOrWhiteSpace(Model.SetupSecret))
+            @if (string.IsNullOrWhiteSpace(Model.SetupQrCodeSvg))
             {
                 <form method="post" asp-page-handler="Begin">
                     <button class="button button--primary" type="submit">@T["Start setup"]</button>
