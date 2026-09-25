@@ -58,17 +58,15 @@
             }
             else
             {
-                <div class="form-stack">
-                    <label>
-                        <span>Secret</span>
-                        <input value="@Model.SetupSecret" readonly />
-                    </label>
-                    <label>
-                        <span>Provisioning URI</span>
-                        <textarea readonly rows="3">@Model.ProvisioningUri</textarea>
-                    </label>
+                <div class="totp-setup">
+                    <div class="totp-qr" role="img" aria-label="@T["TOTP QR code"]">
+                        @Html.Raw(Model.SetupQrCodeSvg)
+                    </div>
+                    <div class="form-stack">
+                        <p>@T["Scan this QR code with Google Authenticator or another compatible authenticator app."]</p>
+                        <p class="field-help">@T["The setup code is shown only for this setup and is not stored in plaintext."]</p>
+                    </div>
                     <form method="post" asp-page-handler="Enable" class="form-stack">
-                        <input type="hidden" asp-for="SetupSecret" />
                         <label>
                             <span>@T["Confirm six-digit code"]</span>
                             <input asp-for="VerificationCode" inputmode="numeric" autocomplete="one-time-code" />

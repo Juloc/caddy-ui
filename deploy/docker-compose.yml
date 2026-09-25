@@ -63,7 +63,7 @@ services:
       Authentication__EnsureBootstrapPassword: "false"
       Security__CookieNamespace: caddy_ui
       Security__PublicOrigin: ${CADDY_UI_PUBLIC_ORIGIN:-https://caddy.juloc.de}
-      Security__RequireTotp: ${CADDY_UI_REQUIRE_TOTP:-false}
+      Security__RequireTotp: ${CADDY_UI_REQUIRE_TOTP:-true}
       Security__AdminProxySecret: ${CADDY_UI_ADMIN_PROXY_SECRET}
       Security__PortalProxySecret: ${CADDY_UI_PORTAL_PROXY_SECRET}
       Analytics__Enabled: "true"

@@ -837,6 +837,9 @@
   <data name="These codes are shown only now. Each code can be used exactly once." xml:space="preserve"><value>Diese Codes werden nur jetzt angezeigt. Jeder Code kann genau einmal verwendet werden.</value></data>
   <data name="Set up new TOTP" xml:space="preserve"><value>Neues TOTP einrichten</value></data>
   <data name="Start setup" xml:space="preserve"><value>Einrichtung starten</value></data>
+  <data name="TOTP QR code" xml:space="preserve"><value>TOTP-QR-Code</value></data>
+  <data name="Scan this QR code with Google Authenticator or another compatible authenticator app." xml:space="preserve"><value>Scanne diesen QR-Code mit Google Authenticator oder einer anderen kompatiblen Authenticator-App.</value></data>
+  <data name="The setup code is shown only for this setup and is not stored in plaintext." xml:space="preserve"><value>Der Einrichtungscode wird nur für diese Einrichtung angezeigt und nicht im Klartext gespeichert.</value></data>
   <data name="Confirm six-digit code" xml:space="preserve"><value>Sechsstelligen Code bestätigen</value></data>
   <data name="Enable TOTP" xml:space="preserve"><value>TOTP aktivieren</value></data>
   <data name="Reset" xml:space="preserve"><value>Zurücksetzen</value></data>

@@ -477,6 +477,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--ui-accent); outl
 .form-stack > label, .form-grid > label, .field { display: grid; gap: 7px; }
 .form-stack > label > span:first-child, .form-grid > label > span:first-child, .field-label { font-size: 12px; font-weight: 600; }
 .field small, .form-stack small, .form-grid small, .check small { color: var(--ui-text-muted); line-height: 1.4; }
+.field-help { margin: 0; color: var(--ui-text-muted); font-size: 12px; line-height: 1.4; }
+.totp-setup { display: grid; grid-template-columns: minmax(168px, 220px) minmax(0, 1fr); align-items: start; gap: var(--ui-space-4); }
+.totp-qr { display: grid; place-items: center; padding: var(--ui-space-3); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-control); background: var(--ui-surface); }
+.totp-qr svg { display: block; width: 100%; height: auto; }
 .field-error, .validation-summary { color: var(--ui-danger); font-size: 12px; }
 .validation-summary:empty { display: none; }
 .check { display: flex; align-items: flex-start; gap: 9px; }
@@ -703,6 +707,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--ui-accent); outl
     .page-heading .button, .page-heading .page-actions { align-self: flex-start; }
     .workspace-grid { grid-template-columns: 1fr; }
     .workspace-split, .workspace-split--wide-left { grid-template-columns: 1fr; }
+    .totp-setup { grid-template-columns: 1fr; }
+    .totp-qr { max-width: 220px; }
     .panel--wide { grid-column: auto; }
     .form-grid--three { grid-template-columns: 1fr; }
     .field--wide { grid-column: auto; }
