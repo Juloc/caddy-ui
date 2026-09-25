@@ -17,7 +17,7 @@ Browser
       -> managed upstream routes
 ```
 
-The production application is .NET 10 with ASP.NET Core Razor Pages, EF Core and PostgreSQL 17. Go is used only for the custom Caddy binary and its modules. There is no Python runtime in the supported build or deployment path.
+The production application uses .NET 10 with ASP.NET Core Razor Pages, EF Core and PostgreSQL 17. Go is limited to the custom Caddy binary and its modules. There is one supported application runtime and one production deployment path.
 
 ## Project boundaries
 
@@ -40,7 +40,7 @@ PostgreSQL is the source of truth for users, domains, DNS providers, routes, rev
 
 The previous SQLite file is mounted read-only during the transition. `CaddyUi.Migration` creates a backup, imports known records idempotently, preserves unknown legacy data in migration records and writes a report. SQLite is never used as the active runtime database after the migration.
 
-ASP.NET Core data-protection keys are persisted in PostgreSQL. Provider credentials are stored only as environment-variable or file-secret references; resolved secret values are not persisted.
+ASP.NET Core Data Protection keys are persisted in PostgreSQL. Provider credentials entered through the UI are encrypted before persistence and are never returned to the browser. Advanced deployments may store environment-variable or file-secret references instead. Resolved plaintext values are materialized only in the protected runtime secret directory required by the Caddy DNS module.
 
 ## Route and certificate flow
 
@@ -53,7 +53,7 @@ ASP.NET Core data-protection keys are persisted in PostgreSQL. Provider credenti
 7. The complete root Caddy configuration is validated before remote reload.
 8. Failed apply or verification restores the previous snapshot and reloads it.
 
-Existing unmanaged route files are preserved in `legacy-dotnet-cutover`. The initial managed fragment imports them until the first successful .NET-managed apply.
+Existing unmanaged route files are preserved in `legacy-dotnet-cutover`. The initial managed fragment imports them until the first successful managed apply.
 
 ## Analytics and security
 
