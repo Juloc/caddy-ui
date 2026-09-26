@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using CaddyUi.Application.Security;
 using CaddyUi.Infrastructure.Security;
 using CaddyUi.Web.Localization;
@@ -24,8 +25,8 @@ public sealed class LoginModel : LocalizedPageModel
     private readonly PasswordHashService _passwords;
     private readonly TotpService _totp;
     private readonly IDataProtector _totpProtector;
+    private readonly ITimeLimitedDataProtector _secondFactorProtector;
     private readonly RequestSurfaceResolver _surfaceResolver;
-    private readonly SecurityRuntimeOptions _securityOptions;
     private readonly UiCultureCatalog _cultures;
     private readonly IStringLocalizer<SharedResource> _localizer;
 
@@ -37,7 +38,6 @@ public sealed class LoginModel : LocalizedPageModel
         TotpService totp,
         IDataProtectionProvider dataProtectionProvider,
         RequestSurfaceResolver surfaceResolver,
-        SecurityRuntimeOptions securityOptions,
         UiCultureCatalog cultures,
         IStringLocalizer<SharedResource> localizer)
     {
@@ -47,8 +47,10 @@ public sealed class LoginModel : LocalizedPageModel
         _passwords = passwords;
         _totp = totp;
         _totpProtector = dataProtectionProvider.CreateProtector("CaddyUi.UserTotp.v1");
+        _secondFactorProtector = dataProtectionProvider
+            .CreateProtector("CaddyUi.LoginSecondFactor.v1")
+            .ToTimeLimitedDataProtector();
         _surfaceResolver = surfaceResolver;
-        _securityOptions = securityOptions;
         _cultures = cultures;
         _localizer = localizer;
     }
@@ -59,14 +61,34 @@ public sealed class LoginModel : LocalizedPageModel
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
-    public bool ShowPublicWarning =>
-        _surfaceResolver.GetResolved(HttpContext) == RequestSurface.PublicAdmin &&
-        _securityOptions.PublicAccessWithoutMandatoryTotp;
+    [BindProperty(SupportsGet = true)]
+    public bool Restart { get; set; }
+
+    [BindProperty]
+    public SecondFactorInput SecondFactor { get; set; } = new();
+
+    [TempData]
+    public string? PendingSecondFactor { get; set; }
+
+    public bool RequiresSecondFactor { get; private set; }
 
     public IActionResult OnGet()
     {
         var returnUrl = SafeReturnUrl(ReturnUrl);
         ReturnUrl = returnUrl;
+        if (Restart)
+        {
+            PendingSecondFactor = null;
+            return User.Identity?.IsAuthenticated == true
+                ? LocalRedirect(returnUrl)
+                : Page();
+        }
+
+        RequiresSecondFactor = TryGetSecondFactorChallenge(out _);
+        if (RequiresSecondFactor)
+        {
+            TempData.Keep(nameof(PendingSecondFactor));
+        }
         return User.Identity?.IsAuthenticated == true
             ? LocalRedirect(returnUrl)
             : Page();
@@ -76,6 +98,7 @@ public sealed class LoginModel : LocalizedPageModel
     {
         var returnUrl = SafeReturnUrl(ReturnUrl);
         ReturnUrl = returnUrl;
+        ModelState.Remove(nameof(SecondFactor));
         if (!ModelState.IsValid)
         {
             return Page();
@@ -120,10 +143,10 @@ public sealed class LoginModel : LocalizedPageModel
                 HttpContext.RequestAborted);
         }
 
-        if (!await VerifySecondFactorAsync(user, surface))
+        if (user.TotpEnabled)
         {
-            await FailAsync(identity, remoteAddress, "invalid-second-factor");
-            return Page();
+            CreateSecondFactorChallenge(user, returnUrl);
+            return RedirectToPage(new { ReturnUrl = returnUrl });
         }
 
         await _protection.RecordSuccessAsync(
@@ -131,6 +154,78 @@ public sealed class LoginModel : LocalizedPageModel
             identity,
             remoteAddress,
             HttpContext.RequestAborted);
+        return await SignInAsync(user, surface, remoteAddress, returnUrl);
+    }
+
+    public async Task<IActionResult> OnPostSecondFactorAsync()
+    {
+        var returnUrl = SafeReturnUrl(ReturnUrl);
+        ReturnUrl = returnUrl;
+        ModelState.Clear();
+        if (!TryValidateModel(SecondFactor, nameof(SecondFactor)))
+        {
+            RequiresSecondFactor = TryGetSecondFactorChallenge(out _);
+            if (RequiresSecondFactor)
+            {
+                TempData.Keep(nameof(PendingSecondFactor));
+            }
+
+            return Page();
+        }
+
+        if (!TryGetSecondFactorChallenge(out var challenge))
+        {
+            ModelState.AddModelError(string.Empty, _localizer["The sign-in request has expired. Please sign in again."]);
+            return Page();
+        }
+
+        returnUrl = SafeReturnUrl(challenge.ReturnUrl);
+        ReturnUrl = returnUrl;
+        PendingSecondFactor = null;
+        var surface = _surfaceResolver.GetResolved(HttpContext);
+        if (surface is not (RequestSurface.Lan or RequestSurface.PublicAdmin))
+        {
+            return NotFound();
+        }
+
+        var remoteAddress = _surfaceResolver.GetClientAddress(HttpContext);
+        var protection = await _protection.EvaluateAsync(
+            "admin",
+            challenge.Username,
+            remoteAddress,
+            HttpContext.RequestAborted);
+        if (!protection.Allowed)
+        {
+            Response.Headers.RetryAfter = Math.Ceiling(protection.RetryAfter.TotalSeconds).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            ModelState.AddModelError(string.Empty, _localizer["Login is temporarily blocked."]);
+            return Page();
+        }
+
+        var user = await _store.FindUserByIdAsync(challenge.UserId, HttpContext.RequestAborted);
+        if (user is null || !user.Enabled || !user.TotpEnabled ||
+            !await VerifySecondFactorAsync(user, SecondFactor.Code))
+        {
+            await FailAsync(challenge.Username, remoteAddress, "invalid-second-factor");
+            CreateSecondFactorChallenge(challenge, returnUrl);
+            RequiresSecondFactor = true;
+            return Page();
+        }
+
+        await _protection.RecordSuccessAsync(
+            "admin",
+            user.Username,
+            remoteAddress,
+            HttpContext.RequestAborted);
+        return await SignInAsync(user, surface, remoteAddress, returnUrl);
+    }
+
+    private async Task<IActionResult> SignInAsync(
+        UserAccount user,
+        RequestSurface surface,
+        string remoteAddress,
+        string returnUrl)
+    {
         var token = await _store.CreateAdminSessionAsync(
             user.Id,
             SessionLifetime,
@@ -172,14 +267,9 @@ public sealed class LoginModel : LocalizedPageModel
 
     private async Task<bool> VerifySecondFactorAsync(
         UserAccount user,
-        RequestSurface surface)
+        string? candidate)
     {
-        if (!user.TotpEnabled)
-        {
-            return !(surface == RequestSurface.PublicAdmin && _securityOptions.RequireTotp);
-        }
-
-        var candidate = Input.SecondFactor?.Trim();
+        candidate = candidate?.Trim();
         if (user.TotpSecretEncrypted is null || string.IsNullOrWhiteSpace(candidate))
         {
             return false;
@@ -200,6 +290,48 @@ public sealed class LoginModel : LocalizedPageModel
             return _totp.VerifyCode(secret, candidate);
         }
         catch (System.Security.Cryptography.CryptographicException)
+        {
+            return false;
+        }
+    }
+
+    private void CreateSecondFactorChallenge(UserAccount user, string returnUrl)
+    {
+        CreateSecondFactorChallenge(
+            new LoginSecondFactorChallenge(user.Id, user.Username, returnUrl),
+            returnUrl);
+    }
+
+    private void CreateSecondFactorChallenge(LoginSecondFactorChallenge challenge, string returnUrl)
+    {
+        challenge = challenge with { ReturnUrl = returnUrl };
+        PendingSecondFactor = _secondFactorProtector.Protect(
+            JsonSerializer.Serialize(challenge),
+            TimeSpan.FromMinutes(5));
+        ReturnUrl = returnUrl;
+    }
+
+    private bool TryGetSecondFactorChallenge(out LoginSecondFactorChallenge challenge)
+    {
+        challenge = default!;
+        if (string.IsNullOrWhiteSpace(PendingSecondFactor))
+        {
+            return false;
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<LoginSecondFactorChallenge>(
+                _secondFactorProtector.Unprotect(PendingSecondFactor));
+            if (parsed is null)
+            {
+                return false;
+            }
+
+            challenge = parsed;
+            return challenge.UserId != Guid.Empty && !string.IsNullOrWhiteSpace(challenge.Username);
+        }
+        catch (Exception exception) when (exception is CryptographicException or JsonException)
         {
             return false;
         }
@@ -232,8 +364,14 @@ public sealed class LoginModel : LocalizedPageModel
         [Required]
         [MaxLength(1024)]
         public string Password { get; set; } = string.Empty;
-
-        [MaxLength(100)]
-        public string? SecondFactor { get; set; }
     }
+
+    public sealed class SecondFactorInput
+    {
+        [Required]
+        [MaxLength(100)]
+        public string Code { get; set; } = string.Empty;
+    }
+
+    private sealed record LoginSecondFactorChallenge(Guid UserId, string Username, string ReturnUrl);
 }

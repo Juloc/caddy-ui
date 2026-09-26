@@ -82,6 +82,10 @@
             <div class="sidebar-footer">
                 @if (User.Identity?.IsAuthenticated == true)
                 {
+                    @if (User.IsInRole("admin"))
+                    {
+                        <a class="nav-item sidebar-about @(path.StartsWithSegments("/Administration/Security") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Administration/Security") ? "page" : null)" asp-page="/Administration/Security" title="@T["Two-factor authentication"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#security"></use></svg><span class="nav-label">@T["Two-factor authentication"]</span></a>
+                    }
                     <a class="nav-item sidebar-about @(path.StartsWithSegments("/Settings") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Settings") ? "page" : null)" asp-page="/Settings/Index" title="@T["User settings"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#settings"></use></svg><span class="nav-label">@T["User settings"]</span></a>
                 }
                 <a class="nav-item sidebar-about @(path.StartsWithSegments("/About") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/About") ? "page" : null)" asp-page="/About" title="@T["About Caddy UI"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#info"></use></svg><span class="nav-label">@T["About Caddy UI"]</span></a>

@@ -8,7 +8,7 @@
     <div>
         <p class="eyebrow">@T["Account"]</p>
         <h1>@T["TOTP and recovery codes"]</h1>
-        <p class="page-description">@T["TOTP remains optional while CADDY_UI_REQUIRE_TOTP=false is configured. Public installations display a warning."]</p>
+        <p class="page-description">@T["Protect your account with an authenticator app. A code is requested after your password only when TOTP is enabled."]</p>
     </div>
     <span class="status-badge @(Model.TotpEnabled ? "status-badge--ok" : "status-badge--warning")">
         @(Model.TotpEnabled ? T["TOTP enabled"] : T["TOTP disabled"])

@@ -8,13 +8,11 @@ public sealed class SecurityRuntimeOptions
         Uri? publicOrigin,
         string adminProxySecret,
         string portalProxySecret,
-        bool requireTotp,
         string cookieNamespace)
     {
         PublicOrigin = publicOrigin;
         AdminProxySecret = adminProxySecret;
         PortalProxySecret = portalProxySecret;
-        RequireTotp = requireTotp;
         CookieNamespace = cookieNamespace;
     }
 
@@ -24,17 +22,11 @@ public sealed class SecurityRuntimeOptions
 
     public string PortalProxySecret { get; }
 
-    public bool RequireTotp { get; }
-
     public string CookieNamespace { get; }
 
     public string LanAdminCookieName => $"{CookieNamespace}_admin";
 
     public string PublicAdminCookieName => $"__Host-{CookieNamespace}_admin";
-
-    public bool PublicAccessConfigured => PublicOrigin is not null;
-
-    public bool PublicAccessWithoutMandatoryTotp => PublicAccessConfigured && !RequireTotp;
 
     public static SecurityRuntimeOptions FromConfiguration(IConfiguration configuration)
     {
@@ -71,9 +63,6 @@ public sealed class SecurityRuntimeOptions
             configuration["CADDY_UI_PORTAL_PROXY_SECRET"] ??
                 configuration["Security:PortalProxySecret"] ??
                 string.Empty,
-            ParseBoolean(
-                configuration["CADDY_UI_REQUIRE_TOTP"] ??
-                configuration["Security:RequireTotp"]),
             cookieNamespace);
     }
 
@@ -123,8 +112,4 @@ public sealed class SecurityRuntimeOptions
         return value;
     }
 
-    private static bool ParseBoolean(string? value)
-    {
-        return bool.TryParse(value, out var parsed) && parsed;
-    }
 }

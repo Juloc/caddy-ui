@@ -65,7 +65,7 @@ DNS-provider credentials no longer need to be placed in the stack environment. O
 
 The admin UI is exposed on host port `8098`. The public origin defaults to `https://caddy.juloc.de` in the production template and can be changed through `CADDY_UI_PUBLIC_ORIGIN`.
 
-Public deployments require TOTP by default. Each administrator enables an authenticator app from **Administration → Security** by scanning the displayed QR code and confirming a six-digit code. `CADDY_UI_REQUIRE_TOTP=false` is an emergency compatibility override and is not recommended for public access.
+Each administrator can enable an authenticator app from **Administration → Security** by scanning the displayed QR code and confirming a six-digit code. The login page always asks for a username and password first, then asks for a TOTP or recovery code only for accounts that have enabled TOTP.
 
 ## Legacy migration and rollback
 

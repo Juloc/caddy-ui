@@ -47,6 +47,6 @@ public sealed class FoundationPageTests :
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("<html lang=\"de\"", body, StringComparison.Ordinal);
         Assert.Contains("Caddy UI", body, StringComparison.Ordinal);
-        Assert.Contains("TOTP- oder Recovery-Code", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("TOTP- oder Recovery-Code", body, StringComparison.Ordinal);
     }
 }

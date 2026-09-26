@@ -53,12 +53,6 @@ if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
     await database.Database.MigrateAsync();
 }
 
-if (securityOptions.PublicAccessWithoutMandatoryTotp)
-{
-    app.Logger.LogWarning(
-        "Public Caddy UI access is configured without mandatory TOTP. CADDY_UI_REQUIRE_TOTP=false remains supported, but the UI will display a warning.");
-}
-
 app.UseMiddleware<RequestSurfaceMiddleware>();
 var portalAssetRoot = Path.Combine(
     app.Environment.WebRootPath ??

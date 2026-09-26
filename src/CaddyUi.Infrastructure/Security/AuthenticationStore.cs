@@ -78,6 +78,28 @@ public sealed class AuthenticationStore
             : null;
     }
 
+    public async Task<UserAccount?> FindUserByIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT id, username, display_name, password_hash, role, enabled,
+                   totp_secret_encrypted, totp_enabled, theme
+            FROM caddy_ui.users
+            WHERE id = @user_id
+            LIMIT 1
+            """;
+        AddParameter(command, "user_id", userId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? ReadUser(reader)
+            : null;
+    }
+
     public async Task UpdatePasswordHashAsync(
         Guid userId,
         string passwordHash,
