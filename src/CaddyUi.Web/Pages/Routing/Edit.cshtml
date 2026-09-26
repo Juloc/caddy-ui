@@ -10,9 +10,7 @@
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">@T["Routing editor"]</p>
         <h1>@ViewData["Title"]</h1>
-        <p class="page-description">@T["Save a managed draft, or save and apply it to the active Caddy configuration in one validated operation."]</p>
     </div>
     <a class="button button--quiet" asp-page="/Routing/Index">@T["Back to routes"]</a>
 </section>
@@ -32,7 +30,7 @@
 
     <section class="workspace-section">
         <header class="section-header">
-            <div><h2>@T["Address and behavior"]</h2><p>@T["Choose the public address and what the route should do."]</p></div>
+            <div><h2>@T["Address and behavior"]</h2></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field field--wide">
@@ -90,7 +88,7 @@
 
     <section class="workspace-section route-kind-panel" data-kind-panel="proxy">
         <header class="section-header">
-            <div><h2>@T["Reverse proxy"]</h2><p>@T["Enter the internal service address. Most services need no other proxy settings."]</p></div>
+            <div><h2>@T["Reverse proxy"]</h2></div>
         </header>
         <div class="form-grid form-grid--two">
             <label class="field field--wide">
@@ -132,7 +130,7 @@
     </section>
 
     <section class="workspace-section route-kind-panel" data-kind-panel="redirect">
-        <header class="section-header"><div><h2>@T["Redirect"]</h2><p>@T["Use a local path or a complete HTTP(S) address."]</p></div></header>
+        <header class="section-header"><div><h2>@T["Redirect"]</h2></div></header>
         <div class="form-grid form-grid--two">
             <label class="field">
                 <span class="field-label">@T["Target"]</span>
@@ -146,7 +144,7 @@
     </section>
 
     <section class="workspace-section route-kind-panel" data-kind-panel="static">
-        <header class="section-header"><div><h2>@T["Static response"]</h2><p>@T["For maintenance notices, fixed status codes, or simple endpoints."]</p></div></header>
+        <header class="section-header"><div><h2>@T["Static response"]</h2></div></header>
         <div class="form-grid form-grid--two">
             <label class="field">
                 <span class="field-label">@T["HTTP status"]</span>
@@ -162,7 +160,7 @@
     @if (Model.AllowCustomRoutes)
     {
         <section class="workspace-section route-kind-panel" data-kind-panel="custom">
-            <header class="section-header"><div><h2>@T["Custom Caddyfile"]</h2><p>@T["Only directives inside an already generated handle block are allowed. Do not enter site blocks or secrets."]</p></div></header>
+            <header class="section-header"><div><h2>@T["Custom Caddyfile"]</h2></div></header>
             <label class="field">
                 <span class="field-label">@T["Directives"]</span>
                 <textarea asp-for="Input.CustomSnippet" rows="12" class="code-editor" spellcheck="false"></textarea>
@@ -171,7 +169,7 @@
     }
 
     <section class="workspace-section">
-        <header class="section-header"><div><h2>@T["Access and certificate"]</h2><p>@T["Use a public route or authentication through the internal access portal."]</p></div></header>
+        <header class="section-header"><div><h2>@T["Access and certificate"]</h2></div></header>
         <div class="form-grid form-grid--three">
             <label class="field">
                 <span class="field-label">@T["Access"]</span>

@@ -6,9 +6,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Account"]</p>
         <h1>@T["TOTP and recovery codes"]</h1>
-        <p class="page-description">@T["Protect your account with an authenticator app. A code is requested after your password only when TOTP is enabled."]</p>
     </div>
     <span class="status-badge @(Model.TotpEnabled ? "status-badge--ok" : "status-badge--warning")">
         @(Model.TotpEnabled ? T["TOTP enabled"] : T["TOTP disabled"])
@@ -25,7 +23,6 @@
     <section class="panel">
         <header class="panel-header">
             <div>
-                <p class="eyebrow">@T["Shown once"]</p>
                 <h2>@T["Recovery codes"]</h2>
             </div>
         </header>
@@ -45,7 +42,6 @@
     <article class="panel panel--wide">
         <header class="panel-header">
             <div>
-                <p class="eyebrow">Authenticator</p>
                 <h2>@T["Set up new TOTP"]</h2>
             </div>
         </header>
@@ -81,7 +77,6 @@
     <aside class="panel">
         <header class="panel-header">
             <div>
-                <p class="eyebrow">@T["Reset"]</p>
                 <h2>@T["Disable TOTP"]</h2>
             </div>
         </header>

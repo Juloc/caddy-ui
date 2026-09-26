@@ -26,9 +26,7 @@
         </div>
 
         <div>
-            <p class="eyebrow">@T["Protected area"]</p>
             <h1>@T["Sign in"]</h1>
-            <p class="page-description">@T["Local and public access use separate server-validated sessions."]</p>
         </div>
 
         @if (Model.RequiresSecondFactor)
@@ -36,7 +34,6 @@
             <form method="post" asp-page-handler="SecondFactor" class="form-stack">
                 <input type="hidden" asp-for="ReturnUrl" />
                 <div asp-validation-summary="All" class="validation-summary" role="alert" aria-live="polite"></div>
-                <p class="page-description">@T["Enter the code from your authenticator app or a recovery code."]</p>
                 <label>
                     <span>@T["TOTP or recovery code"]</span>
                     <input asp-for="SecondFactor.Code" inputmode="numeric" autocomplete="one-time-code" autofocus />

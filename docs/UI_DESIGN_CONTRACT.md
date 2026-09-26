@@ -12,6 +12,7 @@ Caddy UI ist ein schnelles Verwaltungswerkzeug, keine Marketingseite. Die Oberfl
 - servergerenderte Razor Pages; kein schweres SPA-Framework
 - kurze Interaktionen und möglichst wenig JavaScript
 - klare Informationshierarchie: Seite, Aktionen, Arbeitsbereich, Detail
+- Seitentitel und Abschnittstitel benennen nur die Aufgabe. Dekorative Eyebrows, generische Untertitel und wiederholte ErklÃ¤rtexte sind verboten; Hilfetext bleibt nur bei einer konkreten sicherheits-, daten- oder eingaberelevanten Konsequenz stehen.
 - flache Arbeitsbereiche statt verschachtelter Kartenwände
 - sichtbare Rahmen und Zustände statt dekorativer Effekte
 - keine Gradienten, Glows oder unnötigen Animationen

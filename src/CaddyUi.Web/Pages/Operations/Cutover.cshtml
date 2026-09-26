@@ -18,9 +18,7 @@
 }
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Migration and rollback"]</p>
         <h1>@T["Production readiness"]</h1>
-        <p class="page-description">@T["The page opens immediately. Expensive database, backup, and statistics checks run only after an explicit action and time out after 30 seconds."]</p>
     </div>
     <div class="page-actions">
         <form method="post" asp-page-handler="Compare"><button class="button button--quiet" type="submit">@T["Compare statistics"]</button></form>
@@ -33,7 +31,7 @@
 @if (Model.Report is null)
 {
     <section class="workbench operations-section">
-        <header class="workbench-header"><div><p class="eyebrow">@T["Not run yet"]</p><h2>@T["Readiness check"]</h2></div><span class="status-badge status-badge--neutral">@T["Manual"]</span></header>
+        <header class="workbench-header"><div><h2>@T["Readiness check"]</h2></div><span class="status-badge status-badge--neutral">@T["Manual"]</span></header>
         <div class="workbench-body">
             <p class="empty-state">@T["Select Check readiness now to verify PostgreSQL, migrations, the legacy backup, logs, routes, domains, and rollback requirements. Opening the page does not execute expensive queries."]</p>
         </div>
@@ -49,7 +47,7 @@ else
         <article class="metric-card"><span class="metric-label">@T["Legacy source"]</span><strong class="metric-value metric-value--small">@(string.IsNullOrWhiteSpace(Model.Report.Inventory.LegacySourceDigest) ? T["Unavailable"] : Model.Report.Inventory.LegacySourceDigest[..12])</strong><span class="metric-detail">SHA-256 · @Model.Report.Inventory.LegacySourceSizeBytes @T["Bytes"]</span></article>
     </section>
     <section class="workbench operations-section">
-        <header class="workbench-header"><div><p class="eyebrow">Gate</p><h2>@T["Production readiness"]</h2></div><span class="status-badge @(Model.Report.IsReady ? "status-badge--ok" : "status-badge--danger")">@(Model.Report.IsReady ? T["Ready"] : T["Blocked"])</span></header>
+        <header class="workbench-header"><div><h2>@T["Production readiness"]</h2></div><span class="status-badge @(Model.Report.IsReady ? "status-badge--ok" : "status-badge--danger")">@(Model.Report.IsReady ? T["Ready"] : T["Blocked"])</span></header>
         <div class="workbench-body table-wrap">
             <table class="data-table">
                 <thead><tr><th>@T["Status"]</th><th>@T["Check"]</th><th>@T["Result"]</th><th>@T["Remediation"]</th></tr></thead>
@@ -71,7 +69,7 @@ else
 
 <section class="operations-grid operations-grid--sidebar">
     <article class="workbench operations-section">
-        <header class="workbench-header"><div><p class="eyebrow">@T["Same UTC window"]</p><h2>@T["Statistics comparison"]</h2></div>@if (Model.Comparison is not null) { <span class="status-badge @(Model.Comparison.IsWithinTolerance ? "status-badge--ok" : "status-badge--danger")">@(Model.Comparison.IsWithinTolerance ? T["Within tolerance"] : T["Difference"])</span> }</header>
+        <header class="workbench-header"><div><h2>@T["Statistics comparison"]</h2></div>@if (Model.Comparison is not null) { <span class="status-badge @(Model.Comparison.IsWithinTolerance ? "status-badge--ok" : "status-badge--danger")">@(Model.Comparison.IsWithinTolerance ? T["Within tolerance"] : T["Difference"])</span> }</header>
         <div class="workbench-body table-wrap">
             @if (Model.Comparison is null)
             {
@@ -89,7 +87,7 @@ else
         </div>
     </article>
     <aside class="workbench operations-section">
-        <header class="workbench-header"><div><p class="eyebrow">@T["Operations"]</p><h2>@T["Maintenance window"]</h2></div></header>
+        <header class="workbench-header"><div><h2>@T["Maintenance window"]</h2></div></header>
         <div class="workbench-body definition-list">
             <div><span>@T["Cutover approved"]</span><strong>@(Model.Options.Enabled ? T["Yes"] : T["No"])</strong></div>
             <div><span>@T["Minimum observation time"]</span><strong>@Model.Options.MinimumShadowHours h</strong></div>
@@ -101,6 +99,6 @@ else
     </aside>
 </section>
 <section class="workbench operations-section">
-    <header class="workbench-header"><div><p class="eyebrow">@T["Order"]</p><h2>@T["Controlled cutover"]</h2></div></header>
+    <header class="workbench-header"><div><h2>@T["Controlled cutover"]</h2></div></header>
     <div class="workbench-body"><ol class="reason-list"><li>@T["Pause writes briefly and create a consistent backup of the old SQLite file."]</li><li>@T["Run the final import and verification against exactly that backup."]</li><li>@T["Store the PostgreSQL backup and readiness and statistics manifests."]</li><li>@T["Switch the admin and portal upstreams to ports {0} and {1} in a controlled operation.", Model.Options.AdminPort, Model.Options.PortalPort]</li><li>@T["Verify login, TOTP, portal, route preview, DNS, certificates, requests, and page views."]</li><li>@T["Leave workers and write modes enabled only after successful acceptance."]</li><li>@T["If a blocker occurs, restore the previous Caddy snapshot and old data source."]</li></ol></div>
 </section>

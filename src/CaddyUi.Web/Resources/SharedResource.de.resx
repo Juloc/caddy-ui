@@ -829,9 +829,7 @@
   <data name="Class" xml:space="preserve"><value>Klasse</value></data>
   <data name="Account" xml:space="preserve"><value>Konto</value></data>
   <data name="TOTP and recovery codes" xml:space="preserve"><value>TOTP und Recovery-Codes</value></data>
-  <data name="Protect your account with an authenticator app. A code is requested after your password only when TOTP is enabled." xml:space="preserve"><value>Schütze dein Konto mit einer Authenticator-App. Ein Code wird erst nach dem Passwort abgefragt, wenn TOTP aktiviert ist.</value></data>
   <data name="Two-factor authentication" xml:space="preserve"><value>Zwei-Faktor-Authentifizierung</value></data>
-  <data name="Enter the code from your authenticator app or a recovery code." xml:space="preserve"><value>Gib den Code aus deiner Authenticator-App oder einen Recovery-Code ein.</value></data>
   <data name="Verify code" xml:space="preserve"><value>Code prüfen</value></data>
   <data name="Use a different account" xml:space="preserve"><value>Anderes Konto verwenden</value></data>
   <data name="The sign-in request has expired. Please sign in again." xml:space="preserve"><value>Die Anmeldung ist abgelaufen. Bitte melde dich erneut an.</value></data>

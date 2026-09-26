@@ -8,9 +8,7 @@
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">@S["Static content"]</p>
         <h1>@ViewData["Title"]</h1>
-        <p class="page-description">@S["Caddy serves the generated page directly. No additional container or file mount is required."]</p>
     </div>
     <a class="button button--quiet" asp-page="/StaticSites/Index">@S["Back to mini sites"]</a>
 </section>
@@ -32,7 +30,6 @@
         <header class="section-header">
             <div>
                 <h2>@S["Address"]</h2>
-                <p>@S["Choose where the public mini site should be reachable."]</p>
             </div>
         </header>
         <div class="form-grid form-grid--three">
@@ -63,7 +60,6 @@
         <header class="section-header">
             <div>
                 <h2>@S["Page"]</h2>
-                <p>@S["The same compact page is available at /, /privacy, and /terms. The matching section opens automatically."]</p>
             </div>
             @if (!Model.IsEdit)
             {
@@ -106,7 +102,6 @@
         <header class="section-header">
             <div>
                 <h2>@S["HTTPS"]</h2>
-                <p>@S["Usually the domain setting is sufficient. Choose an individual certificate only when this host should not use the domain wildcard."]</p>
             </div>
         </header>
         <div class="form-grid form-grid--two">

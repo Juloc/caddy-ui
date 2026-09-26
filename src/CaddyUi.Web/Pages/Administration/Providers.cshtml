@@ -9,9 +9,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["DNS and certificates"]</p>
         <h1>@T["DNS providers"]</h1>
-        <p class="page-description">@T["Select a provider and enter only the required values. Credentials are encrypted and are never displayed again."]</p>
     </div>
     <div class="page-actions">
         <span class="status-badge status-badge--neutral">@T["{0} provider types", DnsProviderCatalog.All.Count]</span>
@@ -36,7 +34,7 @@
 
 <article class="workbench operations-section">
         <header class="workbench-header">
-            <div><p class="eyebrow">@T["Configured"]</p><h2>@T["{0} providers", Model.Providers.Count]</h2></div>
+            <div><h2>@T["{0} providers", Model.Providers.Count]</h2></div>
         </header>
         <div class="workbench-body table-wrap">
             <table class="data-table">
@@ -118,7 +116,7 @@
 <dialog id="create-provider-dialog" class="dialog-surface dialog-surface--wide" data-dialog aria-labelledby="create-provider-dialog-title" open="@(createProviderOpen ? "open" : null)">
     <div class="dialog-layout">
         <header class="dialog-header">
-            <div><h2 id="create-provider-dialog-title">@T["Add provider"]</h2><p>@T["Select a provider and enter only the required values."]</p></div>
+            <div><h2 id="create-provider-dialog-title">@T["Add provider"]</h2></div>
             <a class="button button--compact button--quiet" asp-page="./Providers" data-dialog-close>@T["Close"]</a>
         </header>
         <div class="dialog-body">
@@ -182,7 +180,7 @@
 </dialog>
 
 <section class="workbench operations-section">
-    <header class="workbench-header"><div><p class="eyebrow">@T["Support"]</p><h2>@T["Provider capabilities"]</h2></div></header>
+    <header class="workbench-header"><div><h2>@T["Provider capabilities"]</h2></div></header>
     <div class="workbench-body table-wrap">
         <table class="data-table">
             <thead><tr><th>@T["Provider"]</th><th>@T["Capabilities"]</th><th>@T["Required settings"]</th><th>@T["Credentials"]</th></tr></thead>

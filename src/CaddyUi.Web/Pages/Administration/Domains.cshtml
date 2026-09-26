@@ -8,9 +8,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["DNS and certificates"]</p>
         <h1>@T["Domains"]</h1>
-        <p class="page-description">@T["Attempts, individual ACME steps, DNS wait times, and retries are combined from the active configuration, certificate storage, and Caddy logs."]</p>
         <small class="certificate-time-zone">@T["Times"]: <strong data-local-time-zone>@T["Detecting browser time zone"]</strong>. @T["UTC remains available as a tooltip."]</small>
     </div>
     <div class="page-actions">
@@ -36,7 +34,7 @@
 
 <article class="workbench operations-section">
         <header class="workbench-header">
-            <div><p class="eyebrow">@T["Managed"]</p><h2>@T["{0} domains", Model.Domains.Count]</h2></div>
+            <div><h2>@T["{0} domains", Model.Domains.Count]</h2></div>
             <a class="button button--compact button--quiet" asp-page="/Routing/Preview">@T["Caddy preview"]</a>
         </header>
         <div class="workbench-body table-wrap">
@@ -251,7 +249,7 @@
 <dialog id="create-domain-dialog" class="dialog-surface dialog-surface--wide" data-dialog aria-labelledby="create-domain-dialog-title" open="@(createDomainOpen ? "open" : null)">
     <div class="dialog-layout">
         <header class="dialog-header">
-            <div><h2 id="create-domain-dialog-title">@T["Add domain"]</h2><p>@T["Create a protected draft before configuring Caddy."]</p></div>
+            <div><h2 id="create-domain-dialog-title">@T["Add domain"]</h2></div>
             <a class="button button--compact button--quiet" asp-page="./Domains" data-dialog-close>@T["Close"]</a>
         </header>
         <div class="dialog-body">
@@ -304,7 +302,7 @@
 </dialog>
 
 <section class="workbench operations-section">
-    <header class="workbench-header"><div><p class="eyebrow">@T["Status model"]</p><h2>@T["What the indicators mean"]</h2></div></header>
+    <header class="workbench-header"><div><h2>@T["What the indicators mean"]</h2></div></header>
     <div class="workbench-body certificate-legend">
         <span><i class="status-dot status-dot--neutral"></i><strong>@T["Ready for apply"]</strong>@T["Draft only."]</span>
         <span><i class="status-dot status-dot--warning"></i><strong>@T["Running or scheduled"]</strong>@T["Caddy is working or has scheduled another attempt."]</span>

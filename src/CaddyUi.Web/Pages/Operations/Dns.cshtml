@@ -5,7 +5,7 @@
     ViewData["Title"] = T["DNS and DDNS"];
 }
 <section class="page-heading">
-    <div><p class="eyebrow">@T["Domains and addresses"]</p><h1>@T["DNS and DDNS"]</h1><p class="page-description">@T["DNS records remain managed drafts first. Writes occur only in the configured mode and use the domain's assigned provider."]</p></div>
+    <div><h1>@T["DNS and DDNS"]</h1></div>
     <span class="status-badge @(OperationsOptions.DnsWriteMode == CaddyUi.Infrastructure.Operations.OperationsWriteMode.Active ? "status-badge--warning" : "status-badge--neutral")">DNS: @OperationsOptions.DnsWriteMode.ToString().ToLowerInvariant()</span>
 </section>
 @if (TempData["Message"] is string message) { <div class="notice notice--success">@message</div> }
@@ -13,7 +13,7 @@
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
 <section class="workbench">
-<header class="workbench-header"><div><p class="eyebrow">@T["Managed records"]</p><h2>@T["{0} DNS records", Model.Records.Count]</h2></div></header>
+<header class="workbench-header"><div><h2>@T["{0} DNS records", Model.Records.Count]</h2></div></header>
 <div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>@T["Name"]</th><th>@T["Type"]</th><th>@T["Value"]</th><th>TTL</th><th>@T["Provider"]</th><th>@T["Sync"]</th><th class="table-actions">@T["Actions"]</th></tr></thead><tbody>
 @foreach (var record in Model.Records)
 {
@@ -24,7 +24,7 @@
 </section>
 
 <section class="operations-grid">
-<article class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["New record"]</p><h2>@T["Create DNS record"]</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="CreateRecord" class="form-grid form-grid--two">
+<article class="workbench"><header class="workbench-header"><div><h2>@T["Create DNS record"]</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="CreateRecord" class="form-grid form-grid--two">
 <label><span>@T["Domain"]</span><select asp-for="RecordInput.DomainId"><option value="">@T["Select domain"]</option>@foreach (var domain in Model.Domains.Where(item => item.Enabled)) { <option value="@domain.Id">@domain.Name</option> }</select></label>
 <label><span>@T["Provider"]</span><select asp-for="RecordInput.ProviderId"><option value="">@T["Select provider"]</option>@foreach (var provider in Model.Providers.Where(item => item.Enabled)) { <option value="@provider.Id">@provider.Label · @provider.ProviderType</option> }</select></label>
 <label><span>@T["Name"]</span><input asp-for="RecordInput.Name" placeholder="@@ or app" /></label>
@@ -35,7 +35,7 @@
 <div class="form-actions form-span"><button class="button button--primary" type="submit">@T["Create record"]</button></div>
 </form></div></article>
 
-<article class="workbench"><header class="workbench-header"><div><p class="eyebrow">@T["Automatic address"]</p><h2>@T["Create DDNS target"]</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="CreateDdns" class="form-grid form-grid--two">
+<article class="workbench"><header class="workbench-header"><div><h2>@T["Create DDNS target"]</h2></div></header><div class="workbench-body"><form method="post" asp-page-handler="CreateDdns" class="form-grid form-grid--two">
 <label><span>@T["Domain"]</span><select asp-for="DynamicInput.DomainId"><option value="">@T["Select domain"]</option>@foreach (var domain in Model.Domains.Where(item => item.Enabled)) { <option value="@domain.Id">@domain.Name</option> }</select></label>
 <label><span>@T["Provider"]</span><select asp-for="DynamicInput.ProviderId"><option value="">@T["Select provider"]</option>@foreach (var provider in Model.Providers.Where(item => item.Enabled)) { <option value="@provider.Id">@provider.Label · @provider.ProviderType</option> }</select></label>
 <label><span>@T["Name"]</span><input asp-for="DynamicInput.Name" placeholder="@@ or home" /></label>
@@ -47,7 +47,7 @@
 </form></div></article>
 </section>
 
-<section class="workbench operations-section"><header class="workbench-header"><div><p class="eyebrow">@T["Dynamic targets"]</p><h2>@T["{0} DDNS targets", Model.DdnsTargets.Count]</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>@T["Target"]</th><th>@T["Source"]</th><th>@T["Interval"]</th><th>@T["Latest value"]</th><th>@T["Status"]</th><th class="table-actions">@T["Actions"]</th></tr></thead><tbody>
+<section class="workbench operations-section"><header class="workbench-header"><div><h2>@T["{0} DDNS targets", Model.DdnsTargets.Count]</h2></div></header><div class="workbench-body table-wrap"><table class="data-table"><thead><tr><th>@T["Target"]</th><th>@T["Source"]</th><th>@T["Interval"]</th><th>@T["Latest value"]</th><th>@T["Status"]</th><th class="table-actions">@T["Actions"]</th></tr></thead><tbody>
 @foreach (var target in Model.DdnsTargets)
 {
 <tr><td><strong>@target.Fqdn</strong><small>@target.RecordType · @target.ProviderLabel</small></td><td>@target.AddressSource</td><td>@target.IntervalSeconds @T["sec."]</td><td><code>@(string.IsNullOrWhiteSpace(target.LastValue) ? "–" : target.LastValue)</code></td><td><span class="status-badge @(target.LastStatus == "ok" ? "status-badge--ok" : target.LastStatus == "failed" ? "status-badge--warning" : "status-badge--neutral")">@target.LastStatus</span>@if (!string.IsNullOrWhiteSpace(target.LastError)) { <small>@target.LastError</small> }</td><td class="table-actions"><form method="post" asp-page-handler="RunDdns"><input type="hidden" name="targetId" value="@target.Id" /><button class="button button--compact" type="submit" disabled="@(!target.Enabled)">@T["Run now"]</button></form><form method="post" asp-page-handler="ToggleDdns"><input type="hidden" name="targetId" value="@target.Id" /><input type="hidden" name="enabled" value="@(!target.Enabled)" /><button class="button button--compact button--quiet" type="submit">@(target.Enabled ? T["Disable"] : T["Enable"])</button></form></td></tr>

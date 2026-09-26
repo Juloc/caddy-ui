@@ -429,8 +429,6 @@ code { font-size: 13px; }
 }
 .page-heading--compact { align-items: center; }
 .page-heading h1 { margin: 0; font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: clamp(24px, 2.3vw, 30px); font-weight: 650; letter-spacing: -.025em; }
-.page-description { max-width: 840px; margin: 7px 0 0; color: var(--ui-text-muted); line-height: 1.5; }
-.eyebrow { margin: 0 0 4px; color: var(--ui-accent); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
 
 .button {
     display: inline-flex;

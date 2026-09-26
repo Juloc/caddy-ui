@@ -14,9 +14,7 @@
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">Access Portal</p>
         <h1>@T["Access groups"]</h1>
-        <p class="page-description">@T["Groups protect individual routes. Passwords are stored only as hashes and existing passwords are never displayed."]</p>
     </div>
     <div class="page-actions">
         <a class="button button--quiet" asp-page="/Routing/Index">@T["Go to routes"]</a>
@@ -40,7 +38,7 @@
 <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
 <article class="workspace-section">
-    <header class="section-header"><div><h2>@T["Groups"]</h2><p>@T["{0} access groups", Model.Groups.Count]</p></div></header>
+    <header class="section-header"><div><h2>@T["Groups"]</h2></div></header>
     <div class="table-wrap">
         <table class="data-table">
             <thead><tr><th>@T["Group"]</th><th>@T["Credentials"]</th><th>@T["Routes"]</th><th>@T["Status"]</th><th class="table-actions">@T["Actions"]</th></tr></thead>
@@ -79,7 +77,7 @@
 </article>
 
 <article class="workspace-section">
-    <header class="section-header"><div><h2>@T["Portal credentials"]</h2><p>@T["User accounts for protected routes."]</p></div></header>
+    <header class="section-header"><div><h2>@T["Portal credentials"]</h2></div></header>
     <div class="table-wrap">
         <table class="data-table">
             <thead><tr><th>@T["User"]</th><th>@T["Group"]</th><th>@T["Created"]</th><th>@T["Status"]</th><th class="table-actions">@T["Actions"]</th></tr></thead>
@@ -120,7 +118,7 @@
 <dialog id="create-group-dialog" class="dialog-surface dialog-surface--compact" data-dialog aria-labelledby="create-group-dialog-title" open="@(createGroupOpen ? "open" : null)">
     <div class="dialog-layout">
         <header class="dialog-header">
-            <div><h2 id="create-group-dialog-title">@T["Create group"]</h2><p>@T["Use a clear name and an optional purpose."]</p></div>
+            <div><h2 id="create-group-dialog-title">@T["Create group"]</h2></div>
             <a class="button button--compact button--quiet" asp-page="./Index" data-dialog-close>@T["Close"]</a>
         </header>
         <div class="dialog-body">
@@ -143,7 +141,7 @@
 <dialog id="edit-group-dialog" class="dialog-surface dialog-surface--compact" data-dialog aria-labelledby="edit-group-dialog-title" open="@(editGroupOpen ? "open" : null)">
     <div class="dialog-layout">
         <header class="dialog-header">
-            <div><h2 id="edit-group-dialog-title">@T["Edit access group"]</h2><p>@T["Change the name or purpose without changing route assignments."]</p></div>
+            <div><h2 id="edit-group-dialog-title">@T["Edit access group"]</h2></div>
             <a class="button button--compact button--quiet" asp-page="./Index" data-dialog-close>@T["Close"]</a>
         </header>
         <div class="dialog-body">
@@ -165,7 +163,7 @@
 <dialog id="create-credential-dialog" class="dialog-surface dialog-surface--compact" data-dialog aria-labelledby="create-credential-dialog-title" open="@(createCredentialOpen ? "open" : null)">
     <div class="dialog-layout">
         <header class="dialog-header">
-            <div><h2 id="create-credential-dialog-title">@T["Create credential"]</h2><p>@T["Use at least twelve characters. The password is not displayed again."]</p></div>
+            <div><h2 id="create-credential-dialog-title">@T["Create credential"]</h2></div>
             <a class="button button--compact button--quiet" asp-page="./Index" data-dialog-close>@T["Close"]</a>
         </header>
         <div class="dialog-body">
@@ -187,7 +185,7 @@
 <dialog id="edit-credential-dialog" class="dialog-surface dialog-surface--compact" data-dialog aria-labelledby="edit-credential-dialog-title" open="@(editCredentialOpen ? "open" : null)">
     <div class="dialog-layout">
         <header class="dialog-header">
-            <div><h2 id="edit-credential-dialog-title">@T["Edit portal credential"]</h2><p>@T["Leave the new password empty to keep the existing password."]</p></div>
+            <div><h2 id="edit-credential-dialog-title">@T["Edit portal credential"]</h2></div>
             <a class="button button--compact button--quiet" asp-page="./Index" data-dialog-close>@T["Close"]</a>
         </header>
         <div class="dialog-body">

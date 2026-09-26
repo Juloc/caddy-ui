@@ -8,9 +8,7 @@
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">@T["Controlled write path"]</p>
         <h1>@T["Preview and apply"]</h1>
-        <p class="page-description">@T["Generate, inspect the diff, validate, write atomically, reload Caddy, and verify. Failures trigger an automatic rollback."]</p>
     </div>
     <a class="button button--quiet" asp-page="/Routing/Index">@T["Back to routes"]</a>
 </section>
@@ -31,7 +29,7 @@
 </section>
 
 <section class="workspace-section">
-    <header class="section-header"><div><h2>@T["Create a new revision"]</h2><p>@T["A revision is immutable and contains the complete generated route state."]</p></div></header>
+    <header class="section-header"><div><h2>@T["Create a new revision"]</h2></div></header>
     <form method="post" asp-page-handler="Preview" class="inline-form inline-form--reason">
         <label class="field">
             <span class="field-label">@T["Reason"]</span>
@@ -91,7 +89,7 @@
 
 <section class="workspace-split">
     <article class="workspace-section">
-        <header class="section-header"><div><h2>@T["Revisions"]</h2><p>@T["Immutable generated states."]</p></div></header>
+        <header class="section-header"><div><h2>@T["Revisions"]</h2></div></header>
         <div class="compact-list">
             @foreach (var revision in Model.Revisions)
             {
@@ -105,7 +103,7 @@
         </div>
     </article>
     <article class="workspace-section">
-        <header class="section-header"><div><h2>@T["Apply history"]</h2><p>@T["Every attempt remains auditable."]</p></div></header>
+        <header class="section-header"><div><h2>@T["Apply history"]</h2></div></header>
         <div class="compact-list">
             @foreach (var operation in Model.Operations)
             {
@@ -123,7 +121,7 @@
 @if (Model.RoutingOptions.WriteMode == RouteWriteMode.Active)
 {
     <section class="workspace-section danger-zone">
-        <header class="section-header"><div><h2>@T["Rollback"]</h2><p>@T["Restores the snapshot before the last successful apply and reloads Caddy."]</p></div></header>
+        <header class="section-header"><div><h2>@T["Rollback"]</h2></div></header>
         <form method="post" asp-page-handler="Rollback" class="inline-form inline-form--reason" data-confirm="@T["Roll back the last active route change?"]">
             <label class="field"><span class="field-label">@T["Rollback reason"]</span><input asp-for="Input.Reason" /></label>
             <button class="button button--danger" type="submit">@T["Roll back last apply"]</button>

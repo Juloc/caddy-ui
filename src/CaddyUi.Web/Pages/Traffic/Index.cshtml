@@ -4,7 +4,7 @@
     ViewData["Title"] = T["Traffic"];
 }
 <section class="page-heading">
-    <div><p class="eyebrow">@T["Server load"]</p><h1>@T["Traffic"]</h1><p class="page-description">@T["Requests, page views, errors, transferred data, and duration are shown separately for each time interval."]</p></div>
+    <div><h1>@T["Traffic"]</h1></div>
     <div class="page-actions">
         <span class="status-badge status-badge--neutral">@T["{0} intervals", Model.Series.Count]</span>
         <a class="button button--quiet" asp-page="/Performance/Index">Performance</a>
@@ -13,7 +13,7 @@
 </section>
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="panel panel--wide">
-    <header class="panel-header"><div><p class="eyebrow">@T["Time series"]</p><h2>@T["Aggregated intervals"]</h2></div></header>
+    <header class="panel-header"><div><h2>@T["Aggregated intervals"]</h2></div></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
             <thead><tr><th>@T["Interval"]</th><th>@T["Requests"]</th><th>@T["Page views"]</th><th>@T["Errors"]</th><th>@T["Traffic"]</th><th>@T["Average duration"]</th></tr></thead>

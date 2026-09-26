@@ -5,7 +5,7 @@
     var liveLabel = T["Live"].Value;
     var reconnectLabel = T["Connection interrupted — retrying"].Value;
 }
-<section class="page-heading"><div><p class="eyebrow">Server-Sent Events</p><h1>@T["Live log"]</h1><p class="page-description">@T["New requests are added without a full page reload. The view is read-only and uses the same filters as the other analytics pages."]</p></div><span id="live-state" class="status-badge @(Model.EventStreamUrl is null ? "status-badge--warning" : "status-badge--neutral")">@(Model.EventStreamUrl is null ? T["Unavailable"] : T["Connecting"])</span></section>
+<section class="page-heading"><div><h1>@T["Live log"]</h1></div><span id="live-state" class="status-badge @(Model.EventStreamUrl is null ? "status-badge--warning" : "status-badge--neutral")">@(Model.EventStreamUrl is null ? T["Unavailable"] : T["Connecting"])</span></section>
 @if (!string.IsNullOrWhiteSpace(Model.LoadError))
 {
     <div class="notice notice--warning"><strong>@T["Live log is currently unavailable"]</strong><span>@Model.LoadError</span><small>@T["Check PostgreSQL migrations, the analytics worker, and the mount for"] <code>/var/log/caddy/access.log</code>.</small></div>

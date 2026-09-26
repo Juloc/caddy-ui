@@ -6,9 +6,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Operational status"]</p>
         <h1>@T["System"]</h1>
-        <p class="page-description">@T["Status of PostgreSQL, log processing, checkpoints, retention, and security services."]</p>
     </div>
     <span class="status-badge @(Model.Status.DatabaseAvailable ? "status-badge--ok" : "status-badge--warning")">@(Model.Status.DatabaseAvailable ? T["PostgreSQL reachable"] : T["PostgreSQL unreachable"])</span>
 </section>
@@ -22,7 +20,7 @@
 {
     <section class="workspace-section">
         <header class="section-header">
-            <div><h2>Systemwerkzeuge</h2><p>Technische und selten benötigte Funktionen sind hier zusammengefasst.</p></div>
+            <div><h2>Systemwerkzeuge</h2></div>
         </header>
         <nav class="page-actions" aria-label="Systemwerkzeuge">
             <a class="button button--quiet" asp-page="/Operations/Health">Health Checks</a>
@@ -44,7 +42,7 @@
 
 <section class="analytics-columns analytics-columns--two">
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Processing"]</p><h2>@T["Log processing"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Log processing"]</h2></div></header>
         <div class="panel-body definition-list">
             <div><span>@T["Enabled"]</span><strong>@(Model.Status.IngestionEnabled ? T["Yes"] : T["No"])</strong></div>
             <div><span>@T["Log paths"]</span><strong>@Model.Status.ConfiguredLogPaths</strong></div>
@@ -54,7 +52,7 @@
         </div>
     </article>
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Security"]</p><h2>@T["Services"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Services"]</h2></div></header>
         <div class="panel-body definition-list">
             <div><span>IP Intelligence</span><strong>@(Model.Status.IpIntelligenceEnabled ? T["Enabled"] : T["Disabled"])</strong></div>
             <div><span>@T["Risk assessment"]</span><strong>@(Model.Status.RiskAssessmentEnabled ? T["Enabled"] : T["Disabled"])</strong></div>

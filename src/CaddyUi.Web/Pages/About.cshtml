@@ -6,16 +6,14 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Application"]</p>
         <h1>@T["About Caddy UI"]</h1>
-        <p class="page-description">@T["Product, runtime, and operational information in one place."]</p>
     </div>
     <span class="status-badge status-badge--ok">@T["Version"] @Model.Product.Version</span>
 </section>
 
 <section class="workspace-grid about-grid">
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Product"]</p><h2>@Model.Product.Product</h2></div></header>
+        <header class="panel-header"><div><h2>@Model.Product.Product</h2></div></header>
         <div class="panel-body definition-list">
             <div><span>@T["Version"]</span><strong>@Model.Product.Version</strong></div>
             <div><span>@T["Runtime"]</span><strong>@Model.Product.Runtime</strong></div>
@@ -25,7 +23,7 @@
     </article>
 
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Operations"]</p><h2>@T["Active modes"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Active modes"]</h2></div></header>
         <div class="panel-body definition-list">
             <div><span>@T["Route writes"]</span><strong>@Model.Routing.WriteMode</strong></div>
             <div><span>@T["DNS writes"]</span><strong>@Model.Operations.DnsWriteMode</strong></div>
@@ -35,7 +33,7 @@
     </article>
 
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">Caddy</p><h2>@T["Integration"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Integration"]</h2></div></header>
         <div class="panel-body definition-list">
             <div><span>@T["Portal upstream"]</span><strong><code>@Model.Routing.PortalUpstream</code></strong></div>
             <div><span>@T["DNS modules"]</span><strong>@string.Join(", ", Model.Operations.InstalledCaddyDnsModules.OrderBy(module => module))</strong></div>
@@ -45,7 +43,7 @@
     </article>
 
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Security"]</p><h2>@T["Migration and rollback"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Migration and rollback"]</h2></div></header>
         <div class="panel-body definition-list">
             <div><span>@T["Cutover"]</span><strong>@(Model.Cutover.Enabled ? T["Approved"] : T["Locked"])</strong></div>
             <div><span>@T["Admin port"]</span><strong>@Model.Cutover.AdminPort</strong></div>

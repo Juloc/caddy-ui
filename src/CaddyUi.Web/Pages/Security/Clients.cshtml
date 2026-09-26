@@ -6,15 +6,13 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Technical identities"]</p>
         <h1>@T["Visitors and clients"]</h1>
-        <p class="page-description">@T["Without a first-party beacon, a client is only a pseudonymous, estimated technical identity. It must not be interpreted as a confirmed person."]</p>
     </div>
     <span class="status-badge status-badge--neutral">@T["{0} clients", Model.Clients.Count]</span>
 </section>
 
 <section class="panel panel--wide">
-    <header class="panel-header"><div><p class="eyebrow">@T["Recently active"]</p><h2>@T["Clients"]</h2></div><a asp-page="/Security/Overview">Security Analytics</a></header>
+    <header class="panel-header"><div><h2>@T["Clients"]</h2></div><a asp-page="/Security/Overview">Security Analytics</a></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
             <thead><tr><th>@T["Client"]</th><th>@T["Latest IP"]</th><th>@T["Requests"]</th><th>@T["Page views"]</th><th>@T["Assessment"]</th><th>@T["Last seen"]</th></tr></thead>

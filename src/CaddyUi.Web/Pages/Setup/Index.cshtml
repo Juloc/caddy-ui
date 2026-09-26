@@ -15,9 +15,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Safe wizard"]</p>
         <h1>@T["Set up DNS, domain, and route"]</h1>
-        <p class="page-description">@T["Select a provider, enter credentials, and optionally prepare the first route. Any error rolls back the complete save; Caddy changes only later through preview and apply."]</p>
     </div>
     <span class="status-badge status-badge--ok">@T["Atomic save"]</span>
 </section>
@@ -42,7 +40,7 @@
 <form method="post" class="setup-wizard" data-setup-wizard>
     <section class="workspace-section setup-step">
         <header class="section-header">
-            <div><p class="setup-step-number">1</p><h2>@T["DNS provider"]</h2><p>@T["Select Netcup or another provider. Only the required fields are shown."]</p></div>
+            <div><p class="setup-step-number">1</p><h2>@T["DNS provider"]</h2></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field">
@@ -126,7 +124,7 @@
 
     <section class="workspace-section setup-step">
         <header class="section-header">
-            <div><p class="setup-step-number">2</p><h2>@T["Domain and certificates"]</h2><p>@T["Wildcard and base-domain certificates are planned separately because *.example.com does not cover the base domain."]</p></div>
+            <div><p class="setup-step-number">2</p><h2>@T["Domain and certificates"]</h2></div>
         </header>
         <div class="form-grid form-grid--three">
             <label class="field">
@@ -157,7 +155,7 @@
 
     <section class="workspace-section setup-step">
         <header class="section-header">
-            <div><p class="setup-step-number">3</p><h2>@T["First route"]</h2><p>@T["Optionally create a route draft now. The active Caddy configuration remains unchanged."]</p></div>
+            <div><p class="setup-step-number">3</p><h2>@T["First route"]</h2></div>
         </header>
         <label class="check setup-toggle">
             <input asp-for="Input.CreateRoute" data-route-toggle />
@@ -227,7 +225,7 @@
     </section>
 
     <section class="workspace-section setup-review">
-        <header class="section-header"><div><p class="setup-step-number">4</p><h2>@T["Review and save"]</h2><p>@T["Nothing has changed until Save is selected."]</p></div></header>
+        <header class="section-header"><div><p class="setup-step-number">4</p><h2>@T["Review and save"]</h2></div></header>
         <dl class="setup-summary">
             <div><dt>@T["Provider"]</dt><dd data-summary-provider>–</dd></div>
             <div><dt>@T["Domain"]</dt><dd data-summary-domain>–</dd></div>

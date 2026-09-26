@@ -17,9 +17,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Client"]</p>
         <h1>@Model.Details.Summary.ClientKey[..Math.Min(Model.Details.Summary.ClientKey.Length, 32)]</h1>
-        <p class="page-description">@(Model.Details.Summary.Estimated ? T["Client estimated from proxy data. Not a confirmed person."] : T["A first-party client identifier is available."])</p>
     </div>
     <span class="status-badge @(Model.Details.Summary.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">
         @Model.Details.Summary.Classification · @T["Score"] @Model.Details.Summary.AutomationScore
@@ -28,7 +26,7 @@
 
 <section class="workspace-grid">
     <article class="panel panel--wide">
-        <header class="panel-header"><div><p class="eyebrow">@T["Network"]</p><h2>IP Intelligence</h2></div></header>
+        <header class="panel-header"><div><h2>IP Intelligence</h2></div></header>
         <div class="panel-body">
             <dl class="detail-grid">
                 <div><dt>@T["Address"]</dt><dd><code>@(Model.Details.Summary.LatestAddress.Length == 0 ? "–" : Model.Details.Summary.LatestAddress)</code></dd></div>
@@ -48,7 +46,7 @@
     </article>
 
     <aside class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Action"]</p><h2>@T["Block IP"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Block IP"]</h2></div></header>
         <div class="panel-body">
             @if (User.IsInRole("admin") || User.IsInRole("editor"))
             {
@@ -76,7 +74,7 @@
 
 <section class="workspace-grid">
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Rule engine"]</p><h2>@T["Reasoning"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Reasoning"]</h2></div></header>
         <div class="panel-body">
             @if (Model.Details.AssessmentReasons.Count == 0)
             {
@@ -95,7 +93,7 @@
     </article>
 
     <article class="panel panel--wide">
-        <header class="panel-header"><div><p class="eyebrow">@T["History"]</p><h2>@T["IP blocks"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["IP blocks"]</h2></div></header>
         <div class="panel-body table-wrap">
             <table class="data-table">
                 <thead><tr><th>@T["Target"]</th><th>@T["Status"]</th><th>@T["Reason"]</th><th>@T["Expires"]</th><th></th></tr></thead>
@@ -127,7 +125,7 @@
 </section>
 
 <section class="panel panel--wide">
-    <header class="panel-header"><div><p class="eyebrow">@T["Latest 100"]</p><h2>@T["Requests"]</h2></div></header>
+    <header class="panel-header"><div><h2>@T["Requests"]</h2></div></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
             <thead><tr><th>@T["Time"]</th><th>Host</th><th>@T["Request"]</th><th>@T["Status"]</th><th>@T["Class"]</th><th>@T["Duration"]</th></tr></thead>

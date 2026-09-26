@@ -8,9 +8,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Automation"]</p>
         <h1>@T["Jobs"]</h1>
-        <p class="page-description">@T["PostgreSQL-backed jobs run with exclusive locking, run history, and a unique correlation ID. The worker is disabled by default."]</p>
     </div>
     <div class="page-actions">
         <span class="status-badge @(OperationsOptions.WorkerEnabled ? "status-badge--ok" : "status-badge--neutral")">Worker: @(OperationsOptions.WorkerEnabled ? T["Enabled"] : T["Disabled"])</span>
@@ -31,7 +29,6 @@
     <article class="workbench">
         <header class="workbench-header">
             <div>
-                <p class="eyebrow">@T["Configured"]</p>
                 <h2>@T["{0} jobs", Model.Jobs.Count]</h2>
             </div>
         </header>
@@ -91,7 +88,6 @@
 <section class="workbench operations-section">
     <header class="workbench-header">
         <div>
-            <p class="eyebrow">@T["Run history"]</p>
             <h2>@T["Latest runs"]</h2>
         </div>
     </header>
@@ -130,7 +126,6 @@
     <div class="dialog-layout">
         <header class="dialog-header">
             <div>
-                <p class="eyebrow">@T["New"]</p>
                 <h2 id="create-job-dialog-title">@T["Create job"]</h2>
             </div>
         </header>

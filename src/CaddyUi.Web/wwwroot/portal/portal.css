@@ -98,26 +98,10 @@ body {
     line-height: 22px;
 }
 
-.portal-brand-copy span,
-.portal-description {
+.portal-brand-copy span {
     color: var(--portal-text-secondary);
     font-size: 14px;
     line-height: 20px;
-}
-
-.portal-heading {
-    display: grid;
-    gap: 8px;
-}
-
-.portal-eyebrow {
-    margin: 0;
-    color: var(--portal-accent);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: .04em;
-    line-height: 16px;
-    text-transform: uppercase;
 }
 
 .portal-heading h1 {
@@ -125,10 +109,6 @@ body {
     font-size: 28px;
     font-weight: 600;
     line-height: 36px;
-}
-
-.portal-description {
-    margin: 0;
 }
 
 .portal-form {

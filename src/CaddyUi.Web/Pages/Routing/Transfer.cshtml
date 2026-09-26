@@ -6,9 +6,7 @@
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">@T["Portable route state"]</p>
         <h1>@T["Import and export"]</h1>
-        <p class="page-description">@T["Exports only route configuration values. Passwords, provider secrets, sessions, and active Caddy snapshots are not included."]</p>
     </div>
     <a class="button button--quiet" asp-page="/Routing/Index">@T["Back to routes"]</a>
 </section>
@@ -24,7 +22,6 @@
         <header class="section-header">
             <div>
                 <h2>@T["Export"]</h2>
-                <p>@T["{0} routes in schema", Model.RouteCount] <code>caddy-ui-routes-v1</code>.</p>
             </div>
             <a class="button button--primary" asp-page-handler="Download">@T["Download JSON"]</a>
         </header>
@@ -36,7 +33,7 @@
 
     <aside class="workspace-section">
         <header class="section-header">
-            <div><h2>@T["Import"]</h2><p>@T["The complete import runs in one PostgreSQL transaction."]</p></div>
+            <div><h2>@T["Import"]</h2></div>
         </header>
         <form method="post" asp-page-handler="Import" class="form-stack panel-body">
             <label class="field">
@@ -51,7 +48,7 @@
 </section>
 
 <section class="workspace-section transfer-contract">
-    <header class="section-header"><div><h2>@T["Security boundaries"]</h2><p>@T["Import is a draft step, not a deployment."]</p></div></header>
+    <header class="section-header"><div><h2>@T["Security boundaries"]</h2></div></header>
     <div class="panel-body">
         <ul class="check-list">
             <li>@T["Domains and access groups must already exist and be enabled."]</li>

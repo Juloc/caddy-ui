@@ -9,11 +9,7 @@
 
 <section class="page-heading">
     <div>
-        <p class="eyebrow">@T["Overview"]</p>
         <h1>@T["Traffic and usage"]</h1>
-        <p class="page-description">
-            @T["Page views describe successful document navigations. Requests show actual server load including JavaScript, CSS, images, APIs, bots, and errors."]
-        </p>
     </div>
 </section>
 
@@ -34,7 +30,7 @@
 
 <section class="panel panel--wide">
     <header class="panel-header">
-        <div><p class="eyebrow">@T["Time series"]</p><h2>@T["Requests and page views"]</h2></div>
+        <div><h2>@T["Requests and page views"]</h2></div>
         <div class="chart-legend"><span><i class="legend-request"></i>@T["Requests"]</span><span><i class="legend-pageview"></i>@T["Page views"]</span></div>
     </header>
     <div class="panel-body">
@@ -62,7 +58,7 @@
 
 <section class="analytics-columns">
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Usage"]</p><h2>@T["Top pages"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Top pages"]</h2></div></header>
         <div class="panel-body compact-list">
             @foreach (var route in Model.Dashboard.TopPages)
             {
@@ -72,7 +68,7 @@
         </div>
     </article>
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Backend"]</p><h2>@T["Top API routes"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Top API routes"]</h2></div></header>
         <div class="panel-body compact-list">
             @foreach (var route in Model.Dashboard.TopApiRoutes)
             {
@@ -82,7 +78,7 @@
         </div>
     </article>
     <article class="panel">
-        <header class="panel-header"><div><p class="eyebrow">@T["Transfer"]</p><h2>@T["Largest assets"]</h2></div></header>
+        <header class="panel-header"><div><h2>@T["Largest assets"]</h2></div></header>
         <div class="panel-body compact-list">
             @foreach (var route in Model.Dashboard.LargestAssets)
             {
@@ -94,7 +90,7 @@
 </section>
 
 <section class="panel panel--wide analytics-section">
-    <header class="panel-header"><div><p class="eyebrow">@T["Rule-based signals"]</p><h2>@T["Suspicious clients"]</h2></div><a asp-page="/Security/Overview">@T["Open security analysis"]</a></header>
+    <header class="panel-header"><div><h2>@T["Suspicious clients"]</h2></div><a asp-page="/Security/Overview">@T["Open security analysis"]</a></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
             <thead><tr><th>@T["Client"]</th><th>@T["IP"]</th><th>@T["Classification"]</th><th>@T["Score"]</th><th>@T["Last seen"]</th></tr></thead>

@@ -9,9 +9,7 @@
 
 <section class="page-heading page-heading--compact">
     <div>
-        <p class="eyebrow">@T["Routing"]</p>
         <h1>@T["Routes"]</h1>
-        <p class="page-description">@R["Manage services by domain. New standard routes only need a name and an upstream target."]</p>
     </div>
     <div class="page-actions">
         <a class="button button--quiet" asp-page="/Administration/Domains">@T["Domains"]</a>
@@ -221,7 +219,6 @@ else if (Model.RuntimeState.HasPendingChanges)
                         <header class="dialog-header">
                             <div>
                                 <h2 id="@($"{dialogId}-title")">@R["New route for {0}", group.Domain.Name]</h2>
-                                <p>@R["The subdomain is generated automatically from the route name."]</p>
                             </div>
                             <a class="button button--compact button--quiet" asp-page="/Routing/Index" data-dialog-close>@R["Close"]</a>
                         </header>
