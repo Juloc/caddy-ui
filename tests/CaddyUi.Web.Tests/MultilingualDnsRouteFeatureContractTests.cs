@@ -36,7 +36,7 @@ public sealed class MultilingualDnsRouteFeatureContractTests
         var page = ReadRepositoryFile("src/CaddyUi.Web/Pages/Administration/ProviderDns.cshtml");
         var service = ReadRepositoryFile("src/CaddyUi.Infrastructure/Operations/DnsProviderRecordQueryService.cs");
 
-        Assert.Contains("Read the current DNS records directly from the selected provider", page, StringComparison.Ordinal);
+        Assert.Contains("<h1>@T[\"Provider DNS\"]</h1>", page, StringComparison.Ordinal);
         Assert.DoesNotContain("method=\"post\"", page, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NetcupDnsProviderRecordReader", service, StringComparison.Ordinal);
         Assert.Contains("CommonRestDnsProviderRecordReader", service, StringComparison.Ordinal);

@@ -95,10 +95,7 @@ public sealed class DomainFirstRoutingMarkupTests
             "@inject IStringLocalizer<CaddyUi.Web.RoutingResource> R",
             markup,
             StringComparison.Ordinal);
-        Assert.Contains(
-            "R[\"Manage services by domain. New standard routes only need a name and an upstream target.\"]",
-            markup,
-            StringComparison.Ordinal);
+        Assert.Contains("R[\"New route for {0}\", group.Domain.Name]", markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Dienste nach Domain verwalten", markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Vorschau &amp; anwenden", markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Entfernung offen", markup, StringComparison.Ordinal);

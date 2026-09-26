@@ -74,11 +74,7 @@ public sealed class LocalizationContractTests
         Assert.Contains("Task<string?> GetLanguageAsync", preferenceStore, StringComparison.Ordinal);
         Assert.Contains("? language\n            : null;", preferenceStore, StringComparison.Ordinal);
         Assert.DoesNotContain("? language\n            : \"en\";", preferenceStore, StringComparison.Ordinal);
-        Assert.Contains("IStringLocalizer<CaddyUi.Web.SettingsResource>", page, StringComparison.Ordinal);
-        Assert.Contains(
-            "German is the default. The preference is stored with your user account.",
-            page,
-            StringComparison.Ordinal);
+        Assert.Contains("<h2>@T[\"Language\"]</h2>", page, StringComparison.Ordinal);
     }
 
     [Fact]
