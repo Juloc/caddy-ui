@@ -43,6 +43,24 @@ public sealed class LoginPageTests :
         Assert.Contains("data-valmsg-for=\"Input.Password\"", html, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task PasswordStep_DoesNotValidateSecondFactorCodeWhenCredentialsAreInvalid()
+    {
+        using var response = await _client.PostAsync(
+            "/Login",
+            new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    ["Input.Username"] = string.Empty,
+                    ["Input.Password"] = string.Empty,
+                }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("The Code field is required.", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-valmsg-for=\"SecondFactor.Code\"", html, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("/")]
     [InlineData("/Traffic")]

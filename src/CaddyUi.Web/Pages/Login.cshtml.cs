@@ -99,8 +99,8 @@ public sealed class LoginModel : LocalizedPageModel
     {
         var returnUrl = SafeReturnUrl(ReturnUrl);
         ReturnUrl = returnUrl;
-        ModelState.Remove(nameof(SecondFactor));
-        if (!ModelState.IsValid)
+        ModelState.Clear();
+        if (!TryValidateModel(Input, nameof(Input)))
         {
             return Page();
         }
