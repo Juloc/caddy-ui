@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -46,11 +47,20 @@ public sealed class LoginPageTests :
     [Fact]
     public async Task PasswordStep_DoesNotValidateSecondFactorCodeWhenCredentialsAreInvalid()
     {
+        using var loginPage = await _client.GetAsync("/Login");
+        var loginHtml = await loginPage.Content.ReadAsStringAsync();
+        var token = Regex.Match(
+            loginHtml,
+            "<input(?=[^>]*name=\"__RequestVerificationToken\")(?=[^>]*value=\"(?<value>[^\"]+)\")[^>]*>",
+            RegexOptions.CultureInvariant);
+        Assert.True(token.Success);
+
         using var response = await _client.PostAsync(
             "/Login",
             new FormUrlEncodedContent(
                 new Dictionary<string, string>
                 {
+                    ["__RequestVerificationToken"] = WebUtility.HtmlDecode(token.Groups["value"].Value),
                     ["Input.Username"] = string.Empty,
                     ["Input.Password"] = string.Empty,
                 }));
