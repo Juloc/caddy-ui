@@ -8,12 +8,12 @@ namespace CaddyUi.Web.Pages.Operations;
 [Authorize(Policy = "Administrator")]
 public sealed class BackupModel : LocalizedPageModel
 {
-    private readonly OperationsStore _store;
+    private readonly BackupOperationsStore _store;
     private readonly BackupDiagnosticsService _backups;
     private readonly OperationsOptions _options;
 
     public BackupModel(
-        OperationsStore store,
+        BackupOperationsStore store,
         BackupDiagnosticsService backups,
         OperationsOptions options)
     {

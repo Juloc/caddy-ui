@@ -15,7 +15,7 @@ public sealed record GeneratedArtifact(string FileName, byte[] Content, string C
 public sealed class BackupDiagnosticsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    private readonly OperationsStore _store;
+    private readonly BackupOperationsStore _backupStore;
     private readonly ScheduledJobOperationsStore _jobStore;
     private readonly HealthOperationsStore _healthStore;
     private readonly DnsOperationsStore _dnsStore;
@@ -25,7 +25,7 @@ public sealed class BackupDiagnosticsService
     private readonly string _connectionString;
 
     public BackupDiagnosticsService(
-        OperationsStore store,
+        BackupOperationsStore backupStore,
         ScheduledJobOperationsStore jobStore,
         HealthOperationsStore healthStore,
         DnsOperationsStore dnsStore,
@@ -34,7 +34,7 @@ public sealed class BackupDiagnosticsService
         RoutingOptions routingOptions,
         IConfiguration configuration)
     {
-        _store = store;
+        _backupStore = backupStore;
         _jobStore = jobStore;
         _healthStore = healthStore;
         _dnsStore = dnsStore;
@@ -90,7 +90,7 @@ public sealed class BackupDiagnosticsService
                 "ok",
                 string.Empty,
                 manifest);
-            await _store.RecordBackupAsync(artifact, cancellationToken);
+            await _backupStore.RecordBackupAsync(artifact, cancellationToken);
             CleanupOldBackups();
             return ProviderOperationResult.Success($"Backup {fileName} created ({bytes.LongLength:N0} bytes).", id.ToString("D"));
         }
@@ -106,7 +106,7 @@ public sealed class BackupDiagnosticsService
                 "failed",
                 Limit(exception.Message, 4000),
                 "{}");
-            await _store.RecordBackupAsync(artifact, cancellationToken);
+            await _backupStore.RecordBackupAsync(artifact, cancellationToken);
             return ProviderOperationResult.Failure(exception.Message);
         }
         finally
