@@ -210,28 +210,28 @@ async function verifyLocalizationPreference(page) {
     }
 
     await page.goto("/Routing");
-    const germanDescription = (await page.locator(".page-description").textContent())?.trim();
-    if (germanDescription !== "Dienste nach Domain verwalten. Neue Standardrouten brauchen nur einen Namen und ein Upstream-Ziel.") {
-        fail(`German routing copy was not rendered: ${germanDescription}`);
+    const germanHeading = (await page.locator("h1").textContent())?.trim();
+    if (germanHeading !== "Routen") {
+        fail(`German routing heading was not rendered: ${germanHeading}`);
     }
 
     await saveLanguage(page, "en");
     await page.goto("/Routing");
     const englishLanguage = await page.evaluate(() => document.documentElement.lang);
-    const englishDescription = (await page.locator(".page-description").textContent())?.trim();
+    const englishHeading = (await page.locator("h1").textContent())?.trim();
     if (englishLanguage !== "en") {
         fail(`English preference did not set html lang: ${englishLanguage}`);
     }
-    if (englishDescription !== "Manage services by domain. New standard routes only need a name and an upstream target.") {
-        fail(`English routing copy was not rendered: ${englishDescription}`);
+    if (englishHeading !== "Routes") {
+        fail(`English routing heading was not rendered: ${englishHeading}`);
     }
 
     await saveLanguage(page, "de");
     await page.goto("/Routing");
     const restoredLanguage = await page.evaluate(() => document.documentElement.lang);
-    const restoredDescription = (await page.locator(".page-description").textContent())?.trim();
-    if (restoredLanguage !== "de" || restoredDescription !== germanDescription) {
-        fail(`German preference was not restored: html=${restoredLanguage}, copy=${restoredDescription}`);
+    const restoredHeading = (await page.locator("h1").textContent())?.trim();
+    if (restoredLanguage !== "de" || restoredHeading !== germanHeading) {
+        fail(`German preference was not restored: html=${restoredLanguage}, heading=${restoredHeading}`);
     }
 }
 

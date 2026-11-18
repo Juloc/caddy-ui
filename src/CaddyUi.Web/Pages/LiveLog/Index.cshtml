@@ -2,8 +2,6 @@
 @model CaddyUi.Web.Pages.LiveLog.IndexModel
 @{
     ViewData["Title"] = T["Live log"];
-    var liveLabel = T["Live"].Value;
-    var reconnectLabel = T["Connection interrupted — retrying"].Value;
 }
 <section class="page-heading"><div><h1>@T["Live log"]</h1></div><span id="live-state" class="status-badge @(Model.EventStreamUrl is null ? "status-badge--warning" : "status-badge--neutral")">@(Model.EventStreamUrl is null ? T["Unavailable"] : T["Connecting"])</span></section>
 @if (!string.IsNullOrWhiteSpace(Model.LoadError))
@@ -19,31 +17,7 @@
 </tbody></table>@if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)){<p class="empty-state">@T["No requests match this filter yet."]</p>}</div></section>
 @if (Model.EventStreamUrl is not null)
 {
-<script>
-(() => {
-    const rows = document.getElementById('live-rows');
-    const state = document.getElementById('live-state');
-    const stream = new EventSource(@Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(Model.EventStreamUrl)));
-    const liveLabel = @Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(liveLabel));
-    const reconnectLabel = @Html.Raw(global::System.Text.Json.JsonSerializer.Serialize(reconnectLabel));
-    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
-    stream.onopen = () => {
-        state.textContent = liveLabel;
-        state.className = 'status-badge status-badge--ok';
-    };
-    stream.addEventListener('request', event => {
-        const item = JSON.parse(event.data);
-        const row = document.createElement('tr');
-        const duration = Number(item.durationMilliseconds || 0).toFixed(1);
-        row.innerHTML = `<td>${escapeHtml(new Date(item.occurredAt).toLocaleString(document.documentElement.lang || undefined))}</td><td><strong>${escapeHtml(item.host)}</strong><small><code>${escapeHtml(item.method)} ${escapeHtml(item.path)}</code></small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.requestType)}</td><td>${escapeHtml(item.actorType)}</td><td>${escapeHtml(duration)} ms</td>`;
-        rows.prepend(row);
-        while (rows.children.length > 100) rows.lastElementChild.remove();
-    });
-    stream.onerror = () => {
-        state.textContent = reconnectLabel;
-        state.className = 'status-badge status-badge--warning';
-    };
-    window.addEventListener('beforeunload', () => stream.close(), { once: true });
-})();
-</script>
+<script src="~/js/live-log.js" asp-append-version="true" defer
+        data-stream-url="@Model.EventStreamUrl" data-live-label="@T["Live"]"
+        data-connecting-label="@T["Connecting"]" data-reconnect-label="@T["Connection interrupted — retrying"]"></script>
 }
