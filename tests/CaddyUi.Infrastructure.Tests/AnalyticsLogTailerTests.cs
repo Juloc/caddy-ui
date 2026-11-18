@@ -86,6 +86,20 @@ public sealed class AnalyticsLogTailerTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadBatch_ReplacementWithSamePrefixRestartsAtZero()
+    {
+        var path = Path.Combine(_directory, "access.log");
+        await File.WriteAllTextAsync(path, "same\nold\n");
+        var first = Assert.IsType<AnalyticsReadBatch>(await _tailer.ReadBatchAsync(path, null, 10));
+        File.Move(path, path + ".1");
+        await File.WriteAllTextAsync(path, "same\nreplacement-is-longer\n");
+        var replaced = Assert.IsType<AnalyticsReadBatch>(await _tailer.ReadBatchAsync(path, Checkpoint(path, first), 10));
+        Assert.NotEqual(first.SourceIdentity, replaced.SourceIdentity);
+        Assert.Equal(0, replaced.StartOffset);
+        Assert.Equal(new[] { "same", "replacement-is-longer" }, replaced.Lines.Select(line => line.Content));
+    }
+
+    [Fact]
     public async Task ReadBatch_MissingFileReturnsNull()
     {
         Assert.Null(await _tailer.ReadBatchAsync(Path.Combine(_directory, "missing.log"), null, 10));

@@ -75,6 +75,7 @@ Asset-Präfixe wie `/_nuxt/`, `/_next/`, `/assets/` und `/static/` werden separa
 - The ingestion worker loads each source checkpoint once and advances its in-memory position only after the batch transaction commits. A processing error discards that position so the next attempt reloads the durable checkpoint. Missing files and idle polls do not query PostgreSQL.
 - Log lines are scanned in buffered blocks with a pooled read buffer; UTF-8, byte offsets, complete-line boundaries and the 4 MiB line limit remain enforced.
 - Dateiersetzung und Rotation werden über eine Quellidentität erkannt.
+- Source identity uses the open file's device/inode on Linux and volume/file ID on Windows, together with its first complete line. It never uses Linux's mutable ctime fallback or Windows's tunneled creation timestamps. The identity change may replay the current file once on upgrade; source-position uniqueness keeps persisted requests and aggregates idempotent. Unparseable lines can be recorded again during that one-time replay.
 - Nur vollständig abgeschlossene Zeilen werden verarbeitet.
 - Request und Checkpoint werden in derselben PostgreSQL-Transaktion geschrieben.
 - Ein Neustart oder erneutes Lesen derselben Quellposition erzeugt keine doppelten Requests, Pageviews oder Aggregate.

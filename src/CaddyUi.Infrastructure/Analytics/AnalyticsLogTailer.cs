@@ -1,7 +1,9 @@
 using System.Buffers;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 
 namespace CaddyUi.Infrastructure.Analytics;
 
@@ -145,11 +147,39 @@ public sealed class AnalyticsLogTailer
 
         var firstNewline = Array.IndexOf(prefix, (byte)'\n', 0, read);
         var stablePrefixLength = firstNewline < 0 ? 0 : firstNewline + 1;
-        var file = new FileInfo(path);
+        string fileIdentity;
+        if (OperatingSystem.IsLinux())
+        {
+            // CreationTimeUtc can fall back to mutable ctime on Linux filesystems without birth time.
+            const uint inodeMask = 0x100;
+            const int emptyPath = 0x1000;
+            if (ReadLinuxFileStatus(stream.SafeFileHandle, string.Empty, emptyPath, inodeMask, out var status) != 0)
+            {
+                throw new IOException("Could not read the analytics log file identity.", new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError()));
+            }
+            if ((status.Mask & inodeMask) == 0)
+            {
+                throw new IOException("The analytics log filesystem does not provide an inode identity.");
+            }
+            fileIdentity = string.Create(CultureInfo.InvariantCulture, $"{status.DeviceMajor}:{status.DeviceMinor}:{status.Inode}");
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            const int fileIdInfo = 18;
+            if (!ReadWindowsFileIdentity(stream.SafeFileHandle, fileIdInfo, out var identity, (uint)Marshal.SizeOf<WindowsFileIdentity>()))
+            {
+                throw new IOException("Could not read the analytics log file identity.", new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError()));
+            }
+            fileIdentity = string.Create(CultureInfo.InvariantCulture, $"{identity.VolumeSerialNumber}:{identity.FileIdLow}:{identity.FileIdHigh}");
+        }
+        else
+        {
+            fileIdentity = new FileInfo(path).CreationTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture);
+        }
         var descriptor = Encoding.UTF8.GetBytes(
             string.Create(
                 CultureInfo.InvariantCulture,
-                $"{Path.GetFullPath(path)}\n{file.CreationTimeUtc.Ticks}\n"));
+                $"{Path.GetFullPath(path)}\n{fileIdentity}\n"));
         var combined = new byte[descriptor.Length + stablePrefixLength];
         Buffer.BlockCopy(descriptor, 0, combined, 0, descriptor.Length);
         Buffer.BlockCopy(
@@ -159,5 +189,29 @@ public sealed class AnalyticsLogTailer
             descriptor.Length,
             stablePrefixLength);
         return Convert.ToHexStringLower(SHA256.HashData(combined));
+    }
+
+    [DllImport("libc", EntryPoint = "statx", SetLastError = true)]
+    private static extern int ReadLinuxFileStatus(SafeFileHandle descriptor, [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags, uint mask, out LinuxFileStatus status);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReadWindowsFileIdentity(SafeFileHandle descriptor, int informationClass, out WindowsFileIdentity identity, uint size);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowsFileIdentity
+    {
+        public ulong VolumeSerialNumber;
+        public ulong FileIdLow;
+        public ulong FileIdHigh;
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 256)]
+    private struct LinuxFileStatus
+    {
+        [FieldOffset(0)] public uint Mask;
+        [FieldOffset(32)] public ulong Inode;
+        [FieldOffset(136)] public uint DeviceMajor;
+        [FieldOffset(140)] public uint DeviceMinor;
     }
 }
