@@ -119,7 +119,7 @@ public sealed record SecurityAnalyticsSnapshot(
 public sealed record TrafficSeriesPoint(DateTimeOffset BucketStart, long Requests, long BotRequests, long BytesSent, long Errors);
 public sealed record DomainTrafficRow(string Host, long Requests, long BotRequests, long Errors, long BytesSent);
 public sealed record AnalyticsDashboardSnapshot(long Requests, long BotRequests, long Errors, long BytesSent,
-    double ErrorRatePercent, double BotSharePercent, IReadOnlyList<TrafficSeriesPoint> Series, IReadOnlyList<DomainTrafficRow> Domains);
+    double ErrorRatePercent, double BotSharePercent, IReadOnlyList<DomainTrafficRow> Domains);
 public sealed record SystemAnalyticsSnapshot(bool DatabaseAvailable, string DatabaseError, bool IngestionEnabled, int ConfiguredLogPaths,
     DateTimeOffset? LatestRequestAt, DateTimeOffset? LatestCheckpointAt, long CheckpointCount, long UnresolvedFailures,
     long TrafficBucketRows, long ClientRows, int StatisticsRetentionDays, int SecurityEventRetentionDays,
@@ -173,7 +173,7 @@ public sealed class AnalyticsReadStore
         var bots = domains.Sum(item => item.BotRequests);
         var errors = domains.Sum(item => item.Errors);
         return new AnalyticsDashboardSnapshot(requests, bots, errors, domains.Sum(item => item.BytesSent), requests == 0 ? 0 : 100d * errors / requests,
-            requests == 0 ? 0 : 100d * bots / requests, await GetTrafficAsync(filter, cancellationToken), domains);
+            requests == 0 ? 0 : 100d * bots / requests, domains);
     }
 
     public async Task<IReadOnlyList<TrafficSeriesPoint>> GetTrafficAsync(AnalyticsReadFilter filter, CancellationToken cancellationToken = default)

@@ -94,7 +94,9 @@ public sealed class AnalyticsReadStoreTests : IAsyncLifetime
         Assert.Equal(0, dashboard.Errors);
         Assert.Equal(2048, dashboard.BytesSent);
         Assert.Equal("mealie.example.com", Assert.Single(dashboard.Domains).Host);
-        Assert.Equal(3, Assert.Single(dashboard.Series).Requests);
+        var series = await readStore.GetTrafficAsync(AnalyticsReadFilter.Create(
+            DateTimeOffset.FromUnixTimeSeconds(1785261500), DateTimeOffset.FromUnixTimeSeconds(1785261700), host: "mealie.example.com"));
+        Assert.Equal(3, Assert.Single(series).Requests);
     }
 
     private static ClassifiedRequest Parse(
