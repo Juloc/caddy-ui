@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -63,58 +64,62 @@ public sealed class AnalyticsLogTailer
 
         stream.Position = startOffset;
         var lines = new List<AnalyticsLogLine>(Math.Min(maximumLines, 1024));
-        var buffer = new byte[BufferSize];
+        var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         using var currentLine = new MemoryStream();
         var absoluteOffset = startOffset;
         var lineOffset = startOffset;
         var endOffset = startOffset;
 
-        while (lines.Count < maximumLines)
+        try
         {
-            var read = await stream.ReadAsync(buffer, cancellationToken);
-            if (read == 0)
+            while (lines.Count < maximumLines)
             {
-                break;
-            }
-
-            for (var index = 0; index < read; index++)
-            {
-                var value = buffer[index];
-                absoluteOffset++;
-
-                if (value == (byte)'\n')
+                var read = await stream.ReadAsync(buffer.AsMemory(0, BufferSize), cancellationToken);
+                if (read == 0)
                 {
-                    var bytes = currentLine.ToArray();
-                    var length = bytes.Length > 0 && bytes[^1] == (byte)'\r'
-                        ? bytes.Length - 1
-                        : bytes.Length;
-                    lines.Add(
-                        new AnalyticsLogLine(
-                            lineOffset,
-                            absoluteOffset,
-                            Utf8.GetString(bytes, 0, length)));
+                    break;
+                }
+
+                var index = 0;
+                while (index < read && lines.Count < maximumLines)
+                {
+                    var newline = buffer.AsSpan(index, read - index).IndexOf((byte)'\n');
+                    var length = newline < 0 ? read - index : newline;
+                    if (currentLine.Length + length > MaximumLineBytes)
+                    {
+                        throw new InvalidDataException(
+                            string.Create(
+                                CultureInfo.InvariantCulture,
+                                $"A Caddy log line exceeds {MaximumLineBytes} bytes."));
+                    }
+
+                    currentLine.Write(buffer, index, length);
+                    index += length;
+                    absoluteOffset += length;
+                    if (newline < 0)
+                    {
+                        continue;
+                    }
+
+                    index++;
+                    absoluteOffset++;
+                    var bytes = currentLine.GetBuffer();
+                    var lineLength = (int)currentLine.Length;
+                    if (lineLength > 0 && bytes[lineLength - 1] == (byte)'\r')
+                    {
+                        lineLength--;
+                    }
+
+                    lines.Add(new AnalyticsLogLine(lineOffset, absoluteOffset, Utf8.GetString(bytes, 0, lineLength)));
                     currentLine.SetLength(0);
                     lineOffset = absoluteOffset;
                     endOffset = absoluteOffset;
-
-                    if (lines.Count >= maximumLines)
-                    {
-                        break;
-                    }
-
-                    continue;
                 }
-
-                if (currentLine.Length >= MaximumLineBytes)
-                {
-                    throw new InvalidDataException(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"A Caddy log line exceeds {MaximumLineBytes} bytes."));
-                }
-
-                currentLine.WriteByte(value);
             }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         return new AnalyticsReadBatch(

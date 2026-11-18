@@ -16,6 +16,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
     private readonly AnalyticsIngestionRuntimeMetrics _runtimeMetrics;
     private readonly AnalyticsClientKeyProvider _keyProvider;
     private readonly ILogger<AnalyticsIngestionWorker> _logger;
+    private readonly Dictionary<string, AnalyticsCheckpoint?> _checkpoints = new(StringComparer.Ordinal);
 
     public AnalyticsIngestionWorker(
         AnalyticsIngestionOptions options,
@@ -61,12 +62,12 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var madeProgress = false;
+            var hasBacklog = false;
             foreach (var path in _options.LogPaths)
             {
                 try
                 {
-                    madeProgress |= await ProcessPathAsync(
+                    hasBacklog |= await ProcessPathAsync(
                         path,
                         clientHashKey,
                         stoppingToken);
@@ -77,6 +78,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
                 }
                 catch (Exception exception)
                 {
+                    _checkpoints.Remove(path);
                     _logger.LogError(
                         exception,
                         "Caddy analytics ingestion failed for {LogPath}.",
@@ -84,7 +86,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
                 }
             }
 
-            var delayMilliseconds = madeProgress
+            var delayMilliseconds = hasBacklog
                 ? _options.BacklogDelayMilliseconds
                 : _options.PollIntervalMilliseconds;
             await Task.Delay(
@@ -98,7 +100,16 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
         byte[] clientHashKey,
         CancellationToken cancellationToken)
     {
-        var checkpoint = await _store.GetCheckpointAsync(path, cancellationToken);
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        if (!_checkpoints.TryGetValue(path, out var checkpoint))
+        {
+            checkpoint = await _store.GetCheckpointAsync(path, cancellationToken);
+            _checkpoints[path] = checkpoint;
+        }
         var batch = await _tailer.ReadBatchAsync(
             path,
             checkpoint,
@@ -143,6 +154,11 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
             clientHashKey,
             _options,
             cancellationToken);
+        _checkpoints[path] = new AnalyticsCheckpoint(
+            path,
+            batch.SourceIdentity,
+            batch.EndOffset,
+            requests.Count == 0 ? checkpoint?.LastEventAt : requests.Max(item => item.Request.OccurredAt));
         stopwatch.Stop();
 
         _runtimeMetrics.Record(
@@ -163,7 +179,7 @@ public sealed class AnalyticsIngestionWorker : BackgroundService
             result.FailuresInserted,
             path,
             stopwatch.ElapsedMilliseconds);
-        return true;
+        return batch.Lines.Count == _options.BatchSize;
     }
 
     private static long GetSourceLength(string path, long minimumLength)

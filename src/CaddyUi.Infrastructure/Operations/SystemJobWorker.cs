@@ -41,15 +41,17 @@ public sealed class SystemJobWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.WorkerEnabled)
+        {
+            return;
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                if (_options.WorkerEnabled)
-                {
-                    await ProcessDdnsAsync(stoppingToken);
-                    await ProcessJobAsync(stoppingToken);
-                }
+                await ProcessDdnsAsync(stoppingToken);
+                await ProcessJobAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

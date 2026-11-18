@@ -44,6 +44,8 @@ jobs:
           cache-dependency-path: Directory.Packages.props
       - name: Restore
         run: dotnet restore CaddyUi.slnx
+      - name: Verify live-log lifecycle
+        run: node --test tests/browser/live-log.test.cjs
       - name: Verify formatting
         run: dotnet format CaddyUi.slnx --no-restore --verify-no-changes
       - name: Build

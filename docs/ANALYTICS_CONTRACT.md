@@ -72,6 +72,8 @@ Asset-Präfixe wie `/_nuxt/`, `/_next/`, `/assets/` und `/static/` werden separa
 ## Ingestion und Idempotenz
 
 - Dateien werden ab einem persistenten Byte-Checkpoint gelesen.
+- The ingestion worker loads each source checkpoint once and advances its in-memory position only after the batch transaction commits. A processing error discards that position so the next attempt reloads the durable checkpoint. Missing files and idle polls do not query PostgreSQL.
+- Log lines are scanned in buffered blocks with a pooled read buffer; UTF-8, byte offsets, complete-line boundaries and the 4 MiB line limit remain enforced.
 - Dateiersetzung und Rotation werden über eine Quellidentität erkannt.
 - Nur vollständig abgeschlossene Zeilen werden verarbeitet.
 - Request und Checkpoint werden in derselben PostgreSQL-Transaktion geschrieben.
@@ -80,6 +82,7 @@ Asset-Präfixe wie `/_nuxt/`, `/_next/`, `/assets/` und `/static/` werden separa
 - Requests, Clients, Session-Zähler, Page-Load-Zähler und Aggregate werden innerhalb eines Ingestion-Batches zusammengefasst, um PostgreSQL-Roundtrips zu begrenzen.
 - Die Standard-Batchgröße beträgt 500 Requests.
 - Solange ein Backlog vorhanden ist, liegt zwischen zwei Worker-Durchläufen standardmäßig eine kooperative Pause von 100 ms. Ohne Backlog gilt das normale Polling-Intervall von 1000 ms.
+- A partial batch uses the normal polling interval; only a full batch requests another backlog iteration.
 - Batchgröße und Backlog-Pause sind über `CADDY_UI_INGEST_BATCH_SIZE` und `CADDY_UI_INGEST_BACKLOG_DELAY_MS` konfigurierbar.
 
 ## Aggregate und Aufbewahrung
@@ -98,5 +101,7 @@ Standardwerte:
 Der Wartungsjob schließt inaktive Sessions und Page Loads, entfernt abgelaufene Daten, löscht vollständig abgelaufene Requestpartitionen und legt die aktuelle sowie die nächste Monatspartition an. Vollständig abgelaufene Monats-Partitionen werden vor zeilenweisen Fallback-Bereinigungen entfernt.
 
 ## SPA-Grenze
+
+The live-log browser stream is active only while its page is visible. Hidden tabs and pages in the browser back/forward cache close the stream, stopping their database polling. Returning to the page reconnects for new events; the server-rendered request history remains available on reload.
 
 Proxylogs erkennen vollständige Dokumentnavigationen. Rein clientseitige SPA-Routenwechsel erzeugen keinen neuen HTTP-Dokumentrequest und können deshalb nur über ein optionales First-Party-Pageview-Beacon exakt gezählt werden. Ohne Beacon werden sie nicht erfunden.
