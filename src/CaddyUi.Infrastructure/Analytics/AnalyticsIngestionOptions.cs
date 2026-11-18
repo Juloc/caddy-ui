@@ -14,19 +14,15 @@ public sealed class AnalyticsIngestionOptions
 
     public int BacklogDelayMilliseconds { get; init; } = 100;
 
-    public int SessionIdleMinutes { get; init; } = 30;
+    public int FlushIntervalSeconds { get; init; } = 30;
 
-    public int PageLoadWindowSeconds { get; init; } = 15;
+    public int StatisticsRetentionDays { get; init; } = 90;
 
-    public int RawRequestRetentionDays { get; init; } = 30;
+    public int SecurityEventRetentionDays { get; init; } = 30;
 
-    public int PageViewRetentionDays { get; init; } = 180;
+    public int SecurityEvidenceMinutes { get; init; } = 61;
 
-    public int HourlyRetentionDays { get; init; } = 90;
-
-    public int DailyRetentionDays { get; init; } = 730;
-
-    public int MaintenanceIntervalMinutes { get; init; } = 360;
+    public int MaintenanceIntervalMinutes { get; init; } = 15;
 
     public static AnalyticsIngestionOptions FromConfiguration(IConfiguration configuration)
     {
@@ -67,22 +63,11 @@ public sealed class AnalyticsIngestionOptions
                     section.GetValue("BacklogDelayMilliseconds", 100)),
                 10,
                 5000),
-            SessionIdleMinutes = Clamp(
-                ReadInt32(configuration, "CADDY_UI_SESSION_IDLE_MINUTES", section.GetValue("SessionIdleMinutes", 30)),
-                1,
-                1440),
-            PageLoadWindowSeconds = Clamp(section.GetValue("PageLoadWindowSeconds", 15), 1, 300),
-            RawRequestRetentionDays = Clamp(
-                ReadInt32(configuration, "CADDY_UI_RAW_REQUEST_RETENTION_DAYS", section.GetValue("RawRequestRetentionDays", 30)),
-                1,
-                3650),
-            PageViewRetentionDays = Clamp(
-                ReadInt32(configuration, "CADDY_UI_PAGEVIEW_RETENTION_DAYS", section.GetValue("PageViewRetentionDays", 180)),
-                1,
-                3650),
-            HourlyRetentionDays = Clamp(section.GetValue("HourlyRetentionDays", 90), 1, 3650),
-            DailyRetentionDays = Clamp(section.GetValue("DailyRetentionDays", 730), 1, 36500),
-            MaintenanceIntervalMinutes = Clamp(section.GetValue("MaintenanceIntervalMinutes", 360), 5, 1440),
+            FlushIntervalSeconds = Clamp(section.GetValue("FlushIntervalSeconds", 30), 1, 300),
+            StatisticsRetentionDays = Clamp(section.GetValue("StatisticsRetentionDays", 90), 1, 3650),
+            SecurityEventRetentionDays = Clamp(section.GetValue("SecurityEventRetentionDays", 30), 1, 3650),
+            SecurityEvidenceMinutes = Clamp(Math.Max(configuration.GetValue("IpSecurity:RiskWindowMinutes", 30), configuration.GetValue("IpSecurity:DiscoveryLookbackMinutes", 60)), 1, 1440) + 1,
+            MaintenanceIntervalMinutes = Clamp(section.GetValue("MaintenanceIntervalMinutes", 15), 5, 1440),
         };
     }
 

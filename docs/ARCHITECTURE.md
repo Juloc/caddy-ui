@@ -57,9 +57,11 @@ Existing unmanaged route files are preserved in `legacy-dotnet-cutover`. The ini
 
 ## Analytics and security
 
-Caddy writes structured access and security logs to the shared log volume. Background workers ingest bounded batches into PostgreSQL with persistent checkpoints and rotation handling. Requests, pageviews, sessions, clients and technical assets remain separate metrics.
+Caddy writes structured access logs to the shared log volume. The ingestion worker reads bounded batches with durable checkpoints and rotation handling, then writes compact per-domain request, bot, error and byte counters. It flushes every 30 seconds or 5,000 events. Raw requests, pageviews, sessions and page loads are no longer persisted by the application.
 
-Sensitive headers, cookies, tokens and configured query values are redacted before persistence. IP intelligence and risk scoring are evidence-based operational signals, not identity claims. Managed IP blocks are written atomically to a dedicated data feed consumed by `caddy_ui_guard`; the feed is not imported as Caddyfile syntax.
+The parser discards query strings, unneeded headers and raw JSON. Live request details use a bounded in-memory buffer only while authenticated viewers are connected; hidden tabs disconnect. Normal analytics pages optionally refresh server-rendered snapshots at an adjustable interval, default 30 seconds, and pause in hidden tabs. Compact security evidence preserves risk scoring without raw request history. IP intelligence and risk scoring are operational signals, not identity claims. Managed IP blocks are written atomically to a dedicated data feed consumed by `caddy_ui_guard`; the feed is not imported as Caddyfile syntax.
+
+New statistics default to 90 days and new security events to 30 days. Administrators can change retention on the System page. Existing analytics tables and pre-cutover security records are preserved as an archive; the new runtime neither writes nor queries the replaced visitor/session/request pipeline. Upgrade, backup and rollback requirements are documented in `docs/ANALYTICS_CONTRACT.md`.
 
 ## Deployment
 

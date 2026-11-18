@@ -6,195 +6,116 @@ using Microsoft.Extensions.Logging;
 
 namespace CaddyUi.Infrastructure.Analytics;
 
-public sealed class AnalyticsIngestionWorker : BackgroundService
+public sealed class AnalyticsIngestionWorker(AnalyticsIngestionOptions options, AnalyticsLogTailer tailer, CaddyAccessLogParser parser,
+    RequestClassifier classifier, AnalyticsIngestionStore store, AnalyticsIngestionRuntimeMetrics runtimeMetrics,
+    AnalyticsClientKeyProvider keyProvider, AnalyticsLiveStream liveStream, ILogger<AnalyticsIngestionWorker> logger) : BackgroundService
 {
-    private readonly AnalyticsIngestionOptions _options;
-    private readonly AnalyticsLogTailer _tailer;
-    private readonly CaddyAccessLogParser _parser;
-    private readonly RequestClassifier _classifier;
-    private readonly AnalyticsIngestionStore _store;
-    private readonly AnalyticsIngestionRuntimeMetrics _runtimeMetrics;
-    private readonly AnalyticsClientKeyProvider _keyProvider;
-    private readonly ILogger<AnalyticsIngestionWorker> _logger;
     private readonly Dictionary<string, AnalyticsCheckpoint?> _checkpoints = new(StringComparer.Ordinal);
-
-    public AnalyticsIngestionWorker(
-        AnalyticsIngestionOptions options,
-        AnalyticsLogTailer tailer,
-        CaddyAccessLogParser parser,
-        RequestClassifier classifier,
-        AnalyticsIngestionStore store,
-        AnalyticsIngestionRuntimeMetrics runtimeMetrics,
-        AnalyticsClientKeyProvider keyProvider,
-        ILogger<AnalyticsIngestionWorker> logger)
-    {
-        _options = options;
-        _tailer = tailer;
-        _parser = parser;
-        _classifier = classifier;
-        _store = store;
-        _runtimeMetrics = runtimeMetrics;
-        _keyProvider = keyProvider;
-        _logger = logger;
-    }
+    private readonly Dictionary<string, PendingBatch> _pending = new(StringComparer.Ordinal);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Enabled)
-        {
-            _logger.LogInformation("Caddy analytics ingestion is disabled.");
+        if (!options.Enabled || options.LogPaths.Count == 0)
             return;
-        }
-
-        if (_options.LogPaths.Count == 0)
+        var clientHashKey = await keyProvider.GetKeyAsync(stoppingToken);
+        try
         {
-            _logger.LogWarning(
-                "Caddy analytics ingestion is enabled, but no log paths are configured.");
-            return;
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var hasBacklog = false;
+                foreach (var path in options.LogPaths)
+                {
+                    try
+                    {
+                        if (File.Exists(path))
+                        {
+                            if (!_checkpoints.TryGetValue(path, out var checkpoint))
+                            {
+                                checkpoint = await store.GetCheckpointAsync(path, stoppingToken);
+                                _checkpoints[path] = checkpoint;
+                            }
+                            _pending.TryGetValue(path, out var pending);
+                            var remaining = 5000 - (pending?.Count ?? 0);
+                            var batch = await tailer.ReadBatchAsync(path, pending?.Checkpoint ?? checkpoint, Math.Min(options.BatchSize, remaining), stoppingToken);
+                            if (batch is not null && batch.Lines.Count > 0)
+                            {
+                                if (pending is not null && pending.Checkpoint.SourceIdentity != batch.SourceIdentity)
+                                {
+                                    await FlushAsync(path, pending, clientHashKey, stoppingToken);
+                                    pending = null;
+                                }
+                                pending ??= new PendingBatch(new AnalyticsCheckpoint(path, batch.SourceIdentity, batch.StartOffset, null));
+                                foreach (var line in batch.Lines)
+                                {
+                                    if (parser.TryParse(line.Content, path, line.Offset, out var request, out var error) && request is not null)
+                                        pending.Requests.Add(classifier.Classify(request));
+                                    else
+                                        pending.Failures.Add(new AnalyticsIngestionFailure(line.Offset, CaddyAccessLogParser.DescribeUnparsedLine(line.Content), error));
+                                }
+                                liveStream.Publish(pending.Requests.Skip(pending.PublishedCount).ToArray());
+                                pending.PublishedCount = pending.Requests.Count;
+                                pending.Checkpoint = new AnalyticsCheckpoint(path, batch.SourceIdentity, batch.EndOffset, null);
+                                _pending[path] = pending;
+                                hasBacklog |= batch.HasMoreData;
+                            }
+                        }
+                        if (_pending.TryGetValue(path, out var queued) &&
+                            (queued.Count >= 5000 || queued.Elapsed.Elapsed >= TimeSpan.FromSeconds(options.FlushIntervalSeconds)))
+                            await FlushAsync(path, queued, clientHashKey, stoppingToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        _pending.Remove(path);
+                        _checkpoints.Remove(path);
+                        logger.LogError(exception, "Analytics ingestion failed for {LogPath}; the committed checkpoint will be reloaded.", path);
+                    }
+                }
+                await Task.Delay(hasBacklog ? options.BacklogDelayMilliseconds : options.PollIntervalMilliseconds, stoppingToken);
+            }
         }
-
-        var clientHashKey = await _keyProvider.GetKeyAsync(stoppingToken);
-        _logger.LogInformation(
-            "Caddy analytics ingestion started for {LogPathCount} log file(s) with batch size {BatchSize} and backlog delay {BacklogDelayMilliseconds} ms.",
-            _options.LogPaths.Count,
-            _options.BatchSize,
-            _options.BacklogDelayMilliseconds);
-
-        while (!stoppingToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            var hasBacklog = false;
-            foreach (var path in _options.LogPaths)
+        }
+        finally
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            foreach (var pair in _pending.ToArray())
             {
                 try
                 {
-                    hasBacklog |= await ProcessPathAsync(
-                        path,
-                        clientHashKey,
-                        stoppingToken);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    return;
+                    await FlushAsync(pair.Key, pair.Value, clientHashKey, timeout.Token);
                 }
                 catch (Exception exception)
                 {
-                    _checkpoints.Remove(path);
-                    _logger.LogError(
-                        exception,
-                        "Caddy analytics ingestion failed for {LogPath}.",
-                        path);
+                    logger.LogWarning(exception, "Uncommitted analytics will resume from the durable checkpoint on restart.");
                 }
             }
-
-            var delayMilliseconds = hasBacklog
-                ? _options.BacklogDelayMilliseconds
-                : _options.PollIntervalMilliseconds;
-            await Task.Delay(
-                TimeSpan.FromMilliseconds(delayMilliseconds),
-                stoppingToken);
         }
     }
 
-    private async Task<bool> ProcessPathAsync(
-        string path,
-        byte[] clientHashKey,
-        CancellationToken cancellationToken)
+    private async Task FlushAsync(string path, PendingBatch pending, byte[] key, CancellationToken cancellationToken)
     {
-        if (!File.Exists(path))
-        {
-            return false;
-        }
-
-        if (!_checkpoints.TryGetValue(path, out var checkpoint))
-        {
-            checkpoint = await _store.GetCheckpointAsync(path, cancellationToken);
-            _checkpoints[path] = checkpoint;
-        }
-        var batch = await _tailer.ReadBatchAsync(
-            path,
-            checkpoint,
-            _options.BatchSize,
-            cancellationToken);
-        if (batch is null || batch.Lines.Count == 0)
-        {
-            return false;
-        }
-
-        var stopwatch = Stopwatch.StartNew();
-        var requests = new List<ClassifiedRequest>(batch.Lines.Count);
-        var failures = new List<AnalyticsIngestionFailure>();
-        foreach (var line in batch.Lines)
-        {
-            if (_parser.TryParse(
-                    line.Content,
-                    path,
-                    line.Offset,
-                    out var requestEvent,
-                    out var error) &&
-                requestEvent is not null)
-            {
-                requests.Add(_classifier.Classify(requestEvent));
-            }
-            else
-            {
-                failures.Add(
-                    new AnalyticsIngestionFailure(
-                        line.Offset,
-                        CaddyAccessLogParser.DescribeUnparsedLine(line.Content),
-                        error));
-            }
-        }
-
-        var result = await _store.PersistBatchAsync(
-            path,
-            batch.SourceIdentity,
-            batch.EndOffset,
-            requests,
-            failures,
-            clientHashKey,
-            _options,
-            cancellationToken);
-        _checkpoints[path] = new AnalyticsCheckpoint(
-            path,
-            batch.SourceIdentity,
-            batch.EndOffset,
-            requests.Count == 0 ? checkpoint?.LastEventAt : requests.Max(item => item.Request.OccurredAt));
-        stopwatch.Stop();
-
-        _runtimeMetrics.Record(
-            new AnalyticsIngestionRuntimeSnapshot(
-                path,
-                batch.EndOffset,
-                GetSourceLength(path, batch.EndOffset),
-                DateTimeOffset.UtcNow,
-                result.RequestsInserted,
-                result.PageViewsInserted,
-                result.FailuresInserted,
-                stopwatch.ElapsedMilliseconds));
-
-        _logger.LogDebug(
-            "Ingested {RequestCount} requests, {PageViewCount} pageviews and {FailureCount} failures from {LogPath} in {ElapsedMilliseconds} ms.",
-            result.RequestsInserted,
-            result.PageViewsInserted,
-            result.FailuresInserted,
-            path,
-            stopwatch.ElapsedMilliseconds);
-        return batch.Lines.Count == _options.BatchSize;
+        var elapsed = Stopwatch.StartNew();
+        var checkpoint = pending.Checkpoint;
+        var result = await store.PersistBatchAsync(path, checkpoint.SourceIdentity, checkpoint.ByteOffset, pending.Requests, pending.Failures, key, options, cancellationToken);
+        _checkpoints[path] = checkpoint;
+        _pending.Remove(path);
+        var length = File.Exists(path) ? Math.Max(checkpoint.ByteOffset, new FileInfo(path).Length) : checkpoint.ByteOffset;
+        runtimeMetrics.Record(new AnalyticsIngestionRuntimeSnapshot(path, checkpoint.ByteOffset, length, DateTimeOffset.UtcNow,
+            result.RequestsProcessed, result.TrafficBucketsWritten, result.FailuresInserted, elapsed.ElapsedMilliseconds));
     }
 
-    private static long GetSourceLength(string path, long minimumLength)
+    private sealed class PendingBatch(AnalyticsCheckpoint checkpoint)
     {
-        try
-        {
-            return Math.Max(minimumLength, new FileInfo(path).Length);
-        }
-        catch (IOException)
-        {
-            return minimumLength;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return minimumLength;
-        }
+        public AnalyticsCheckpoint Checkpoint { get; set; } = checkpoint;
+        public List<ClassifiedRequest> Requests { get; } = new();
+        public List<AnalyticsIngestionFailure> Failures { get; } = new();
+        public Stopwatch Elapsed { get; } = Stopwatch.StartNew();
+        public int PublishedCount { get; set; }
+        public int Count => Requests.Count + Failures.Count;
     }
 }

@@ -8,11 +8,8 @@
         path.StartsWithSegments("/Administration/ProviderDns") ||
         path.StartsWithSegments("/Operations/Dns") ||
         path.StartsWithSegments("/Setup");
-    var trafficPath = path.StartsWithSegments("/Traffic") ||
-        path.StartsWithSegments("/Performance") ||
-        path.StartsWithSegments("/Routes/Analytics");
-    var requestsPath = path.StartsWithSegments("/Requests") ||
-        path.StartsWithSegments("/LiveLog");
+    var trafficPath = path.StartsWithSegments("/Traffic");
+    var requestsPath = path.StartsWithSegments("/LiveLog");
     var systemPath = path.StartsWithSegments("/System") ||
         path.StartsWithSegments("/Operations/Health") ||
         path.StartsWithSegments("/Operations/Jobs") ||
@@ -72,7 +69,7 @@
 
                 <span class="nav-section">Monitoring</span>
                 <a class="nav-item @(trafficPath ? "nav-item--active" : string.Empty)" aria-current="@(trafficPath ? "page" : null)" asp-page="/Traffic/Index" title="@T["Traffic"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#traffic"></use></svg><span class="nav-label">@T["Traffic"]</span></a>
-                <a class="nav-item @(requestsPath ? "nav-item--active" : string.Empty)" aria-current="@(requestsPath ? "page" : null)" asp-page="/Requests/Index" title="@T["Requests"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#requests"></use></svg><span class="nav-label">@T["Requests"]</span></a>
+                <a class="nav-item @(requestsPath ? "nav-item--active" : string.Empty)" aria-current="@(requestsPath ? "page" : null)" asp-page="/LiveLog/Index" title="@T["Live log"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#requests"></use></svg><span class="nav-label">@T["Live log"]</span></a>
                 <a class="nav-item @(path.StartsWithSegments("/Security") ? "nav-item--active" : string.Empty)" aria-current="@(path.StartsWithSegments("/Security") ? "page" : null)" asp-page="/Security/Overview" title="@T["Bots and security"]"><svg class="nav-icon" aria-hidden="true"><use href="/icons/shell.svg#security"></use></svg><span class="nav-label">@T["Bots and security"]</span></a>
 
                 <span class="nav-section">@T["System"]</span>

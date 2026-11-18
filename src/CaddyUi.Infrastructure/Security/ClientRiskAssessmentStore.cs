@@ -12,20 +12,6 @@ namespace CaddyUi.Infrastructure.Security;
 
 public sealed class ClientRiskAssessmentStore
 {
-    private static readonly string[] ScannerPathFragments =
-    [
-        "/.env",
-        "/.git",
-        "/wp-admin",
-        "/wp-login",
-        "/phpmyadmin",
-        "/cgi-bin",
-        "/actuator",
-        "/vendor/phpunit",
-        "/server-status",
-        "/boaform",
-    ];
-
     private readonly IDbContextFactory<CaddyUiDbContext> _contextFactory;
     private readonly ClientRiskEngine _engine;
     private readonly IpSecurityOptions _options;
@@ -94,20 +80,19 @@ public sealed class ClientRiskAssessmentStore
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            SELECT requests.anonymous_client_id,
-                   (array_agg(requests.remote_address ORDER BY requests.occurred_at DESC)
+            SELECT requests.client_id,
+                   (array_agg(requests.remote_address ORDER BY requests.last_seen_at DESC)
                        FILTER (WHERE requests.remote_address IS NOT NULL))[1] AS remote_address
-            FROM caddy_ui.request_events AS requests
-            WHERE requests.anonymous_client_id IS NOT NULL
-              AND requests.occurred_at >= @window_start
+            FROM caddy_ui.client_activity_buckets AS requests
+            WHERE requests.last_seen_at >= @window_start
               AND NOT EXISTS (
                   SELECT 1
                   FROM caddy_ui.client_assessments AS assessments
-                  WHERE assessments.anonymous_client_id = requests.anonymous_client_id
+                  WHERE assessments.anonymous_client_id = requests.client_id
                     AND assessments.engine_version = @engine_version
                     AND assessments.created_at >= @refresh_cutoff)
-            GROUP BY requests.anonymous_client_id
-            ORDER BY MAX(requests.occurred_at) DESC
+            GROUP BY requests.client_id
+            ORDER BY MAX(requests.last_seen_at) DESC
             LIMIT @limit
             """;
         AddParameter(command, "window_start", windowStart);
@@ -139,31 +124,33 @@ public sealed class ClientRiskAssessmentStore
         command.CommandText =
             """
             WITH filtered AS (
-                SELECT occurred_at, actor_type, user_agent, path, status, method, host
-                FROM caddy_ui.request_events
-                WHERE anonymous_client_id = @client_id
-                  AND occurred_at >= @window_start
-                  AND occurred_at <= @window_end
+                SELECT first_seen_at, last_seen_at, user_agent, is_bot, is_human, request_count, not_found_count,
+                       auth_failure_count, unsafe_method_count, scanner_count, gap_count, gap_sum, gap_squares, path_hashes, hosts
+                FROM caddy_ui.client_activity_buckets
+                WHERE client_id = @client_id AND last_seen_at >= @window_start AND first_seen_at <= @window_end
             ), ordered AS (
                 SELECT *,
-                       EXTRACT(EPOCH FROM occurred_at - LAG(occurred_at)
-                           OVER (ORDER BY occurred_at)) AS gap_seconds
+                       EXTRACT(EPOCH FROM first_seen_at - LAG(last_seen_at) OVER (ORDER BY first_seen_at)) AS bridge
                 FROM filtered
+            ), timing AS (
+                SELECT COALESCE(SUM(gap_count), 0) + COUNT(bridge) AS gap_count,
+                       COALESCE(SUM(gap_sum), 0) + COALESCE(SUM(bridge), 0) AS gap_sum,
+                       COALESCE(SUM(gap_squares), 0) + COALESCE(SUM(bridge * bridge), 0) AS gap_squares
+                FROM ordered
             )
-            SELECT COUNT(*)::bigint,
-                   MIN(occurred_at),
-                   MAX(occurred_at),
-                   COUNT(DISTINCT path)::integer,
-                   COUNT(DISTINCT host)::integer,
-                   COUNT(*) FILTER (WHERE status = 404)::bigint,
-                   COUNT(*) FILTER (WHERE status IN (401, 403))::bigint,
-                   COUNT(*) FILTER (WHERE method NOT IN ('GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'))::integer,
-                   BOOL_OR(actor_type = 'bot'),
-                   BOOL_OR(actor_type = 'human'),
+            SELECT COALESCE(SUM(request_count), 0)::bigint,
+                   MIN(first_seen_at), MAX(last_seen_at),
+                   (SELECT COUNT(DISTINCT value)::integer FROM filtered CROSS JOIN LATERAL jsonb_array_elements_text(path_hashes)),
+                   (SELECT COUNT(DISTINCT value)::integer FROM filtered CROSS JOIN LATERAL jsonb_array_elements_text(hosts)),
+                   COALESCE(SUM(not_found_count), 0)::bigint,
+                   COALESCE(SUM(auth_failure_count), 0)::bigint,
+                   LEAST(COALESCE(SUM(unsafe_method_count), 0), 2147483647)::integer,
+                   BOOL_OR(is_bot), BOOL_OR(is_human),
                    COALESCE(MAX(NULLIF(user_agent, '')), ''),
-                   COALESCE(AVG(gap_seconds) FILTER (WHERE gap_seconds IS NOT NULL), 0)::double precision,
-                   COALESCE(STDDEV_POP(gap_seconds) FILTER (WHERE gap_seconds IS NOT NULL), 0)::double precision
-            FROM ordered
+                   (SELECT COALESCE(gap_sum / NULLIF(gap_count, 0), 0)::double precision FROM timing),
+                   (SELECT SQRT(GREATEST(0, COALESCE(gap_squares / NULLIF(gap_count, 0) - POWER(gap_sum / NULLIF(gap_count, 0), 2), 0)))::double precision FROM timing),
+                   LEAST(COALESCE(SUM(scanner_count), 0), 2147483647)::integer
+            FROM filtered
             """;
         AddParameter(command, "client_id", clientId);
         AddParameter(command, "window_start", windowStart);
@@ -190,14 +177,7 @@ public sealed class ClientRiskAssessmentStore
         var regularity = averageGap <= 0
             ? 0
             : Math.Clamp(1 - (standardDeviation / averageGap), 0, 1);
-        await reader.DisposeAsync();
-
-        var scannerPathCount = await CountScannerPathsAsync(
-            connection,
-            clientId,
-            windowStart,
-            windowEnd,
-            cancellationToken);
+        var scannerPathCount = reader.GetInt32(13);
 
         return new ClientRiskSample(
             existingBot ? "bot" : existingHuman ? "human" : "unknown",
@@ -214,39 +194,6 @@ public sealed class ClientRiskAssessmentStore
             existingBot,
             sampleStartedAt,
             sampleEndedAt);
-    }
-
-    private static async Task<int> CountScannerPathsAsync(
-        DbConnection connection,
-        Guid clientId,
-        DateTimeOffset windowStart,
-        DateTimeOffset windowEnd,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        var predicates = ScannerPathFragments
-            .Select((_, index) => $"path ILIKE @scanner_path_{index}")
-            .ToArray();
-        command.CommandText =
-            $"""
-            SELECT COUNT(*)::integer
-            FROM caddy_ui.request_events
-            WHERE anonymous_client_id = @client_id
-              AND occurred_at >= @window_start
-              AND occurred_at <= @window_end
-              AND ({string.Join(" OR ", predicates)})
-            """;
-        AddParameter(command, "client_id", clientId);
-        AddParameter(command, "window_start", windowStart);
-        AddParameter(command, "window_end", windowEnd);
-        for (var index = 0; index < ScannerPathFragments.Length; index++)
-        {
-            AddParameter(command, $"scanner_path_{index}", $"%{ScannerPathFragments[index]}%");
-        }
-
-        return Convert.ToInt32(
-            await command.ExecuteScalarAsync(cancellationToken),
-            CultureInfo.InvariantCulture);
     }
 
     private async Task SaveAssessmentAsync(

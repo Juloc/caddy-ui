@@ -59,8 +59,6 @@ public sealed class ClientRiskAssessmentStoreTests : IAsyncLifetime
             new AnalyticsIngestionOptions
             {
                 Enabled = true,
-                SessionIdleMinutes = 30,
-                PageLoadWindowSeconds = 15,
             },
             CancellationToken.None);
 
@@ -81,6 +79,15 @@ public sealed class ClientRiskAssessmentStoreTests : IAsyncLifetime
 
         Assert.Equal(1, firstCount);
         Assert.Equal(0, secondCount);
+
+        var queries = new ClientSecurityQueryStore(factory,
+            new IpIntelligenceStore(factory, new IpAddressClassifier(), new IpSecurityOptions(), new FixedTimeProvider(now)));
+        var client = Assert.Single(await queries.ListAsync());
+        Assert.Equal(30, client.RequestCount);
+        var details = await queries.GetAsync(client.Id);
+        Assert.NotNull(details);
+        Assert.Equal("203.0.113.10", details.Summary.LatestAddress);
+        Assert.NotEmpty(details.AssessmentReasons);
 
         await using var verification = factory.CreateDbContext();
         Assert.Equal(

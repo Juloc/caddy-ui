@@ -83,12 +83,18 @@ async function verifyReflow(page) {
         "/Access",
         "/Operations/Dns",
         "/Operations/Cutover",
+        "/Traffic",
+        "/LiveLog",
+        "/System",
+        "/Security/Overview",
+        "/Security/Clients",
     ];
 
     // 1280 CSS px at 400% browser zoom exposes roughly a 320 CSS px viewport.
     await page.setViewportSize({ width: 320, height: 900 });
     for (const path of paths) {
-        await page.goto(path);
+        const response = await page.goto(path);
+        if (!response.ok()) fail(`${path} failed with HTTP ${response.status()}.`);
         await assertNoPageOverflow(page, `${path} at 320px reflow`);
     }
 }
@@ -199,6 +205,57 @@ async function saveLanguage(page, language) {
     ]);
 }
 
+async function verifyAnalytics(page) {
+    await page.clock.install();
+    await page.goto('/Traffic');
+    const interval = page.locator('[name="RefreshSeconds"]');
+    if (await interval.inputValue() !== '30') fail('Analytics refresh must default to 30 seconds.');
+    await interval.fill('5');
+    await interval.dispatchEvent('change');
+    const refreshed = page.waitForResponse(response => response.url().includes('/Traffic') && response.request().resourceType() === 'fetch');
+    await page.clock.fastForward('00:05');
+    await refreshed;
+    await page.waitForFunction(() => document.querySelector('[data-analytics-refresh-state]').textContent.includes('aktiv'));
+    let calls = 0;
+    const count = request => { if (request.url().includes('/Traffic') && request.resourceType() === 'fetch') calls++; };
+    page.on('request', count);
+    await interval.fill('0');
+    await interval.dispatchEvent('change');
+    await page.clock.fastForward('01:00');
+    if (calls !== 0) fail('Paused analytics performed a background fetch.');
+    await page.reload();
+    if (await interval.inputValue() !== '0') fail('Analytics refresh preference was not retained.');
+    await interval.fill('5');
+    await interval.dispatchEvent('change');
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.clock.fastForward('01:00');
+    if (calls !== 0) fail('Inactive analytics page performed a background fetch.');
+    page.off('request', count);
+    await page.clock.resume();
+    await page.goto('/System');
+    const statistics = page.locator('[name="StatisticsDays"]');
+    const security = page.locator('[name="SecurityEventDays"]');
+    if (await statistics.inputValue() !== '90' || await security.inputValue() !== '30') fail('Retention defaults differ from 90/30 days.');
+    const csrf = await page.request.post('/System?handler=Retention', { form: { StatisticsDays: '7', SecurityEventDays: '7' } });
+    if (csrf.status() !== 400) fail('Retention change accepted a request without its CSRF token.');
+    await statistics.fill('60');
+    await security.fill('14');
+    await Promise.all([page.waitForNavigation(), statistics.locator('xpath=ancestor::form').locator('button[type="submit"]').click()]);
+    if (await statistics.inputValue() !== '60' || await security.inputValue() !== '14') fail('Retention settings did not persist.');
+    await statistics.fill('90');
+    await security.fill('30');
+    await Promise.all([page.waitForNavigation(), statistics.locator('xpath=ancestor::form').locator('button[type="submit"]').click()]);
+    if (process.env.CADDY_UI_TEST_TRAFFIC_URL) {
+        await page.goto('/LiveLog');
+        await page.locator('#live-state.status-badge--ok').waitFor();
+        const path = `/live-acceptance-${Date.now()}`;
+        const response = await fetch(process.env.CADDY_UI_TEST_TRAFFIC_URL + path);
+        if (!response.ok) fail('Test traffic producer failed.');
+        await page.locator('#live-rows code').filter({ hasText: path }).waitFor();
+        if (await page.locator('[data-live-empty]').count()) fail('Live empty state remained after receiving a request.');
+    }
+}
+
 async function verifyLocalizationPreference(page) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/Settings");
@@ -252,6 +309,7 @@ async function verifyLocalizationPreference(page) {
         await verifyDialogFocus(page);
         await verifyMobileNavigationFocus(page);
         await verifyLocalizationPreference(page);
+        await verifyAnalytics(page);
 
         console.log("UI/UX and localization browser acceptance passed.");
     } finally {

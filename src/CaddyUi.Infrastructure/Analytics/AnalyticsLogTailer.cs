@@ -22,12 +22,14 @@ public sealed record AnalyticsReadBatch(
     string SourceIdentity,
     long StartOffset,
     long EndOffset,
-    IReadOnlyList<AnalyticsLogLine> Lines);
+    IReadOnlyList<AnalyticsLogLine> Lines,
+    bool HasMoreData);
 
 public sealed class AnalyticsLogTailer
 {
     private const int BufferSize = 64 * 1024;
     private const int MaximumLineBytes = 4 * 1024 * 1024;
+    private const int MaximumBatchBytes = 8 * 1024 * 1024;
     private static readonly Encoding Utf8 = new UTF8Encoding(false, false);
 
     public async Task<AnalyticsReadBatch?> ReadBatchAsync(
@@ -74,7 +76,7 @@ public sealed class AnalyticsLogTailer
 
         try
         {
-            while (lines.Count < maximumLines)
+            while (lines.Count < maximumLines && endOffset - startOffset < MaximumBatchBytes)
             {
                 var read = await stream.ReadAsync(buffer.AsMemory(0, BufferSize), cancellationToken);
                 if (read == 0)
@@ -83,7 +85,7 @@ public sealed class AnalyticsLogTailer
                 }
 
                 var index = 0;
-                while (index < read && lines.Count < maximumLines)
+                while (index < read && lines.Count < maximumLines && endOffset - startOffset < MaximumBatchBytes)
                 {
                     var newline = buffer.AsSpan(index, read - index).IndexOf((byte)'\n');
                     var length = newline < 0 ? read - index : newline;
@@ -128,7 +130,8 @@ public sealed class AnalyticsLogTailer
             identity,
             startOffset,
             endOffset,
-            lines);
+            lines,
+            endOffset < stream.Length);
     }
 
     private static async Task<string> ComputeIdentityAsync(

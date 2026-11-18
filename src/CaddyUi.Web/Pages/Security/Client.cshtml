@@ -124,24 +124,4 @@
     </article>
 </section>
 
-<section class="panel panel--wide">
-    <header class="panel-header"><div><h2>@T["Requests"]</h2></div></header>
-    <div class="panel-body table-wrap">
-        <table class="data-table">
-            <thead><tr><th>@T["Time"]</th><th>Host</th><th>@T["Request"]</th><th>@T["Status"]</th><th>@T["Class"]</th><th>@T["Duration"]</th></tr></thead>
-            <tbody>
-                @foreach (var request in Model.Details.RecentRequests)
-                {
-                    <tr>
-                        <td><time datetime="@request.OccurredAt.ToString("O")" data-local-time>@request.OccurredAt.ToString("u")</time></td>
-                        <td>@request.Host</td>
-                        <td><code>@request.Method @request.Path</code></td>
-                        <td>@request.Status</td>
-                        <td>@request.ActorType · @request.RequestType</td>
-                        <td>@request.DurationMilliseconds.ToString("0.0") ms</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-</section>
+<p class="notice">@T["Request details are available only while the live log is open."] <a asp-page="/LiveLog/Index">@T["Live log"]</a></p>

@@ -1,12 +1,12 @@
 @page
 @model CaddyUi.Web.Pages.Security.ClientsModel
 @{
-    ViewData["Title"] = T["Visitors and clients"];
+    ViewData["Title"] = T["Security clients"];
 }
 
 <section class="page-heading">
     <div>
-        <h1>@T["Visitors and clients"]</h1>
+        <h1>@T["Security clients"]</h1>
     </div>
     <span class="status-badge status-badge--neutral">@T["{0} clients", Model.Clients.Count]</span>
 </section>
@@ -15,14 +15,14 @@
     <header class="panel-header"><div><h2>@T["Clients"]</h2></div><a asp-page="/Security/Overview">Security Analytics</a></header>
     <div class="panel-body table-wrap">
         <table class="data-table">
-            <thead><tr><th>@T["Client"]</th><th>@T["Latest IP"]</th><th>@T["Requests"]</th><th>@T["Page views"]</th><th>@T["Assessment"]</th><th>@T["Last seen"]</th></tr></thead>
+            <thead><tr><th>@T["Client"]</th><th>@T["Latest IP"]</th><th>@T["Requests in security window"]</th><th>@T["Assessment"]</th><th>@T["Last seen"]</th></tr></thead>
             <tbody>
                 @foreach (var client in Model.Clients)
                 {
                     <tr>
                         <td><a asp-page="/Security/Client" asp-route-id="@client.Id"><strong>@client.ClientKey[..Math.Min(client.ClientKey.Length, 24)]</strong></a><small>@(client.Estimated ? T["estimated client"] : T["First-party ID"])</small></td>
                         <td><code>@(string.IsNullOrWhiteSpace(client.LatestAddress) ? "–" : client.LatestAddress)</code></td>
-                        <td>@client.RequestCount</td><td>@client.PageViewCount</td>
+                        <td>@client.RequestCount</td>
                         <td><span class="status-badge @(client.RiskLevel == "high" ? "status-badge--warning" : "status-badge--neutral")">@client.Classification · @client.AutomationScore</span></td>
                         <td><time datetime="@client.LastSeenAt.ToString("O")" data-local-time>@client.LastSeenAt.ToString("u")</time></td>
                     </tr>

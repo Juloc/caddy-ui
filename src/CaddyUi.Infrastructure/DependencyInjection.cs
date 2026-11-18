@@ -122,6 +122,7 @@ public static class DependencyInjection
         services.AddSingleton<CaddyAccessLogParser>();
         services.AddSingleton<RequestClassifier>();
         services.AddSingleton<AnalyticsLogTailer>();
+        services.AddSingleton<AnalyticsLiveStream>();
         services.AddSingleton<AnalyticsIngestionStore>();
         services.AddSingleton<AnalyticsIngestionRuntimeMetrics>();
         services.AddSingleton<AnalyticsClientKeyProvider>();

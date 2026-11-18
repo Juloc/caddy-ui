@@ -15,7 +15,6 @@ public sealed record ClientSecuritySummary(
     DateTimeOffset LastSeenAt,
     string LatestAddress,
     long RequestCount,
-    long PageViewCount,
     string Classification,
     int AutomationScore,
     string RiskLevel,
@@ -27,21 +26,10 @@ public sealed record ClientAssessmentReasonRecord(
     int Weight,
     string EvidenceJson);
 
-public sealed record ClientRequestRecord(
-    DateTimeOffset OccurredAt,
-    string Host,
-    string Method,
-    string Path,
-    int Status,
-    string RequestType,
-    string ActorType,
-    double DurationMilliseconds);
-
 public sealed record ClientSecurityDetails(
     ClientSecuritySummary Summary,
     IpIntelligenceSnapshot Intelligence,
     IReadOnlyList<ClientAssessmentReasonRecord> AssessmentReasons,
-    IReadOnlyList<ClientRequestRecord> RecentRequests,
     IReadOnlyList<IpBlockRuleRecord> BlockRules);
 
 public sealed class ClientSecurityQueryStore
@@ -65,7 +53,7 @@ public sealed class ClientSecurityQueryStore
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var connection = await OpenConnectionAsync(context, cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = SummarySelect +
+        command.CommandText = SummarySelect + "\n" +
             """
             ORDER BY clients.last_seen_at DESC
             LIMIT @limit
@@ -94,7 +82,6 @@ public sealed class ClientSecurityQueryStore
         }
 
         var reasons = await ReadReasonsAsync(connection, clientId, cancellationToken);
-        var requests = await ReadRequestsAsync(connection, clientId, cancellationToken);
         var blocks = summary.LatestAddress.Length == 0
             ? Array.Empty<IpBlockRuleRecord>()
             : await ReadBlocksAsync(connection, summary.LatestAddress, cancellationToken);
@@ -102,7 +89,7 @@ public sealed class ClientSecurityQueryStore
             ? await _intelligenceStore.GetOrQueueAsync(address, cancellationToken)
             : new IpIntelligenceSnapshot(null, false, false);
 
-        return new ClientSecurityDetails(summary, intelligence, reasons, requests, blocks);
+        return new ClientSecurityDetails(summary, intelligence, reasons, blocks);
     }
 
     private async Task<ClientSecuritySummary?> ReadSummaryAsync(
@@ -111,7 +98,7 @@ public sealed class ClientSecurityQueryStore
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = SummarySelect + "WHERE clients.id = @client_id";
+        command.CommandText = SummarySelect + "\nWHERE clients.id = @client_id";
         AddParameter(command, "client_id", clientId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? ReadSummary(reader) : null;
@@ -149,41 +136,6 @@ public sealed class ClientSecurityQueryStore
                     reader.GetString(1),
                     reader.GetInt32(2),
                     reader.GetString(3)));
-        }
-
-        return result;
-    }
-
-    private static async Task<IReadOnlyList<ClientRequestRecord>> ReadRequestsAsync(
-        DbConnection connection,
-        Guid clientId,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT occurred_at, host, method, path, status,
-                   request_type, actor_type, duration_ms
-            FROM caddy_ui.request_events
-            WHERE anonymous_client_id = @client_id
-            ORDER BY occurred_at DESC
-            LIMIT 100
-            """;
-        AddParameter(command, "client_id", clientId);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var result = new List<ClientRequestRecord>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            result.Add(
-                new ClientRequestRecord(
-                    ReadTimestamp(reader, 0),
-                    reader.GetString(1),
-                    reader.GetString(2),
-                    reader.GetString(3),
-                    reader.GetInt32(4),
-                    reader.GetString(5),
-                    reader.GetString(6),
-                    reader.GetDouble(7)));
         }
 
         return result;
@@ -238,11 +190,10 @@ public sealed class ClientSecurityQueryStore
             ReadTimestamp(reader, 4),
             reader.GetString(5),
             reader.GetInt64(6),
-            reader.GetInt64(7),
-            reader.GetString(8),
-            reader.GetInt32(9),
-            reader.GetString(10),
-            reader.IsDBNull(11) ? null : ReadTimestamp(reader, 11));
+            reader.GetString(7),
+            reader.GetInt32(8),
+            reader.GetString(9),
+            reader.IsDBNull(10) ? null : ReadTimestamp(reader, 10));
     }
 
     private static DateTimeOffset ReadTimestamp(DbDataReader reader, int ordinal)
@@ -286,30 +237,20 @@ public sealed class ClientSecurityQueryStore
                COALESCE((clients.metadata_json ->> 'estimated')::boolean, true),
                clients.first_seen_at,
                clients.last_seen_at,
-               COALESCE(latest_request.remote_address, ''),
-               COALESCE(session_totals.request_count, 0),
-               COALESCE(session_totals.page_view_count, 0),
+               COALESCE(host(activity.remote_address), host(latest_assessment.remote_address), ''),
+               COALESCE(activity.request_count, latest_assessment.request_count, 0),
                COALESCE(latest_assessment.classification, 'unknown'),
                COALESCE(latest_assessment.automation_score, 0),
                COALESCE(latest_assessment.risk, 'unknown'),
                latest_assessment.created_at
         FROM caddy_ui.anonymous_clients AS clients
         LEFT JOIN LATERAL (
-            SELECT host(requests.remote_address) AS remote_address
-            FROM caddy_ui.request_events AS requests
-            WHERE requests.anonymous_client_id = clients.id
-              AND requests.remote_address IS NOT NULL
-            ORDER BY requests.occurred_at DESC
-            LIMIT 1
-        ) AS latest_request ON true
+            SELECT (array_agg(remote_address ORDER BY last_seen_at DESC) FILTER (WHERE remote_address IS NOT NULL))[1] AS remote_address,
+                   SUM(request_count)::bigint AS request_count
+            FROM caddy_ui.client_activity_buckets WHERE client_id = clients.id
+        ) AS activity ON true
         LEFT JOIN LATERAL (
-            SELECT SUM(sessions.request_count)::bigint AS request_count,
-                   SUM(sessions.page_view_count)::bigint AS page_view_count
-            FROM caddy_ui.analytics_sessions AS sessions
-            WHERE sessions.anonymous_client_id = clients.id
-        ) AS session_totals ON true
-        LEFT JOIN LATERAL (
-            SELECT classification, automation_score, risk, created_at
+            SELECT classification, automation_score, risk, created_at, remote_address, request_count
             FROM caddy_ui.client_assessments AS assessments
             WHERE assessments.anonymous_client_id = clients.id
             ORDER BY assessments.created_at DESC

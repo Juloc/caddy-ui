@@ -10,11 +10,7 @@
 }
 <partial name="Shared/_AnalyticsFilters" model="Model" />
 <section class="panel panel--wide"><div class="panel-body table-wrap"><table class="data-table request-table"><thead><tr><th>@T["Time"]</th><th>@T["Host / path"]</th><th>@T["Status"]</th><th>@T["Type"]</th><th>@T["Actor"]</th><th>@T["Duration"]</th></tr></thead><tbody id="live-rows">
-@foreach (var request in Model.Requests)
-{
-<tr><td><time datetime="@request.OccurredAt.ToString("O")" data-local-time>@request.OccurredAt.ToString("u")</time></td><td><strong>@request.Host</strong><small><code>@request.Method @request.Path</code></small></td><td>@request.Status</td><td>@request.RequestType</td><td>@request.ActorType</td><td>@AnalyticsPageModelBase.FormatDuration(request.DurationMilliseconds)</td></tr>
-}
-</tbody></table>@if (Model.Requests.Count == 0 && string.IsNullOrWhiteSpace(Model.LoadError)){<p class="empty-state">@T["No requests match this filter yet."]</p>}</div></section>
+</tbody></table>@if (string.IsNullOrWhiteSpace(Model.LoadError)){<p class="empty-state" data-live-empty>@T["No requests match this filter yet."]</p>}</div></section>
 @if (Model.EventStreamUrl is not null)
 {
 <script src="~/js/live-log.js" asp-append-version="true" defer

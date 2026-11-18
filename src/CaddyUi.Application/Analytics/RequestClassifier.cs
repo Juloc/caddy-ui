@@ -75,159 +75,86 @@ public sealed class RequestClassifier
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var evidence = new List<string>();
-        var requestType = ClassifyRequestType(request, evidence);
-        var actorType = ClassifyActor(request, requestType, evidence);
-        var confidence = ClassifyConfidence(request, requestType, actorType);
-        var isNavigation =
-            requestType == AnalyticsRequestType.Document &&
-            actorType is AnalyticsActorType.Human or AnalyticsActorType.Unknown &&
-            request.Method is "GET" or "HEAD";
-        var isPageView =
-            isNavigation &&
-            (request.Status is >= 200 and < 300 || request.Status == 304);
-        var navigationState = request.Status switch
-        {
-            304 => AnalyticsNavigationState.Succeeded,
-            >= 300 and < 400 => AnalyticsNavigationState.Redirected,
-            >= 400 => AnalyticsNavigationState.Failed,
-            _ => AnalyticsNavigationState.Succeeded,
-        };
-
-        if (isNavigation)
-        {
-            evidence.Add("navigation-candidate");
-        }
-
-        if (isPageView)
-        {
-            evidence.Add("successful-document-response");
-        }
-
+        var requestType = ClassifyRequestType(request);
+        var actorType = ClassifyActor(request, requestType);
         return new ClassifiedRequest(
             request,
             actorType,
-            requestType,
-            confidence,
-            isNavigation,
-            isPageView,
-            navigationState,
-            evidence);
+            requestType);
     }
 
     private static AnalyticsRequestType ClassifyRequestType(
-        NormalizedRequestEvent request,
-        ICollection<string> evidence)
+        NormalizedRequestEvent request)
     {
         if (request.Status == 101 ||
             request.Upgrade.Contains("websocket", StringComparison.OrdinalIgnoreCase))
         {
-            evidence.Add("websocket-upgrade");
             return AnalyticsRequestType.WebSocket;
         }
 
         if (IsHealthcheckPath(request.Path))
         {
-            evidence.Add("healthcheck-path");
             return AnalyticsRequestType.Healthcheck;
         }
 
         if (request.Path.StartsWith("/__caddy_ui_auth", StringComparison.OrdinalIgnoreCase))
         {
-            evidence.Add("caddy-ui-auth-path");
             return AnalyticsRequestType.Auth;
         }
 
         if (request.Path.StartsWith("/.well-known/acme-challenge/", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(request.Path, "/metrics", StringComparison.OrdinalIgnoreCase))
         {
-            evidence.Add("system-path");
             return AnalyticsRequestType.System;
         }
 
         if (IsExplicitApiPath(request.Path))
         {
-            evidence.Add("api-path");
             return AnalyticsRequestType.Api;
         }
 
         if (IsAssetPath(request.Path))
         {
-            evidence.Add("asset-path");
             return AnalyticsRequestType.Asset;
         }
 
         if (IsApiByHeaders(request))
         {
-            evidence.Add("api-header-evidence");
             return AnalyticsRequestType.Api;
         }
 
         if (IsDocumentRequest(request))
         {
-            evidence.Add("document-evidence");
             return AnalyticsRequestType.Document;
         }
 
-        evidence.Add("no-specific-resource-evidence");
         return AnalyticsRequestType.Other;
     }
 
     private static AnalyticsActorType ClassifyActor(
         NormalizedRequestEvent request,
-        AnalyticsRequestType requestType,
-        ICollection<string> evidence)
+        AnalyticsRequestType requestType)
     {
         if ((requestType is AnalyticsRequestType.Healthcheck or AnalyticsRequestType.System) &&
             ContainsAny(request.UserAgent, InternalTokens))
         {
-            evidence.Add("internal-user-agent");
             return AnalyticsActorType.Internal;
         }
 
         if (ContainsAny(request.UserAgent, BotTokens))
         {
-            evidence.Add("automation-user-agent");
             return AnalyticsActorType.Bot;
         }
 
         if (request.SecFetchDest.Length > 0 ||
             ContainsAny(request.UserAgent, BrowserTokens))
         {
-            evidence.Add("browser-evidence");
             return AnalyticsActorType.Human;
         }
 
-        evidence.Add("actor-unknown");
         return AnalyticsActorType.Unknown;
     }
 
-    private static AnalyticsClassificationConfidence ClassifyConfidence(
-        NormalizedRequestEvent request,
-        AnalyticsRequestType requestType,
-        AnalyticsActorType actorType)
-    {
-        if (request.Status == 101 ||
-            request.SecFetchDest.Length > 0 ||
-            (requestType is AnalyticsRequestType.Healthcheck or
-                AnalyticsRequestType.Auth or
-                AnalyticsRequestType.System) ||
-            IsAssetPath(request.Path) ||
-            request.Path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
-            request.ContentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) ||
-            request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase))
-        {
-            return AnalyticsClassificationConfidence.High;
-        }
-
-        if (request.AcceptHeader.Length > 0 ||
-            actorType != AnalyticsActorType.Unknown)
-        {
-            return AnalyticsClassificationConfidence.Medium;
-        }
-
-        return AnalyticsClassificationConfidence.Low;
-    }
 
     private static bool IsDocumentRequest(NormalizedRequestEvent request)
     {

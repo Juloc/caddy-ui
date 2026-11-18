@@ -1,108 +1,46 @@
-# Analytics-Vertrag
+# Analytics contract
 
-Status: verbindlich für Caddy UI 2.0  
-Eingeführt: Phase 4
+## Operational statistics
 
-## Getrennte Größen
+The application retains per-host request counts, bot counts/share, HTTP errors and transferred bytes. It does not collect visitor analytics, pageviews, sessions, page-load groups, route performance distributions or historical individual requests.
 
-Caddy UI vermischt fachliche Nutzung nicht mit HTTP-Last.
+`AnalyticsIngestionWorker` is the single ingestion owner. It reads Caddy's structured access log and classifies each event once. Query strings, unused headers and raw JSON are discarded. Retained fields are bounded. Caddy's input files remain subject to Caddy's own log rotation; the UI does not change that source logging policy.
 
-- **Request:** jeder von Caddy verarbeitete HTTP-Request, einschließlich HTML, JavaScript, CSS, Bilder, Fonts, API, WebSocket, Healthchecks, Redirects, Bots und Fehler.
-- **Navigation:** ein mutmaßlicher Browseraufruf eines Dokuments. Redirects und fehlgeschlagene Dokumentaufrufe können Navigationen sein.
-- **Pageview:** eine erfolgreiche Dokumentnavigation. HTTP-Redirects sind keine eigenen Pageviews; `304 Not Modified` zählt als erfolgreiche Dokumentnavigation.
-- **Page Load:** ein Pageview zusammen mit den kurz danach beobachteten Asset- und API-Requests desselben geschätzten Clients.
-- **Session:** zusammenhängende fachliche Nutzung desselben Clients und Hosts. Standardmäßig endet sie nach 30 Minuten Inaktivität.
-- **Client/Besucher:** bevorzugt über eine explizite First-Party-ID, andernfalls als pseudonymisierte Schätzung aus Caddys `client_ip` und User-Agent.
+`AnalyticsIngestionStore` groups counters into five-minute buckets and commits a batch with its source checkpoint in one transaction. Reads use these compact buckets, rather than scanning raw request tables. Period boundaries include the overlapping five-minute bucket. Normal ingestion flushes every 30 seconds, or sooner at 5,000 events. An idle or missing source does not poll PostgreSQL for its checkpoint. File reads are capped at 8 MiB plus at most one complete line, with a 4 MiB individual-line limit.
 
-Ein Aufruf von Mealie mit einem HTML-Dokument und 100 Nuxt-Dateien ergibt daher:
+Source identity uses the opened file's device/inode on Linux and volume/file ID on Windows, plus its first complete line. Appends do not change identity; replacement and truncation restart the source position. Each source is transactionally locked during persistence, and committed offsets suppress complete or overlapping replay. On processing failure the worker discards its speculative position and resumes from the durable checkpoint. Shutdown attempts a bounded final flush; unfinished data is replayed on restart.
 
-- 101 Requests
-- 1 Navigation
-- 1 Pageview
-- 1 Page Load
-- 100 Asset-Requests
+## Live request details
 
-## Zweidimensionale Klassifikation
+`AnalyticsLiveStream` holds request details only in process memory while authenticated viewers are connected. It is bounded to 1,000 rows and 64 viewers. Individual connections have a 20-second renewable lease. Disconnecting the last viewer, or expiry of abandoned viewers, clears the buffer. There is no persistent raw-request queue.
 
-Akteur und Ressourcentyp sind getrennte Dimensionen.
+The authorized `/events/live` stream reads this buffer without database polling. Sequence cursors handle equal event timestamps and bounded replay on reconnect. A restarted process accepts an older cursor by starting at its available buffer. Hidden tabs and pages in the browser back/forward cache disconnect; returning reconnects. Live details from periods with no viewer cannot be recovered from the application.
 
-Akteur:
+## UI refresh
 
-- `human`
-- `bot`
-- `internal`
-- `unknown`
+Normal traffic and security views render on the server and optionally refresh their read-only snapshot. The interval defaults to 30 seconds, is adjustable from 5 to 300 seconds, and can be paused with 0. The browser remembers the preference. Hidden/inactive pages stop requests, overlapping fetches are prevented, requests time out after 10 seconds, errors use bounded backoff, and a focused snapshot is not replaced. Navigation, filters, settings and manual reload remain functional without JavaScript.
 
-Ressourcentyp:
+## Security and DDNS
 
-- `document`
-- `asset`
-- `api`
-- `websocket`
-- `healthcheck`
-- `auth`
-- `system`
-- `other`
+DDNS and Caddy request-guard enforcement operate independently of UI visibility. Risk scoring and IP discovery use compact per-client minute buckets: request/error/scanner/method counts, timing moments, at most 64 distinct path hashes, at most 8 host names, and the latest technical address/user-agent. No raw request paths are retained as normal security history. The set bounds exceed the engine's path/host detection thresholds.
 
-Ein Eintrag `human + asset` bleibt ein technischer Asset-Request und wird niemals als Pageview gezählt.
+Evidence is retained for the configured risk/discovery window, plus the maintenance interval. Security assessments retain their reasons and corresponding security events. Existing manual blocking, exact-address enforcement, authorization and CSRF boundaries remain in place. See [IP security contract](IP_SECURITY_CONTRACT.md).
 
-## Dokumenterkennung
+## Retention
 
-Die Klassifikation verwendet gewichtete Evidenz:
+Defaults for newly collected data:
 
-1. `Sec-Fetch-Dest: document`
-2. Antworttyp `text/html`
-3. `Accept: text/html`
-4. Methode `GET` oder `HEAD`
-5. kein bekannter Asset-, API-, Healthcheck-, Auth- oder Systempfad
-6. kein Bot- oder interner Akteur
+- Traffic/bot statistics: 90 days.
+- Security events, assessments and processing failures: 30 days.
+- Compact security evidence: the larger of the risk/discovery windows plus one minute; default 61 minutes.
+- Maintenance: every 15 minutes.
 
-Asset-Präfixe wie `/_nuxt/`, `/_next/`, `/assets/` und `/static/` werden separat klassifiziert. Gehashte Assetdateien erscheinen nicht als Top-Seiten.
+Administrators can set statistics and security retention from 1 to 3,650 days on the System page. Changes are validated server-side, authorized and protected by antiforgery. Values live in PostgreSQL; maintenance reads them when it runs. Unreferenced technical identities created after the cutover are pruned in bounded batches after their security retention expires. Defaults can be supplied through `Analytics:StatisticsRetentionDays`, `Analytics:SecurityEventRetentionDays`, `Analytics:FlushIntervalSeconds` and `Analytics:MaintenanceIntervalMinutes` configuration.
 
-## Datenschutz und Secrets
+## Existing history, upgrade and rollback
 
-- Rohlogs werden vor dem Speichern bereinigt.
-- Authorization-, Cookie-, Secret-, Token-, Passwort-, API-Key- und Signaturwerte werden entfernt.
-- Empfindliche Queryparameter werden als `[redacted]` gespeichert.
-- Nicht parsebare Zeilen werden nur als SHA-256-Fingerabdruck und Länge protokolliert.
-- Clientkennungen werden mit einem zufälligen, über ASP.NET Core Data Protection geschützten HMAC-Schlüssel pseudonymisiert.
-- Bei rein proxybasierter Erkennung wird der Client ausdrücklich als geschätzt markiert.
-- Forwarded Header werden nicht blind für die Clientidentität verwendet; maßgeblich ist Caddys aufgelöstes `client_ip`.
+The lightweight migration creates new compact tables and records its cutover timestamp. Existing raw requests, visitor/session/page-load tables, old aggregates and pre-cutover security records are preserved as an archive. The supported SQLite importer can still import that history. Archived tables are not an alternative active analytics pipeline and are not queried or written by normal analytics pages or workers.
 
-## Ingestion und Idempotenz
+Before production upgrade, take and verify a PostgreSQL backup, preserve Caddy access logs, and record the prior application image/version. Validate the migration on a restored copy first. No production deployment is performed merely by merging the code.
 
-- Dateien werden ab einem persistenten Byte-Checkpoint gelesen.
-- The ingestion worker loads each source checkpoint once and advances its in-memory position only after the batch transaction commits. A processing error discards that position so the next attempt reloads the durable checkpoint. Missing files and idle polls do not query PostgreSQL.
-- Log lines are scanned in buffered blocks with a pooled read buffer; UTF-8, byte offsets, complete-line boundaries and the 4 MiB line limit remain enforced.
-- Dateiersetzung und Rotation werden über eine Quellidentität erkannt.
-- Source identity uses the open file's device/inode on Linux and volume/file ID on Windows, together with its first complete line. It never uses Linux's mutable ctime fallback or Windows's tunneled creation timestamps. The identity change may replay the current file once on upgrade; source-position uniqueness keeps persisted requests and aggregates idempotent. Unparseable lines can be recorded again during that one-time replay.
-- Nur vollständig abgeschlossene Zeilen werden verarbeitet.
-- Request und Checkpoint werden in derselben PostgreSQL-Transaktion geschrieben.
-- Ein Neustart oder erneutes Lesen derselben Quellposition erzeugt keine doppelten Requests, Pageviews oder Aggregate.
-- Es gibt keine unbegrenzte In-Memory-Queue.
-- Requests, Clients, Session-Zähler, Page-Load-Zähler und Aggregate werden innerhalb eines Ingestion-Batches zusammengefasst, um PostgreSQL-Roundtrips zu begrenzen.
-- Die Standard-Batchgröße beträgt 500 Requests.
-- Solange ein Backlog vorhanden ist, liegt zwischen zwei Worker-Durchläufen standardmäßig eine kooperative Pause von 100 ms. Ohne Backlog gilt das normale Polling-Intervall von 1000 ms.
-- A partial batch uses the normal polling interval; only a full batch requests another backlog iteration.
-- Batchgröße und Backlog-Pause sind über `CADDY_UI_INGEST_BATCH_SIZE` und `CADDY_UI_INGEST_BACKLOG_DELAY_MS` konfigurierbar.
-
-## Aggregate und Aufbewahrung
-
-Bei der Ingestion werden Stunden-, Tages-, Monats- und Routenaggregate aktualisiert. Rohrequests liegen in monatlichen PostgreSQL-Partitionen.
-
-Standardwerte:
-
-- Rohrequests: 30 Tage
-- Navigationen und Pageviews: 180 Tage
-- Stundenaggregate: 90 Tage
-- Tagesaggregate: 730 Tage
-- Monatsaggregate: unbegrenzt
-- Session-Timeout: 30 Minuten
-
-Der Wartungsjob schließt inaktive Sessions und Page Loads, entfernt abgelaufene Daten, löscht vollständig abgelaufene Requestpartitionen und legt die aktuelle sowie die nächste Monatspartition an. Vollständig abgelaufene Monats-Partitionen werden vor zeilenweisen Fallback-Bereinigungen entfernt.
-
-## SPA-Grenze
-
-The live-log browser stream is active only while its page is visible. Hidden tabs and pages in the browser back/forward cache close the stream, stopping their database polling. Returning to the page reconnects for new events; the server-rendered request history remains available on reload.
-
-Proxylogs erkennen vollständige Dokumentnavigationen. Rein clientseitige SPA-Routenwechsel erzeugen keinen neuen HTTP-Dokumentrequest und können deshalb nur über ein optionales First-Party-Pageview-Beacon exakt gezählt werden. Ohne Beacon werden sie nicht erfunden.
+An empty lightweight schema can be migrated down and back up while preserving the archive. Once new statistics or security evidence exist, the down migration refuses to drop them. Export those tables and settings and restore the verified pre-upgrade backup before rolling the application back. Keep the export with the backup so the newer records remain recoverable. Do not discard the live checkpoint or switch between ingestion implementations against the same running database.
