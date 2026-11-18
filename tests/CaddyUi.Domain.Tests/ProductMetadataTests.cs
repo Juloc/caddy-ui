@@ -7,6 +7,6 @@ public sealed class ProductMetadataTests
     [Fact]
     public void FoundationVersion_IdentifiesCurrentStableRelease()
     {
-        Assert.Equal("2.1.25", ProductMetadata.FoundationVersion);
+        Assert.Equal("2.1.26", ProductMetadata.FoundationVersion);
     }
 }
