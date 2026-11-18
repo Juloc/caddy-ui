@@ -18,6 +18,18 @@
 
 @if (User.IsInRole("admin"))
 {
+    <section class="panel panel--wide">
+        <header class="panel-header"><div><h2>@T["Analytics retention"]</h2></div></header>
+        <div class="panel-body">
+            <form method="post" asp-page-handler="Retention" class="settings-form">
+                <div asp-validation-summary="All" class="validation-summary" role="alert"></div>
+                <label asp-for="StatisticsDays">@T["Traffic statistics (days)"]</label><input asp-for="StatisticsDays" type="number" min="1" max="3650" />
+                <label asp-for="SecurityEventDays">@T["Security events (days)"]</label><input asp-for="SecurityEventDays" type="number" min="1" max="3650" />
+                <p>@T["Retention applies to new compact data. Existing archived history is preserved."]</p>
+                <button class="button button--primary" type="submit">@T["Save"]</button>
+            </form>
+        </div>
+    </section>
     <section class="workspace-section">
         <header class="section-header">
             <div><h2>Systemwerkzeuge</h2></div>
@@ -34,9 +46,9 @@
 }
 
 <section class="metric-grid">
-    <article class="metric-card"><span class="metric-label">@T["Request rows"]</span><strong class="metric-value">@Model.Status.RequestRows.ToString("N0")</strong><span class="metric-detail">@T["Retention {0} days", Model.Status.RawRequestRetentionDays]</span></article>
-    <article class="metric-card"><span class="metric-label">@T["Page views"]</span><strong class="metric-value">@Model.Status.PageViewRows.ToString("N0")</strong><span class="metric-detail">@T["Retention {0} days", Model.Status.PageViewRetentionDays]</span></article>
-    <article class="metric-card"><span class="metric-label">@T["Clients"]</span><strong class="metric-value">@Model.Status.ClientRows.ToString("N0")</strong><span class="metric-detail">@T["pseudonymous or estimated"]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Stored intervals (estimate)"]</span><strong class="metric-value">@Model.Status.TrafficBucketRows.ToString("N0")</strong><span class="metric-detail">@T["Retention {0} days", Model.Status.StatisticsRetentionDays]</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Security events"]</span><strong class="metric-value">@T["Retention {0} days", Model.Status.SecurityEventRetentionDays]</strong></article>
+    <article class="metric-card"><span class="metric-label">@T["Security clients"]</span><strong class="metric-value">@Model.Status.ClientRows.ToString("N0")</strong><span class="metric-detail">@T["estimated technical identities"]</span></article>
     <article class="metric-card"><span class="metric-label">@T["Unresolved processing failures"]</span><strong class="metric-value">@Model.Status.UnresolvedFailures.ToString("N0")</strong><span class="metric-detail">@T["logged separately"]</span></article>
 </section>
 
@@ -47,6 +59,11 @@
             <div><span>@T["Enabled"]</span><strong>@(Model.Status.IngestionEnabled ? T["Yes"] : T["No"])</strong></div>
             <div><span>@T["Log paths"]</span><strong>@Model.Status.ConfiguredLogPaths</strong></div>
             <div><span>@T["Checkpoints"]</span><strong>@Model.Status.CheckpointCount</strong></div>
+            @if (Model.Ingestion is not null)
+            {
+                <div><span>@T["Requests in latest batch"]</span><strong>@Model.Ingestion.RequestsProcessed</strong></div>
+                <div><span>@T["Pending log bytes"]</span><strong>@AnalyticsPageModelBase.FormatBytes(Model.Ingestion.BacklogBytes)</strong></div>
+            }
             <div><span>@T["Latest request"]</span><strong>@if (Model.Status.LatestRequestAt is not null) { <time datetime="@Model.Status.LatestRequestAt.Value.ToString("O")" data-local-time>@Model.Status.LatestRequestAt.Value.ToString("u")</time> } else { <span>–</span> }</strong></div>
             <div><span>@T["Latest checkpoint"]</span><strong>@if (Model.Status.LatestCheckpointAt is not null) { <time datetime="@Model.Status.LatestCheckpointAt.Value.ToString("O")" data-local-time>@Model.Status.LatestCheckpointAt.Value.ToString("u")</time> } else { <span>–</span> }</strong></div>
         </div>

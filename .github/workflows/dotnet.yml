@@ -88,6 +88,27 @@ jobs:
             fi
             sleep 1
           done
+          docker volume create caddy-ui-analytics-logs
+          cat >/tmp/caddy-ui-analytics.Caddyfile <<'CADDY'
+          {
+              auto_https off
+              admin off
+          }
+          :18080 {
+              log {
+                  output file /var/log/caddy/access.log
+                  format json
+              }
+              respond "analytics acceptance" 200
+          }
+          CADDY
+          docker run -d \
+            --name caddy-ui-traffic \
+            --network caddy-ui-ci \
+            -p 127.0.0.1:18100:18080 \
+            -v /tmp/caddy-ui-analytics.Caddyfile:/etc/caddy/Caddyfile:ro \
+            -v caddy-ui-analytics-logs:/var/log/caddy \
+            caddy-ui:bundle-test caddy run --config /etc/caddy/Caddyfile
           docker run -d \
             --name caddy-ui-web \
             --network caddy-ui-ci \
@@ -95,6 +116,10 @@ jobs:
             -p 18099:8099 \
             -e 'ConnectionStrings__CaddyUi=Host=caddy-ui-postgres;Port=5432;Database=caddy_ui;Username=caddy_ui;Password=caddy_ui' \
             -e Database__ApplyMigrationsOnStartup=true \
+            -e Analytics__Enabled=true \
+            -e Analytics__LogPaths__0=/var/log/caddy/access.log \
+            -e Analytics__FlushIntervalSeconds=1 \
+            -v caddy-ui-analytics-logs:/var/log/caddy:ro \
             -e CADDY_UI_USERNAME=ci-admin \
             -e CADDY_UI_PASSWORD=ci-admin-password-123456789 \
             -e CADDY_UI_COOKIE_NAMESPACE=caddy_ui_ci \
@@ -167,7 +192,7 @@ jobs:
 
           check_page /
           check_page /About
-          check_page /Requests
+          check_page /Traffic
           check_page /Access
           check_page /LiveLog
           check_page /Operations/Cutover 5
@@ -187,6 +212,7 @@ jobs:
           docker run --rm \
             --network host \
             -e CADDY_UI_TEST_BASE_URL=http://127.0.0.1:18098 \
+            -e CADDY_UI_TEST_TRAFFIC_URL=http://127.0.0.1:18100 \
             -e CADDY_UI_TEST_USERNAME=ci-admin \
             -e CADDY_UI_TEST_PASSWORD=ci-admin-password-123456789 \
             -v "$PWD:/work:ro" \
@@ -249,6 +275,7 @@ jobs:
           mkdir -p /tmp/caddy-ui-container-logs
           docker logs caddy-ui-postgres > /tmp/caddy-ui-container-logs/postgres.log 2>&1 || true
           docker logs caddy-ui-web > /tmp/caddy-ui-container-logs/web.log 2>&1 || true
+          docker logs caddy-ui-traffic > /tmp/caddy-ui-container-logs/traffic.log 2>&1 || true
           cp /tmp/login.response /tmp/page-*.html /tmp/caddy-ui-container-logs/ 2>/dev/null || true
       - name: Upload logs
         if: failure()
@@ -260,5 +287,6 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f caddy-ui-web caddy-ui-postgres || true
+          docker rm -f caddy-ui-web caddy-ui-traffic caddy-ui-postgres || true
+          docker volume rm caddy-ui-analytics-logs || true
           docker network rm caddy-ui-ci || true

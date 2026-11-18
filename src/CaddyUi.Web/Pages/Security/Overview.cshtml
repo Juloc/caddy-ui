@@ -5,6 +5,7 @@
 }
 <section class="page-heading"><div><h1>@T["Bots and security"]</h1></div><a class="button button--quiet" asp-page="/Security/Clients">@T["All clients"]</a></section>
 <partial name="Shared/_AnalyticsFilters" model="Model" />
+<div data-analytics-snapshot>
 <section class="metric-grid">
 <article class="metric-card"><span class="metric-label">@T["Clients"]</span><strong class="metric-value">@Model.Security.Clients.ToString("N0")</strong><span class="metric-detail">@T["estimated technical identities"]</span></article>
 <article class="metric-card"><span class="metric-label">@T["Bot requests"]</span><strong class="metric-value">@Model.Security.BotRequests.ToString("N0")</strong><span class="metric-detail">@T["request classification"]</span></article>
@@ -26,3 +27,4 @@
 <tr><td><time datetime="@item.OccurredAt.ToString("O")" data-local-time>@item.OccurredAt.ToString("u")</time></td><td>@item.Kind</td><td>@item.Reason</td><td><code>@item.RemoteAddress</code></td><td>@item.Host<small><code>@item.Path</code></small></td></tr>
 }
 </tbody></table></div></section>
+</div>

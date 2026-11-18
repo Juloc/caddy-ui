@@ -9,7 +9,7 @@ public sealed class AnalyticsClassificationTests
     private readonly RequestClassifier _classifier = new();
 
     [Fact]
-    public void BrowserDocument_IsOnePageView()
+    public void BrowserDocument_ClassifiesWithoutRetainingCredentials()
     {
         var request = Parse(
             """
@@ -41,16 +41,14 @@ public sealed class AnalyticsClassificationTests
 
         Assert.Equal(AnalyticsActorType.Human, result.ActorType);
         Assert.Equal(AnalyticsRequestType.Document, result.RequestType);
-        Assert.True(result.IsNavigation);
-        Assert.True(result.IsPageView);
-        Assert.Equal("token=[redacted]&sort=name", request.QueryString);
-        Assert.DoesNotContain("secret-value", request.RawJson, StringComparison.Ordinal);
-        Assert.DoesNotContain("Bearer secret", request.RawJson, StringComparison.Ordinal);
-        Assert.DoesNotContain("secret=value", request.RawJson, StringComparison.Ordinal);
+        var retained = global::System.Text.Json.JsonSerializer.Serialize(request);
+        Assert.DoesNotContain("secret-value", retained, StringComparison.Ordinal);
+        Assert.DoesNotContain("Bearer secret", retained, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret=value", retained, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void NuxtAsset_IsARequestButNotAPageView()
+    public void NuxtAsset_IsClassifiedAsAsset()
     {
         var request = Parse(
             """
@@ -80,12 +78,10 @@ public sealed class AnalyticsClassificationTests
 
         Assert.Equal(AnalyticsActorType.Human, result.ActorType);
         Assert.Equal(AnalyticsRequestType.Asset, result.RequestType);
-        Assert.False(result.IsNavigation);
-        Assert.False(result.IsPageView);
     }
 
     [Fact]
-    public void RedirectedDocument_IsNavigationButNotPageView()
+    public void RedirectedDocument_RemainsADocumentRequest()
     {
         var request = Parse(
             """
@@ -110,13 +106,11 @@ public sealed class AnalyticsClassificationTests
 
         var result = _classifier.Classify(request);
 
-        Assert.True(result.IsNavigation);
-        Assert.False(result.IsPageView);
-        Assert.Equal(AnalyticsNavigationState.Redirected, result.NavigationState);
+        Assert.Equal(AnalyticsRequestType.Document, result.RequestType);
     }
 
     [Fact]
-    public void Scanner_IsBotAndNeverAPageView()
+    public void Scanner_IsClassifiedAsBot()
     {
         var request = Parse(
             """
@@ -145,8 +139,6 @@ public sealed class AnalyticsClassificationTests
 
         Assert.Equal(AnalyticsActorType.Bot, result.ActorType);
         Assert.Equal(AnalyticsRequestType.Document, result.RequestType);
-        Assert.False(result.IsNavigation);
-        Assert.False(result.IsPageView);
     }
 
     [Fact]

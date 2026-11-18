@@ -916,4 +916,21 @@
   <data name="Icon URL" xml:space="preserve"><value>Icon-URL</value></data>
   <data name="Optional HTTPS image URL for the access portal." xml:space="preserve"><value>Optionale HTTPS-Bildadresse für das Zugriffsportal.</value></data>
   <data name="Authentication is provided by the protected application's access group." xml:space="preserve"><value>Die Anmeldung erfolgt über die Zugriffsgruppe der geschützten Anwendung.</value></data>
+  <data name="Refresh interval (seconds)" xml:space="preserve"><value>Aktualisierung alle (Sekunden)</value></data>
+  <data name="0 pauses automatic refresh." xml:space="preserve"><value>0 pausiert die automatische Aktualisierung.</value></data>
+  <data name="Automatic refresh active" xml:space="preserve"><value>Automatische Aktualisierung aktiv</value></data>
+  <data name="Automatic refresh paused" xml:space="preserve"><value>Automatische Aktualisierung pausiert</value></data>
+  <data name="Automatic refresh unavailable — retrying" xml:space="preserve"><value>Aktualisierung nicht verfügbar — erneuter Versuch</value></data>
+  <data name="Security clients" xml:space="preserve"><value>Sicherheitsclients</value></data>
+  <data name="Requests in security window" xml:space="preserve"><value>Requests im Sicherheitszeitraum</value></data>
+  <data name="Stored intervals (estimate)" xml:space="preserve"><value>Gespeicherte Intervalle (geschätzt)</value></data>
+  <data name="Request details are available only while the live log is open." xml:space="preserve"><value>Request-Details sind nur bei geöffneter Live-Ansicht verfügbar.</value></data>
+  <data name="Analytics retention" xml:space="preserve"><value>Aufbewahrung der Analysedaten</value></data>
+  <data name="Traffic statistics (days)" xml:space="preserve"><value>Traffic-Statistik (Tage)</value></data>
+  <data name="Security events (days)" xml:space="preserve"><value>Sicherheitsereignisse (Tage)</value></data>
+  <data name="Retention applies to new compact data. Existing archived history is preserved." xml:space="preserve"><value>Die Aufbewahrung gilt für neue kompakte Daten. Bestehende archivierte Daten bleiben erhalten.</value></data>
+  <data name="Could not save retention settings." xml:space="preserve"><value>Die Aufbewahrungseinstellungen konnten nicht gespeichert werden.</value></data>
+  <data name="Analytics ingestion is disabled." xml:space="preserve"><value>Die Verarbeitung der Zugriffslogs ist deaktiviert.</value></data>
+  <data name="Requests in latest batch" xml:space="preserve"><value>Requests im letzten Paket</value></data>
+  <data name="Pending log bytes" xml:space="preserve"><value>Noch nicht verarbeitete Logdaten</value></data>
 </root>

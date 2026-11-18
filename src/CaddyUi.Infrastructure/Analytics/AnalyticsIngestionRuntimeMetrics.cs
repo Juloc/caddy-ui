@@ -5,8 +5,8 @@ public sealed record AnalyticsIngestionRuntimeSnapshot(
     long CheckpointOffset,
     long SourceLength,
     DateTimeOffset CompletedAt,
-    int RequestsInserted,
-    int PageViewsInserted,
+    int RequestsProcessed,
+    int TrafficBucketsWritten,
     int FailuresInserted,
     long DurationMilliseconds)
 {

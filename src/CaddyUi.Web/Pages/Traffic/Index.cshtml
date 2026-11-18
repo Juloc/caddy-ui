@@ -3,27 +3,21 @@
 @{
     ViewData["Title"] = T["Traffic"];
 }
-<section class="page-heading">
-    <div><h1>@T["Traffic"]</h1></div>
-    <div class="page-actions">
-        <span class="status-badge status-badge--neutral">@T["{0} intervals", Model.Series.Count]</span>
-        <a class="button button--quiet" asp-page="/Performance/Index">Performance</a>
-        <a class="button button--quiet" asp-page="/Routes/Analytics">Routenstatistik</a>
-    </div>
-</section>
+<section class="page-heading"><div><h1>@T["Traffic"]</h1></div><a class="button button--quiet" asp-page="/LiveLog/Index">@T["Live log"]</a></section>
 <partial name="Shared/_AnalyticsFilters" model="Model" />
+<div data-analytics-snapshot>
 <section class="panel panel--wide">
     <header class="panel-header"><div><h2>@T["Aggregated intervals"]</h2></div></header>
-    <div class="panel-body table-wrap">
-        <table class="data-table">
-            <thead><tr><th>@T["Interval"]</th><th>@T["Requests"]</th><th>@T["Page views"]</th><th>@T["Errors"]</th><th>@T["Traffic"]</th><th>@T["Average duration"]</th></tr></thead>
-            <tbody>
-            @foreach (var point in Model.Series)
-            {
-                <tr><td><time datetime="@point.BucketStart.ToString("O")" data-local-time>@point.BucketStart.ToString("u")</time></td><td>@point.Requests.ToString("N0")</td><td>@point.PageViews.ToString("N0")</td><td>@point.Errors.ToString("N0")</td><td>@AnalyticsPageModelBase.FormatBytes(point.BytesSent)</td><td>@AnalyticsPageModelBase.FormatDuration(point.AverageDurationMilliseconds)</td></tr>
-            }
-            </tbody>
-        </table>
-        @if (Model.Series.Count == 0) { <p class="empty-state">@T["No data matches the filter."]</p> }
+    <div class="panel-body table-wrap"><table class="data-table">
+        <thead><tr><th>@T["Interval"]</th><th>@T["Requests"]</th><th>@T["Bot requests"]</th><th>@T["Errors"]</th><th>@T["Traffic"]</th></tr></thead>
+        <tbody>
+        @foreach (var point in Model.Series)
+        {
+            <tr><td><time datetime="@point.BucketStart.ToString("O")" data-local-time>@point.BucketStart.ToString("u")</time></td><td>@point.Requests.ToString("N0")</td><td>@point.BotRequests.ToString("N0")</td><td>@point.Errors.ToString("N0")</td><td>@AnalyticsPageModelBase.FormatBytes(point.BytesSent)</td></tr>
+        }
+        </tbody>
+    </table>
+    @if (Model.Series.Count == 0) { <p class="empty-state">@T["No data matches the filter."]</p> }
     </div>
 </section>
+</div>

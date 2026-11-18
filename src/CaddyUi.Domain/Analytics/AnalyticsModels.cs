@@ -20,51 +20,28 @@ public enum AnalyticsRequestType
     Other,
 }
 
-public enum AnalyticsClassificationConfidence
-{
-    High,
-    Medium,
-    Low,
-}
-
-public enum AnalyticsNavigationState
-{
-    Succeeded,
-    Redirected,
-    Failed,
-}
-
 public sealed record NormalizedRequestEvent(
-    Guid Id,
     DateTimeOffset OccurredAt,
     string SourceFile,
     long SourceOffset,
     string Host,
     string Method,
     string Path,
-    string QueryString,
     int Status,
     double DurationMilliseconds,
     long BytesSent,
     string? RemoteAddress,
     string UserAgent,
-    string Referer,
     string AcceptHeader,
     string ContentType,
     string SecFetchDest,
     string Upgrade,
-    string? FirstPartyClientIdentifier,
-    string RawJson);
+    string? FirstPartyClientIdentifier);
 
 public sealed record ClassifiedRequest(
     NormalizedRequestEvent Request,
     AnalyticsActorType ActorType,
-    AnalyticsRequestType RequestType,
-    AnalyticsClassificationConfidence Confidence,
-    bool IsNavigation,
-    bool IsPageView,
-    AnalyticsNavigationState NavigationState,
-    IReadOnlyList<string> Evidence);
+    AnalyticsRequestType RequestType);
 
 public static class AnalyticsStorageValues
 {
@@ -96,25 +73,5 @@ public static class AnalyticsStorageValues
         };
     }
 
-    public static string ToStorageValue(this AnalyticsClassificationConfidence value)
-    {
-        return value switch
-        {
-            AnalyticsClassificationConfidence.High => "high",
-            AnalyticsClassificationConfidence.Medium => "medium",
-            AnalyticsClassificationConfidence.Low => "low",
-            _ => throw new ArgumentOutOfRangeException(nameof(value)),
-        };
-    }
 
-    public static string ToStorageValue(this AnalyticsNavigationState value)
-    {
-        return value switch
-        {
-            AnalyticsNavigationState.Succeeded => "succeeded",
-            AnalyticsNavigationState.Redirected => "redirected",
-            AnalyticsNavigationState.Failed => "failed",
-            _ => throw new ArgumentOutOfRangeException(nameof(value)),
-        };
-    }
 }

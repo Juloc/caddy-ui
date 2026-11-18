@@ -14,7 +14,7 @@ Caddy UI is a compact, server-rendered administration application for Caddy. Ver
 - Proxy, redirect, static-response and optional custom routes
 - Preview, diff, validation, atomic apply, verification and rollback
 - Separate wildcard and base-domain certificate plans with full Netcup DNS-01 support
-- Request, pageview, session, client, performance and error analytics
+- Compact per-domain request, bot, error and traffic statistics; request details only during live viewing
 - IP intelligence, risk assessment and managed IP blocks
 - Healthchecks, scheduled jobs, notifications, backups and diagnostics
 - Idempotent read-only migration from the legacy SQLite database

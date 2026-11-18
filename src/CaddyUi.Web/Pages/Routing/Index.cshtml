@@ -177,7 +177,7 @@ else if (Model.RuntimeState.HasPendingChanges)
                                     <details class="route-row-menu">
                                         <summary class="button button--compact button--quiet" aria-label="@actionsLabel">⋯</summary>
                                         <div class="route-row-menu-items">
-                                            <a asp-page="/Routes/Analytics" asp-route-routeId="@definition.Id">@R["Statistics"]</a>
+                                            <a asp-page="/Traffic/Index" asp-route-host="@definition.Host">@R["Statistics"]</a>
                                             <form method="post" asp-page-handler="Toggle" asp-antiforgery="true">
                                                 <input type="hidden" name="id" value="@definition.Id" />
                                                 <input type="hidden" name="enabled" value="@(!definition.Enabled)" />

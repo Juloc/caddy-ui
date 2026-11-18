@@ -21,6 +21,7 @@ function setup(hidden = false) {
         documentElement: { lang: 'en' },
         getElementById: id => id === 'live-rows' ? rows : state,
         createElement: () => ({}),
+        querySelector: () => null,
         addEventListener: (type, handler) => documentEvents.set(type, handler),
     };
     class EventSource {

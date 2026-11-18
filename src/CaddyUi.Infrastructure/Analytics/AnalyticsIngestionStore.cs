@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CaddyUi.Application.Analytics;
@@ -11,25 +11,243 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CaddyUi.Infrastructure.Analytics;
 
-public sealed record AnalyticsIngestionFailure(
-    long? SourceOffset,
-    string SafeRawLine,
-    string Error);
+public sealed record AnalyticsIngestionFailure(long? SourceOffset, string SafeRawLine, string Error);
+public sealed record AnalyticsPersistResult(int RequestsProcessed, int TrafficBucketsWritten, int FailuresInserted);
+public sealed record AnalyticsRetention(int StatisticsDays, int SecurityEventDays);
 
-public sealed record AnalyticsPersistResult(
-    int RequestsInserted,
-    int PageViewsInserted,
-    int FailuresInserted);
-
-public sealed class AnalyticsIngestionStore
+public sealed class AnalyticsIngestionStore(IDbContextFactory<CaddyUiDbContext> contextFactory)
 {
-    private readonly IDbContextFactory<CaddyUiDbContext> _contextFactory;
-    private readonly ConcurrentDictionary<DateOnly, byte> _knownPartitions = new();
+    private readonly IDbContextFactory<CaddyUiDbContext> _contextFactory = contextFactory;
 
-    public AnalyticsIngestionStore(IDbContextFactory<CaddyUiDbContext> contextFactory)
+    public async Task<AnalyticsPersistResult> PersistBatchAsync(string source, string sourceIdentity, long byteOffset,
+        IReadOnlyList<ClassifiedRequest> requests, IReadOnlyList<AnalyticsIngestionFailure> failures, byte[] clientHashKey,
+        AnalyticsIngestionOptions options, CancellationToken cancellationToken = default)
     {
-        _contextFactory = contextFactory;
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceIdentity);
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(failures);
+        ArgumentNullException.ThrowIfNull(options);
+        if (clientHashKey is null || clientHashKey.Length == 0)
+            throw new ArgumentException("The client hash key is required.", nameof(clientHashKey));
+        if (requests.Count + failures.Count > 5000)
+            throw new ArgumentOutOfRangeException(nameof(requests));
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        long previousOffset = -1;
+        await using (var checkpointCommand = connection.CreateCommand())
+        {
+            checkpointCommand.Transaction = transaction;
+            checkpointCommand.CommandText = """
+                SELECT pg_advisory_xact_lock(hashtextextended(@source, 0));
+                SELECT source_identity, byte_offset FROM caddy_ui.analytics_checkpoints WHERE source = @source;
+                """;
+            AddParameter(checkpointCommand, "source", source);
+            await using var reader = await checkpointCommand.ExecuteReaderAsync(cancellationToken);
+            await reader.NextResultAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken) && reader.GetString(0) == sourceIdentity)
+                previousOffset = reader.GetInt64(1);
+        }
+        if (previousOffset >= byteOffset)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new AnalyticsPersistResult(0, 0, 0);
+        }
+        var prepared = requests.Where(item => item.Request.SourceOffset >= previousOffset)
+            .OrderBy(item => item.Request.OccurredAt)
+            .Select(item => new PreparedAnalyticsRequest(item, item.ActorType == AnalyticsActorType.Internal ? null : AnalyticsClientFingerprint.Create(item.Request, clientHashKey))).ToArray();
+        var clients = await GetOrCreateClientsAsync(connection, transaction, prepared, cancellationToken);
+        var traffic = prepared.GroupBy(item => new
+        {
+            bucket_start = Bucket(item.Classified.Request.OccurredAt, 5),
+            host = item.Classified.Request.Host,
+            actor_type = item.Classified.ActorType.ToStorageValue(),
+            status_class = item.Classified.Request.Status / 100
+        }).Select(group => new
+        {
+            group.Key.bucket_start,
+            group.Key.host,
+            group.Key.actor_type,
+            group.Key.status_class,
+            requests = group.LongCount(),
+            bytes_sent = group.Sum(item => item.Classified.Request.BytesSent)
+        }).ToArray();
+        if (traffic.Length > 0)
+        {
+            await ExecuteAsync(connection, transaction, """
+                INSERT INTO caddy_ui.traffic_buckets(bucket_start, host, actor_type, status_class, requests, bytes_sent)
+                SELECT bucket_start, host, actor_type, status_class, requests, bytes_sent
+                FROM jsonb_to_recordset(CAST(@rows AS jsonb)) AS batch(
+                    bucket_start timestamptz, host text, actor_type text, status_class integer, requests bigint, bytes_sent bigint)
+                ON CONFLICT (bucket_start, host, actor_type, status_class) DO UPDATE
+                SET requests = caddy_ui.traffic_buckets.requests + EXCLUDED.requests,
+                    bytes_sent = caddy_ui.traffic_buckets.bytes_sent + EXCLUDED.bytes_sent
+                """, command => AddParameter(command, "rows", JsonSerializer.Serialize(traffic)), cancellationToken);
+        }
+        var activity = prepared.Where(item => item.Identity is not null)
+            .GroupBy(item => new { client_id = clients[item.Identity!.ClientKey], bucket_start = Bucket(item.Classified.Request.OccurredAt, 1) })
+            .Select(group =>
+            {
+                var items = group.Select(item => item.Classified).ToArray();
+                var gaps = items.Zip(items.Skip(1), (left, right) => (right.Request.OccurredAt - left.Request.OccurredAt).TotalSeconds).ToArray();
+                var last = items[^1].Request;
+                return new
+                {
+                    group.Key.client_id,
+                    group.Key.bucket_start,
+                    first_seen_at = items[0].Request.OccurredAt,
+                    last_seen_at = last.OccurredAt,
+                    remote_address = last.RemoteAddress,
+                    user_agent = last.UserAgent[..Math.Min(512, last.UserAgent.Length)],
+                    is_bot = items.Any(item => item.ActorType == AnalyticsActorType.Bot),
+                    is_human = items.Any(item => item.ActorType == AnalyticsActorType.Human),
+                    request_count = items.LongLength,
+                    not_found_count = items.LongCount(item => item.Request.Status == 404),
+                    auth_failure_count = items.LongCount(item => item.Request.Status is 401 or 403),
+                    unsafe_method_count = items.LongCount(item => item.Request.Method is not ("GET" or "HEAD" or "POST" or "PUT" or "PATCH" or "DELETE" or "OPTIONS")),
+                    scanner_count = items.LongCount(item => ScannerPaths.Any(fragment => item.Request.Path.Contains(fragment, StringComparison.OrdinalIgnoreCase))),
+                    gap_count = gaps.LongLength,
+                    gap_sum = gaps.Sum(),
+                    gap_squares = gaps.Sum(gap => gap * gap),
+                    path_hashes = items.Select(item => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(item.Request.Path)))).Distinct().Take(64).ToArray(),
+                    hosts = items.Select(item => item.Request.Host).Distinct().Take(8).ToArray()
+                };
+            }).ToArray();
+        if (activity.Length > 0)
+        {
+            await ExecuteAsync(connection, transaction, """
+                INSERT INTO caddy_ui.client_activity_buckets AS activity(
+                    client_id, bucket_start, first_seen_at, last_seen_at, remote_address, user_agent, is_bot, is_human,
+                    request_count, not_found_count, auth_failure_count, unsafe_method_count, scanner_count,
+                    gap_count, gap_sum, gap_squares, path_hashes, hosts)
+                SELECT client_id, bucket_start, first_seen_at, last_seen_at, CAST(remote_address AS inet), user_agent, is_bot, is_human,
+                       request_count, not_found_count, auth_failure_count, unsafe_method_count, scanner_count,
+                       gap_count, gap_sum, gap_squares, path_hashes, hosts
+                FROM jsonb_to_recordset(CAST(@rows AS jsonb)) AS batch(
+                    client_id uuid, bucket_start timestamptz, first_seen_at timestamptz, last_seen_at timestamptz,
+                    remote_address text, user_agent text, is_bot boolean, is_human boolean,
+                    request_count bigint, not_found_count bigint, auth_failure_count bigint, unsafe_method_count bigint, scanner_count bigint,
+                    gap_count bigint, gap_sum double precision, gap_squares double precision, path_hashes jsonb, hosts jsonb)
+                ON CONFLICT (client_id, bucket_start) DO UPDATE SET
+                    first_seen_at = LEAST(activity.first_seen_at, EXCLUDED.first_seen_at),
+                    last_seen_at = GREATEST(activity.last_seen_at, EXCLUDED.last_seen_at),
+                    remote_address = CASE WHEN EXCLUDED.last_seen_at >= activity.last_seen_at THEN EXCLUDED.remote_address ELSE activity.remote_address END,
+                    user_agent = CASE WHEN EXCLUDED.last_seen_at >= activity.last_seen_at THEN EXCLUDED.user_agent ELSE activity.user_agent END,
+                    is_bot = activity.is_bot OR EXCLUDED.is_bot, is_human = activity.is_human OR EXCLUDED.is_human,
+                    request_count = activity.request_count + EXCLUDED.request_count,
+                    not_found_count = activity.not_found_count + EXCLUDED.not_found_count,
+                    auth_failure_count = activity.auth_failure_count + EXCLUDED.auth_failure_count,
+                    unsafe_method_count = activity.unsafe_method_count + EXCLUDED.unsafe_method_count,
+                    scanner_count = activity.scanner_count + EXCLUDED.scanner_count,
+                    gap_count = activity.gap_count + EXCLUDED.gap_count + CASE WHEN EXCLUDED.first_seen_at >= activity.last_seen_at THEN 1 ELSE 0 END,
+                    gap_sum = activity.gap_sum + EXCLUDED.gap_sum + GREATEST(0, EXTRACT(EPOCH FROM EXCLUDED.first_seen_at - activity.last_seen_at)),
+                    gap_squares = activity.gap_squares + EXCLUDED.gap_squares + POWER(GREATEST(0, EXTRACT(EPOCH FROM EXCLUDED.first_seen_at - activity.last_seen_at)), 2),
+                    path_hashes = (SELECT jsonb_agg(value) FROM (SELECT DISTINCT value FROM jsonb_array_elements(activity.path_hashes || EXCLUDED.path_hashes) LIMIT 64) AS paths),
+                    hosts = (SELECT jsonb_agg(value) FROM (SELECT DISTINCT value FROM jsonb_array_elements(activity.hosts || EXCLUDED.hosts) LIMIT 8) AS hosts)
+                """, command => AddParameter(command, "rows", JsonSerializer.Serialize(activity)), cancellationToken);
+        }
+        var newFailures = failures.Where(item => item.SourceOffset is null || item.SourceOffset >= previousOffset).ToArray();
+        if (newFailures.Length > 0)
+        {
+            await ExecuteAsync(connection, transaction, """
+                INSERT INTO caddy_ui.ingestion_failures(source, source_offset, occurred_at, raw_line, error, resolved_at)
+                SELECT @source, source_offset, CURRENT_TIMESTAMP, safe_line, error, NULL
+                FROM jsonb_to_recordset(CAST(@rows AS jsonb)) AS batch(source_offset bigint, safe_line text, error text)
+                """, command =>
+                {
+                    AddParameter(command, "source", source);
+                    AddParameter(command, "rows", JsonSerializer.Serialize(newFailures.Select(item => new { source_offset = item.SourceOffset, safe_line = item.SafeRawLine, error = item.Error })));
+                }, cancellationToken);
+        }
+        await UpsertCheckpointAsync(connection, transaction, source, sourceIdentity, byteOffset,
+            prepared.Length == 0 ? null : prepared[^1].Classified.Request.OccurredAt, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new AnalyticsPersistResult(prepared.Length, traffic.Length, newFailures.Length);
     }
+
+    public async Task RunMaintenanceAsync(AnalyticsIngestionOptions options, DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var retention = await ReadRetentionAsync(connection, transaction, options, cancellationToken);
+        await ExecuteAsync(connection, transaction, """
+            DELETE FROM caddy_ui.traffic_buckets WHERE bucket_start < @statistics_cutoff;
+            DELETE FROM caddy_ui.client_activity_buckets WHERE last_seen_at < @evidence_cutoff;
+            DELETE FROM caddy_ui.security_events
+            WHERE occurred_at < @security_cutoff AND occurred_at >=
+                (SELECT (value_json ->> 'at')::timestamptz FROM caddy_ui.application_settings WHERE key = 'analytics.lightweight_started_at');
+            DELETE FROM caddy_ui.client_assessment_reasons AS reasons USING caddy_ui.client_assessments AS assessments
+            WHERE reasons.assessment_id = assessments.id AND assessments.created_at < @security_cutoff AND assessments.created_at >=
+                (SELECT (value_json ->> 'at')::timestamptz FROM caddy_ui.application_settings WHERE key = 'analytics.lightweight_started_at');
+            DELETE FROM caddy_ui.client_assessments
+            WHERE created_at < @security_cutoff AND created_at >=
+                (SELECT (value_json ->> 'at')::timestamptz FROM caddy_ui.application_settings WHERE key = 'analytics.lightweight_started_at');
+            DELETE FROM caddy_ui.ingestion_failures
+            WHERE occurred_at < @security_cutoff AND occurred_at >=
+                (SELECT (value_json ->> 'at')::timestamptz FROM caddy_ui.application_settings WHERE key = 'analytics.lightweight_started_at');
+            WITH expired AS (
+                SELECT clients.id FROM caddy_ui.anonymous_clients AS clients
+                WHERE clients.last_seen_at < @security_cutoff AND clients.first_seen_at >=
+                    (SELECT (value_json ->> 'at')::timestamptz FROM caddy_ui.application_settings WHERE key = 'analytics.lightweight_started_at')
+                  AND NOT EXISTS (SELECT 1 FROM caddy_ui.client_activity_buckets WHERE client_id = clients.id)
+                  AND NOT EXISTS (SELECT 1 FROM caddy_ui.client_assessments WHERE anonymous_client_id = clients.id)
+                  AND NOT EXISTS (SELECT 1 FROM caddy_ui.security_events WHERE anonymous_client_id = clients.id)
+                  AND NOT EXISTS (SELECT 1 FROM caddy_ui.request_events WHERE anonymous_client_id = clients.id)
+                  AND NOT EXISTS (SELECT 1 FROM caddy_ui.page_views WHERE anonymous_client_id = clients.id)
+                  AND NOT EXISTS (SELECT 1 FROM caddy_ui.analytics_sessions WHERE anonymous_client_id = clients.id)
+                ORDER BY clients.last_seen_at LIMIT 1000
+            )
+            DELETE FROM caddy_ui.anonymous_clients WHERE id IN (SELECT id FROM expired);
+            """, command =>
+            {
+                AddParameter(command, "statistics_cutoff", now.AddDays(-retention.StatisticsDays));
+                AddParameter(command, "security_cutoff", now.AddDays(-retention.SecurityEventDays));
+                AddParameter(command, "evidence_cutoff", now.AddMinutes(-options.SecurityEvidenceMinutes));
+            }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task SaveRetentionAsync(int statisticsDays, int securityEventDays, CancellationToken cancellationToken = default)
+    {
+        if (statisticsDays is < 1 or > 3650)
+            throw new ArgumentOutOfRangeException(nameof(statisticsDays));
+        if (securityEventDays is < 1 or > 3650)
+            throw new ArgumentOutOfRangeException(nameof(securityEventDays));
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await OpenConnectionAsync(context, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO caddy_ui.application_settings(key, value_json, updated_at)
+            VALUES ('analytics.retention', CAST(@settings AS jsonb), CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = EXCLUDED.updated_at
+            """;
+        AddParameter(command, "settings", JsonSerializer.Serialize(new { statistics_days = statisticsDays, security_event_days = securityEventDays }));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task<AnalyticsRetention> ReadRetentionAsync(DbConnection connection, DbTransaction transaction,
+        AnalyticsIngestionOptions options, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT value_json::text FROM caddy_ui.application_settings WHERE key = 'analytics.retention'";
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        if (value is not string json)
+            return new AnalyticsRetention(options.StatisticsRetentionDays, options.SecurityEventRetentionDays);
+        using var settings = JsonDocument.Parse(json);
+        return new AnalyticsRetention(Math.Clamp(settings.RootElement.GetProperty("statistics_days").GetInt32(), 1, 3650),
+            Math.Clamp(settings.RootElement.GetProperty("security_event_days").GetInt32(), 1, 3650));
+    }
+
+    private static DateTimeOffset Bucket(DateTimeOffset value, int minutes)
+    {
+        var ticks = TimeSpan.FromMinutes(minutes).Ticks;
+        return new DateTimeOffset(value.UtcTicks / ticks * ticks, TimeSpan.Zero);
+    }
+
+    private static readonly string[] ScannerPaths = ["/.env", "/.git", "/wp-admin", "/wp-login", "/phpmyadmin", "/cgi-bin", "/actuator", "/vendor/phpunit", "/server-status", "/boaform"];
 
     public async Task<AnalyticsCheckpoint?> GetCheckpointAsync(
         string source,
@@ -59,296 +277,6 @@ public sealed class AnalyticsIngestionStore
             reader.GetString(1),
             reader.GetInt64(2),
             reader.IsDBNull(3) ? null : ReadTimestamp(reader, 3));
-    }
-
-    public async Task<AnalyticsPersistResult> PersistBatchAsync(
-        string source,
-        string sourceIdentity,
-        long byteOffset,
-        IReadOnlyList<ClassifiedRequest> requests,
-        IReadOnlyList<AnalyticsIngestionFailure> failures,
-        byte[] clientHashKey,
-        AnalyticsIngestionOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(source);
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourceIdentity);
-        ArgumentNullException.ThrowIfNull(requests);
-        ArgumentNullException.ThrowIfNull(failures);
-        ArgumentNullException.ThrowIfNull(clientHashKey);
-        ArgumentNullException.ThrowIfNull(options);
-        if (clientHashKey.Length == 0)
-        {
-            throw new ArgumentException(
-                "The analytics client hash key must not be empty.",
-                nameof(clientHashKey));
-        }
-
-        var preparedRequests = requests
-            .OrderBy(item => item.Request.OccurredAt)
-            .Select(item => new PreparedAnalyticsRequest(
-                item,
-                item.ActorType == AnalyticsActorType.Internal
-                    ? null
-                    : AnalyticsClientFingerprint.Create(item.Request, clientHashKey)))
-            .ToArray();
-        var lastEventAt = preparedRequests.Length == 0
-            ? (DateTimeOffset?)null
-            : preparedRequests[^1].Classified.Request.OccurredAt;
-
-        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var connection = await OpenConnectionAsync(context, cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-        var ensuredMonths = preparedRequests
-            .Select(item => new DateOnly(
-                item.Classified.Request.OccurredAt.Year,
-                item.Classified.Request.OccurredAt.Month,
-                1))
-            .Distinct()
-            .Where(month => !_knownPartitions.ContainsKey(month))
-            .ToArray();
-
-        try
-        {
-            foreach (var month in ensuredMonths)
-            {
-                await EnsurePartitionAsync(connection, transaction, month, cancellationToken);
-            }
-
-            var clientIds = await GetOrCreateClientsAsync(
-                connection,
-                transaction,
-                preparedRequests,
-                cancellationToken);
-            var insertedRequestIds = await InsertRequestsAsync(
-                connection,
-                transaction,
-                preparedRequests,
-                clientIds,
-                cancellationToken);
-            var insertedRequests = preparedRequests
-                .Where(item => insertedRequestIds.Contains(item.Classified.Request.Id))
-                .ToArray();
-
-            var pageViewsInserted = 0;
-            var sessionCache = new Dictionary<SessionCacheKey, SessionCacheEntry>();
-            var sessionDeltas = new Dictionary<Guid, SessionDelta>();
-            var pageLoadRequests = new List<PageLoadRequest>(insertedRequests.Length);
-            var idleTimeout = TimeSpan.FromMinutes(options.SessionIdleMinutes);
-
-            foreach (var prepared in insertedRequests)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var classified = prepared.Classified;
-                var request = classified.Request;
-                var clientId = GetClientId(prepared, clientIds);
-                Guid? sessionId = clientId is null ||
-                    classified.ActorType is AnalyticsActorType.Bot or AnalyticsActorType.Internal
-                        ? null
-                        : await ResolveSessionAsync(
-                            connection,
-                            transaction,
-                            sessionCache,
-                            clientId.Value,
-                            request.Host,
-                            request.OccurredAt,
-                            idleTimeout,
-                            classified.IsNavigation,
-                            cancellationToken);
-
-                if (sessionId is not null)
-                {
-                    AddSessionDelta(
-                        sessionDeltas,
-                        sessionId.Value,
-                        request.OccurredAt,
-                        classified.IsPageView);
-                }
-
-                if (classified.IsNavigation)
-                {
-                    var navigationId = await InsertNavigationAsync(
-                        connection,
-                        transaction,
-                        classified,
-                        sessionId,
-                        cancellationToken);
-                    if (classified.IsPageView)
-                    {
-                        await InsertPageViewAsync(
-                            connection,
-                            transaction,
-                            classified,
-                            navigationId,
-                            sessionId,
-                            clientId,
-                            options.PageLoadWindowSeconds,
-                            cancellationToken);
-                        pageViewsInserted++;
-                    }
-                }
-                else if (clientId is not null)
-                {
-                    pageLoadRequests.Add(
-                        new PageLoadRequest(
-                            clientId.Value,
-                            classified));
-                }
-            }
-
-            await UpdateRecentPageLoadsAsync(
-                connection,
-                transaction,
-                pageLoadRequests,
-                options.PageLoadWindowSeconds,
-                cancellationToken);
-            await UpdateSessionsAsync(
-                connection,
-                transaction,
-                sessionDeltas,
-                cancellationToken);
-            await UpsertAggregatesAsync(
-                connection,
-                transaction,
-                insertedRequests.Select(item => item.Classified).ToArray(),
-                cancellationToken);
-
-            foreach (var failure in failures)
-            {
-                await InsertFailureAsync(
-                    connection,
-                    transaction,
-                    source,
-                    failure,
-                    cancellationToken);
-            }
-
-            await UpsertCheckpointAsync(
-                connection,
-                transaction,
-                source,
-                sourceIdentity,
-                byteOffset,
-                lastEventAt,
-                cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            foreach (var month in ensuredMonths)
-            {
-                _knownPartitions.TryAdd(month, 0);
-            }
-
-            return new AnalyticsPersistResult(
-                insertedRequestIds.Count,
-                pageViewsInserted,
-                failures.Count);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
-    }
-
-    public async Task RunMaintenanceAsync(
-        AnalyticsIngestionOptions options,
-        DateTimeOffset now,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-
-        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var connection = await OpenConnectionAsync(context, cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-        var currentMonth = new DateOnly(now.Year, now.Month, 1);
-        var next = now.AddMonths(1);
-        var nextMonth = new DateOnly(next.Year, next.Month, 1);
-
-        try
-        {
-            await ExecuteAsync(
-                connection,
-                transaction,
-                "SELECT caddy_ui.drop_expired_request_event_partitions(@cutoff)",
-                command => AddParameter(
-                    command,
-                    "cutoff",
-                    DateOnly.FromDateTime(
-                        now.AddDays(-options.RawRequestRetentionDays).UtcDateTime)),
-                cancellationToken);
-
-            await ExecuteAsync(
-                connection,
-                transaction,
-                """
-                UPDATE caddy_ui.analytics_sessions
-                SET ended_at = last_activity_at
-                WHERE ended_at IS NULL
-                  AND last_activity_at < @session_cutoff;
-
-                UPDATE caddy_ui.page_loads
-                SET completed_at = COALESCE(completed_at, started_at)
-                WHERE completed_at IS NULL
-                  AND started_at < @page_load_cutoff;
-
-                DELETE FROM caddy_ui.request_events_default
-                WHERE occurred_at < @raw_cutoff;
-
-                DELETE FROM caddy_ui.navigation_events
-                WHERE occurred_at < @pageview_cutoff;
-
-                DELETE FROM caddy_ui.hourly_traffic_aggregates
-                WHERE bucket_start < @hourly_cutoff;
-
-                DELETE FROM caddy_ui.daily_traffic_aggregates
-                WHERE bucket_start < @daily_cutoff;
-
-                DELETE FROM caddy_ui.analytics_sessions
-                WHERE COALESCE(ended_at, last_activity_at) < @pageview_cutoff;
-                """,
-                command =>
-                {
-                    AddParameter(
-                        command,
-                        "session_cutoff",
-                        now.Subtract(TimeSpan.FromMinutes(options.SessionIdleMinutes)));
-                    AddParameter(
-                        command,
-                        "page_load_cutoff",
-                        now.Subtract(TimeSpan.FromSeconds(options.PageLoadWindowSeconds)));
-                    AddParameter(command, "raw_cutoff", now.AddDays(-options.RawRequestRetentionDays));
-                    AddParameter(command, "pageview_cutoff", now.AddDays(-options.PageViewRetentionDays));
-                    AddParameter(command, "hourly_cutoff", now.AddDays(-options.HourlyRetentionDays));
-                    AddParameter(
-                        command,
-                        "daily_cutoff",
-                        DateOnly.FromDateTime(now.AddDays(-options.DailyRetentionDays).UtcDateTime));
-                },
-                cancellationToken);
-
-            await EnsurePartitionAsync(
-                connection,
-                transaction,
-                currentMonth,
-                cancellationToken);
-            await EnsurePartitionAsync(
-                connection,
-                transaction,
-                nextMonth,
-                cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            _knownPartitions.TryAdd(currentMonth, 0);
-            _knownPartitions.TryAdd(nextMonth, 0);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 
     private static async Task<Dictionary<string, Guid>> GetOrCreateClientsAsync(
@@ -439,799 +367,6 @@ public sealed class AnalyticsIngestionStore
         return clientIds;
     }
 
-    private static async Task<HashSet<Guid>> InsertRequestsAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        IReadOnlyList<PreparedAnalyticsRequest> requests,
-        IReadOnlyDictionary<string, Guid> clientIds,
-        CancellationToken cancellationToken)
-    {
-        if (requests.Count == 0)
-        {
-            return [];
-        }
-
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        var sql = new StringBuilder(
-            """
-            INSERT INTO caddy_ui.request_events(
-                id, occurred_at, source_file, source_offset, host, method, path,
-                query_string, status, duration_ms, bytes_sent, remote_address,
-                user_agent, referer, accept_header, content_type, sec_fetch_dest,
-                actor_type, request_type, classification_confidence,
-                managed_route_id, anonymous_client_id, raw_json)
-            VALUES
-            """);
-
-        for (var index = 0; index < requests.Count; index++)
-        {
-            if (index > 0)
-            {
-                sql.Append(',');
-            }
-
-            sql.Append(
-                CultureInfo.InvariantCulture,
-                $"""
-
-                (@id_{index}, @occurred_at_{index}, @source_file_{index}, @source_offset_{index},
-                 @host_{index}, @method_{index}, @path_{index}, @query_string_{index},
-                 @status_{index}, @duration_ms_{index}, @bytes_sent_{index},
-                 CAST(@remote_address_{index} AS inet), @user_agent_{index}, @referer_{index},
-                 @accept_header_{index}, @content_type_{index}, @sec_fetch_dest_{index},
-                 @actor_type_{index}, @request_type_{index}, @classification_confidence_{index},
-                 NULL, @anonymous_client_id_{index}, CAST(@raw_json_{index} AS jsonb))
-                """);
-
-            var prepared = requests[index];
-            var classified = prepared.Classified;
-            var request = classified.Request;
-            AddParameter(command, $"id_{index}", request.Id);
-            AddParameter(command, $"occurred_at_{index}", request.OccurredAt);
-            AddParameter(command, $"source_file_{index}", request.SourceFile);
-            AddParameter(command, $"source_offset_{index}", request.SourceOffset);
-            AddParameter(command, $"host_{index}", request.Host);
-            AddParameter(command, $"method_{index}", request.Method);
-            AddParameter(command, $"path_{index}", request.Path);
-            AddParameter(command, $"query_string_{index}", request.QueryString);
-            AddParameter(command, $"status_{index}", request.Status);
-            AddParameter(command, $"duration_ms_{index}", request.DurationMilliseconds);
-            AddParameter(command, $"bytes_sent_{index}", request.BytesSent);
-            AddParameter(command, $"remote_address_{index}", request.RemoteAddress);
-            AddParameter(command, $"user_agent_{index}", request.UserAgent);
-            AddParameter(command, $"referer_{index}", request.Referer);
-            AddParameter(command, $"accept_header_{index}", request.AcceptHeader);
-            AddParameter(command, $"content_type_{index}", request.ContentType);
-            AddParameter(command, $"sec_fetch_dest_{index}", request.SecFetchDest);
-            AddParameter(command, $"actor_type_{index}", classified.ActorType.ToStorageValue());
-            AddParameter(command, $"request_type_{index}", classified.RequestType.ToStorageValue());
-            AddParameter(
-                command,
-                $"classification_confidence_{index}",
-                classified.Confidence.ToStorageValue());
-            AddParameter(
-                command,
-                $"anonymous_client_id_{index}",
-                GetClientId(prepared, clientIds));
-            AddParameter(command, $"raw_json_{index}", request.RawJson);
-        }
-
-        sql.Append(
-            """
-
-            ON CONFLICT DO NOTHING
-            RETURNING id
-            """);
-        command.CommandText = sql.ToString();
-
-        var inserted = new HashSet<Guid>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            inserted.Add(reader.GetGuid(0));
-        }
-
-        return inserted;
-    }
-
-    private static Guid? GetClientId(
-        PreparedAnalyticsRequest request,
-        IReadOnlyDictionary<string, Guid> clientIds)
-    {
-        if (request.Identity is null)
-        {
-            return null;
-        }
-
-        return clientIds.TryGetValue(request.Identity.ClientKey, out var clientId)
-            ? clientId
-            : throw new InvalidOperationException(
-                "The analytics client could not be resolved for the current batch.");
-    }
-
-    private static async Task<Guid?> ResolveSessionAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        IDictionary<SessionCacheKey, SessionCacheEntry> cache,
-        Guid clientId,
-        string host,
-        DateTimeOffset occurredAt,
-        TimeSpan idleTimeout,
-        bool createWhenMissing,
-        CancellationToken cancellationToken)
-    {
-        var key = new SessionCacheKey(clientId, host);
-        if (cache.TryGetValue(key, out var cached) &&
-            occurredAt >= cached.LastActivityAt &&
-            occurredAt - cached.LastActivityAt <= idleTimeout)
-        {
-            if (cached.SessionId is not null || !createWhenMissing)
-            {
-                cache[key] = cached with { LastActivityAt = occurredAt };
-                return cached.SessionId;
-            }
-        }
-
-        var sessionId = await FindOrCreateSessionAsync(
-            connection,
-            transaction,
-            clientId,
-            host,
-            occurredAt,
-            idleTimeout,
-            createWhenMissing,
-            cancellationToken);
-        cache[key] = new SessionCacheEntry(sessionId, occurredAt);
-        return sessionId;
-    }
-
-    private static async Task<Guid?> FindOrCreateSessionAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        Guid clientId,
-        string host,
-        DateTimeOffset occurredAt,
-        TimeSpan idleTimeout,
-        bool createWhenMissing,
-        CancellationToken cancellationToken)
-    {
-        await using (var command = connection.CreateCommand())
-        {
-            command.Transaction = transaction;
-            command.CommandText =
-                """
-                SELECT id
-                FROM caddy_ui.analytics_sessions
-                WHERE anonymous_client_id = @client_id
-                  AND host = @host
-                  AND ended_at IS NULL
-                  AND last_activity_at >= @activity_cutoff
-                  AND last_activity_at <= @future_cutoff
-                ORDER BY last_activity_at DESC
-                LIMIT 1
-                FOR UPDATE
-                """;
-            AddParameter(command, "client_id", clientId);
-            AddParameter(command, "host", host);
-            AddParameter(command, "activity_cutoff", occurredAt.Subtract(idleTimeout));
-            AddParameter(command, "future_cutoff", occurredAt.Add(idleTimeout));
-            if (await command.ExecuteScalarAsync(cancellationToken) is Guid existing)
-            {
-                return existing;
-            }
-        }
-
-        if (!createWhenMissing)
-        {
-            return null;
-        }
-
-        var sessionId = Guid.NewGuid();
-        await ExecuteAsync(
-            connection,
-            transaction,
-            """
-            INSERT INTO caddy_ui.analytics_sessions(
-                id, anonymous_client_id, host, started_at, last_activity_at,
-                ended_at, page_view_count, request_count)
-            VALUES(
-                @id, @client_id, @host, @occurred_at, @occurred_at,
-                NULL, 0, 0)
-            """,
-            command =>
-            {
-                AddParameter(command, "id", sessionId);
-                AddParameter(command, "client_id", clientId);
-                AddParameter(command, "host", host);
-                AddParameter(command, "occurred_at", occurredAt);
-            },
-            cancellationToken);
-        return sessionId;
-    }
-
-    private static void AddSessionDelta(
-        IDictionary<Guid, SessionDelta> deltas,
-        Guid sessionId,
-        DateTimeOffset occurredAt,
-        bool isPageView)
-    {
-        if (deltas.TryGetValue(sessionId, out var existing))
-        {
-            deltas[sessionId] = existing with
-            {
-                LastActivityAt = occurredAt > existing.LastActivityAt
-                    ? occurredAt
-                    : existing.LastActivityAt,
-                RequestCount = existing.RequestCount + 1,
-                PageViewCount = existing.PageViewCount + (isPageView ? 1 : 0),
-            };
-            return;
-        }
-
-        deltas[sessionId] = new SessionDelta(
-            occurredAt,
-            1,
-            isPageView ? 1 : 0);
-    }
-
-    private static Task UpdateSessionsAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        IReadOnlyDictionary<Guid, SessionDelta> deltas,
-        CancellationToken cancellationToken)
-    {
-        if (deltas.Count == 0)
-        {
-            return Task.CompletedTask;
-        }
-
-        return ExecuteDynamicAsync(
-            connection,
-            transaction,
-            command =>
-            {
-                var sql = new StringBuilder(
-                    """
-                    WITH updates(id, last_activity_at, request_count, page_view_count) AS (
-                        VALUES
-                    """);
-                var index = 0;
-                foreach (var (sessionId, delta) in deltas)
-                {
-                    if (index > 0)
-                    {
-                        sql.Append(',');
-                    }
-
-                    sql.Append(
-                        CultureInfo.InvariantCulture,
-                        $"""
-
-                        (@id_{index}, @last_activity_at_{index}, @request_count_{index}, @page_view_count_{index})
-                        """);
-                    AddParameter(command, $"id_{index}", sessionId);
-                    AddParameter(command, $"last_activity_at_{index}", delta.LastActivityAt);
-                    AddParameter(command, $"request_count_{index}", delta.RequestCount);
-                    AddParameter(command, $"page_view_count_{index}", delta.PageViewCount);
-                    index++;
-                }
-
-                sql.Append(
-                    """
-
-                    )
-                    UPDATE caddy_ui.analytics_sessions AS sessions
-                    SET last_activity_at = GREATEST(
-                            sessions.last_activity_at,
-                            updates.last_activity_at),
-                        request_count = sessions.request_count + updates.request_count,
-                        page_view_count = sessions.page_view_count + updates.page_view_count
-                    FROM updates
-                    WHERE sessions.id = updates.id
-                    """);
-                return sql.ToString();
-            },
-            cancellationToken);
-    }
-
-    private static async Task<Guid> InsertNavigationAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        ClassifiedRequest classified,
-        Guid? sessionId,
-        CancellationToken cancellationToken)
-    {
-        var request = classified.Request;
-        var navigationId = Guid.NewGuid();
-        await ExecuteAsync(
-            connection,
-            transaction,
-            """
-            INSERT INTO caddy_ui.navigation_events(
-                id, request_event_id, request_occurred_at, analytics_session_id,
-                occurred_at, host, path, state, evidence_json)
-            VALUES(
-                @id, @request_event_id, @request_occurred_at, @session_id,
-                @occurred_at, @host, @path, @state, CAST(@evidence_json AS jsonb))
-            """,
-            command =>
-            {
-                AddParameter(command, "id", navigationId);
-                AddParameter(command, "request_event_id", request.Id);
-                AddParameter(command, "request_occurred_at", request.OccurredAt);
-                AddParameter(command, "session_id", sessionId);
-                AddParameter(command, "occurred_at", request.OccurredAt);
-                AddParameter(command, "host", request.Host);
-                AddParameter(command, "path", request.Path);
-                AddParameter(command, "state", classified.NavigationState.ToStorageValue());
-                AddParameter(command, "evidence_json", JsonSerializer.Serialize(classified.Evidence));
-            },
-            cancellationToken);
-        return navigationId;
-    }
-
-    private static Task InsertPageViewAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        ClassifiedRequest classified,
-        Guid navigationId,
-        Guid? sessionId,
-        Guid? clientId,
-        int pageLoadWindowSeconds,
-        CancellationToken cancellationToken)
-    {
-        var request = classified.Request;
-        var pageViewId = Guid.NewGuid();
-        return ExecuteAsync(
-            connection,
-            transaction,
-            """
-            INSERT INTO caddy_ui.page_views(
-                id, navigation_event_id, analytics_session_id, anonymous_client_id,
-                occurred_at, host, path, source, successful, estimated)
-            VALUES(
-                @id, @navigation_id, @session_id, @client_id,
-                @occurred_at, @host, @path, @source, true, @estimated);
-
-            INSERT INTO caddy_ui.page_loads(
-                id, page_view_id, started_at, completed_at, request_count,
-                asset_request_count, api_request_count, bytes_sent, estimated,
-                grouping_evidence_json)
-            VALUES(
-                @load_id, @id, @occurred_at, NULL, 1, 0, 0, @bytes_sent,
-                @estimated, CAST(@grouping_evidence_json AS jsonb));
-            """,
-            command =>
-            {
-                AddParameter(command, "id", pageViewId);
-                AddParameter(command, "load_id", Guid.NewGuid());
-                AddParameter(command, "navigation_id", navigationId);
-                AddParameter(command, "session_id", sessionId);
-                AddParameter(command, "client_id", clientId);
-                AddParameter(command, "occurred_at", request.OccurredAt);
-                AddParameter(command, "host", request.Host);
-                AddParameter(command, "path", request.Path);
-                AddParameter(
-                    command,
-                    "source",
-                    string.Equals(
-                        request.SecFetchDest,
-                        "document",
-                        StringComparison.OrdinalIgnoreCase)
-                            ? "sec-fetch-document"
-                            : "proxy-estimate");
-                AddParameter(
-                    command,
-                    "estimated",
-                    string.IsNullOrWhiteSpace(request.FirstPartyClientIdentifier));
-                AddParameter(command, "bytes_sent", request.BytesSent);
-                AddParameter(
-                    command,
-                    "grouping_evidence_json",
-                    JsonSerializer.Serialize(new Dictionary<string, object>
-                    {
-                        ["windowSeconds"] = pageLoadWindowSeconds,
-                        ["evidence"] = classified.Evidence,
-                    }));
-            },
-            cancellationToken);
-    }
-
-    private static Task UpdateRecentPageLoadsAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        IReadOnlyList<PageLoadRequest> requests,
-        int pageLoadWindowSeconds,
-        CancellationToken cancellationToken)
-    {
-        if (requests.Count == 0)
-        {
-            return Task.CompletedTask;
-        }
-
-        return ExecuteDynamicAsync(
-            connection,
-            transaction,
-            command =>
-            {
-                var sql = new StringBuilder(
-                    """
-                    WITH events(
-                        client_id, host, occurred_at,
-                        asset_increment, api_increment, bytes_sent) AS (
-                        VALUES
-                    """);
-
-                for (var index = 0; index < requests.Count; index++)
-                {
-                    if (index > 0)
-                    {
-                        sql.Append(',');
-                    }
-
-                    sql.Append(
-                        CultureInfo.InvariantCulture,
-                        $"""
-
-                        (@client_id_{index}, @host_{index}, @occurred_at_{index},
-                         @asset_increment_{index}, @api_increment_{index}, @bytes_sent_{index})
-                        """);
-
-                    var request = requests[index];
-                    AddParameter(command, $"client_id_{index}", request.ClientId);
-                    AddParameter(command, $"host_{index}", request.Classified.Request.Host);
-                    AddParameter(
-                        command,
-                        $"occurred_at_{index}",
-                        request.Classified.Request.OccurredAt);
-                    AddParameter(
-                        command,
-                        $"asset_increment_{index}",
-                        request.Classified.RequestType == AnalyticsRequestType.Asset ? 1 : 0);
-                    AddParameter(
-                        command,
-                        $"api_increment_{index}",
-                        request.Classified.RequestType == AnalyticsRequestType.Api ? 1 : 0);
-                    AddParameter(
-                        command,
-                        $"bytes_sent_{index}",
-                        request.Classified.Request.BytesSent);
-                }
-
-                AddParameter(command, "window_seconds", pageLoadWindowSeconds);
-                sql.Append(
-                    """
-
-                    ),
-                    mapped AS (
-                        SELECT recent.id,
-                               COUNT(*)::integer AS request_increment,
-                               COALESCE(SUM(events.asset_increment), 0)::integer AS asset_increment,
-                               COALESCE(SUM(events.api_increment), 0)::integer AS api_increment,
-                               COALESCE(SUM(events.bytes_sent), 0)::bigint AS bytes_increment,
-                               MAX(events.occurred_at) AS completed_at
-                        FROM events
-                        JOIN LATERAL (
-                            SELECT loads.id
-                            FROM caddy_ui.page_loads AS loads
-                            JOIN caddy_ui.page_views AS views
-                              ON views.id = loads.page_view_id
-                            WHERE views.anonymous_client_id = events.client_id
-                              AND views.host = events.host
-                              AND loads.started_at <= events.occurred_at
-                              AND loads.started_at >=
-                                  events.occurred_at - (@window_seconds * INTERVAL '1 second')
-                            ORDER BY loads.started_at DESC
-                            LIMIT 1
-                        ) AS recent ON TRUE
-                        GROUP BY recent.id
-                    )
-                    UPDATE caddy_ui.page_loads AS loads
-                    SET request_count = loads.request_count + mapped.request_increment,
-                        asset_request_count =
-                            loads.asset_request_count + mapped.asset_increment,
-                        api_request_count =
-                            loads.api_request_count + mapped.api_increment,
-                        bytes_sent = loads.bytes_sent + mapped.bytes_increment,
-                        completed_at = GREATEST(
-                            COALESCE(loads.completed_at, mapped.completed_at),
-                            mapped.completed_at)
-                    FROM mapped
-                    WHERE loads.id = mapped.id
-                    """);
-                return sql.ToString();
-            },
-            cancellationToken);
-    }
-
-    private static async Task UpsertAggregatesAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        IReadOnlyList<ClassifiedRequest> requests,
-        CancellationToken cancellationToken)
-    {
-        if (requests.Count == 0)
-        {
-            return;
-        }
-
-        await UpsertTrafficAggregatesAsync(
-            connection,
-            transaction,
-            "hourly_traffic_aggregates",
-            BuildTrafficAggregateRows(
-                requests,
-                item => GetHourBucket(item.Request.OccurredAt)),
-            cancellationToken);
-        await UpsertTrafficAggregatesAsync(
-            connection,
-            transaction,
-            "daily_traffic_aggregates",
-            BuildTrafficAggregateRows(
-                requests,
-                item => GetDayBucket(item.Request.OccurredAt)),
-            cancellationToken);
-        await UpsertTrafficAggregatesAsync(
-            connection,
-            transaction,
-            "monthly_traffic_aggregates",
-            BuildTrafficAggregateRows(
-                requests,
-                item => GetMonthBucket(item.Request.OccurredAt)),
-            cancellationToken);
-        await UpsertRouteAggregatesAsync(
-            connection,
-            transaction,
-            BuildRouteAggregateRows(requests),
-            cancellationToken);
-    }
-
-    private static IReadOnlyList<TrafficAggregateRow> BuildTrafficAggregateRows(
-        IReadOnlyList<ClassifiedRequest> requests,
-        Func<ClassifiedRequest, object> bucketSelector)
-    {
-        return requests
-            .GroupBy(item => new TrafficAggregateKey(
-                bucketSelector(item),
-                item.Request.Host,
-                GetStatusClass(item.Request.Status),
-                item.ActorType.ToStorageValue(),
-                item.RequestType.ToStorageValue()))
-            .Select(group => new TrafficAggregateRow(
-                group.Key.BucketStart,
-                group.Key.Host,
-                group.Key.StatusClass,
-                group.Key.ActorType,
-                group.Key.RequestType,
-                group.LongCount(),
-                group.LongCount(item => item.IsPageView),
-                group.Sum(item => item.Request.BytesSent),
-                group.Sum(item => item.Request.DurationMilliseconds),
-                group.Max(item => item.Request.DurationMilliseconds)))
-            .ToArray();
-    }
-
-    private static Task UpsertTrafficAggregatesAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        string table,
-        IReadOnlyList<TrafficAggregateRow> rows,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteDynamicAsync(
-            connection,
-            transaction,
-            command =>
-            {
-                var sql = new StringBuilder();
-                sql.Append(
-                    CultureInfo.InvariantCulture,
-                    $"""
-                    INSERT INTO caddy_ui.{table}(
-                        bucket_start, host, status_class, actor_type, request_type,
-                        requests, page_views, bytes_sent, duration_sum_ms, duration_max_ms)
-                    VALUES
-                    """);
-
-                for (var index = 0; index < rows.Count; index++)
-                {
-                    if (index > 0)
-                    {
-                        sql.Append(',');
-                    }
-
-                    sql.Append(
-                        CultureInfo.InvariantCulture,
-                        $"""
-
-                        (@bucket_start_{index}, @host_{index}, @status_class_{index},
-                         @actor_type_{index}, @request_type_{index}, @requests_{index},
-                         @page_views_{index}, @bytes_sent_{index}, @duration_sum_ms_{index},
-                         @duration_max_ms_{index})
-                        """);
-                    var row = rows[index];
-                    AddParameter(command, $"bucket_start_{index}", row.BucketStart);
-                    AddParameter(command, $"host_{index}", row.Host);
-                    AddParameter(command, $"status_class_{index}", row.StatusClass);
-                    AddParameter(command, $"actor_type_{index}", row.ActorType);
-                    AddParameter(command, $"request_type_{index}", row.RequestType);
-                    AddParameter(command, $"requests_{index}", row.Requests);
-                    AddParameter(command, $"page_views_{index}", row.PageViews);
-                    AddParameter(command, $"bytes_sent_{index}", row.BytesSent);
-                    AddParameter(command, $"duration_sum_ms_{index}", row.DurationSumMilliseconds);
-                    AddParameter(command, $"duration_max_ms_{index}", row.DurationMaxMilliseconds);
-                }
-
-                sql.Append(
-                    CultureInfo.InvariantCulture,
-                    $"""
-
-                    ON CONFLICT (bucket_start, host, status_class, actor_type, request_type)
-                    DO UPDATE SET
-                        requests = caddy_ui.{table}.requests + EXCLUDED.requests,
-                        page_views = caddy_ui.{table}.page_views + EXCLUDED.page_views,
-                        bytes_sent = caddy_ui.{table}.bytes_sent + EXCLUDED.bytes_sent,
-                        duration_sum_ms =
-                            caddy_ui.{table}.duration_sum_ms + EXCLUDED.duration_sum_ms,
-                        duration_max_ms = GREATEST(
-                            caddy_ui.{table}.duration_max_ms,
-                            EXCLUDED.duration_max_ms)
-                    """);
-                return sql.ToString();
-            },
-            cancellationToken);
-    }
-
-    private static IReadOnlyList<RouteAggregateRow> BuildRouteAggregateRows(
-        IReadOnlyList<ClassifiedRequest> requests)
-    {
-        return requests
-            .GroupBy(item => new RouteAggregateKey(
-                GetHourBucket(item.Request.OccurredAt),
-                item.Request.Host,
-                PathCardinalityNormalizer.Normalize(item.Request.Path),
-                item.RequestType.ToStorageValue()))
-            .Select(group => new RouteAggregateRow(
-                group.Key.BucketStart,
-                group.Key.Host,
-                group.Key.PathPattern,
-                group.Key.RequestType,
-                group.LongCount(),
-                group.LongCount(item => item.Request.Status >= 400),
-                group.Sum(item => item.Request.DurationMilliseconds),
-                group.Max(item => item.Request.DurationMilliseconds)))
-            .ToArray();
-    }
-
-    private static Task UpsertRouteAggregatesAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        IReadOnlyList<RouteAggregateRow> rows,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteDynamicAsync(
-            connection,
-            transaction,
-            command =>
-            {
-                var sql = new StringBuilder(
-                    """
-                    INSERT INTO caddy_ui.route_performance_aggregates(
-                        bucket_start, granularity, host, path_pattern, request_type,
-                        request_count, error_count, duration_sum_ms, duration_max_ms,
-                        p50_ms, p95_ms, p99_ms)
-                    VALUES
-                    """);
-
-                for (var index = 0; index < rows.Count; index++)
-                {
-                    if (index > 0)
-                    {
-                        sql.Append(',');
-                    }
-
-                    sql.Append(
-                        CultureInfo.InvariantCulture,
-                        $"""
-
-                        (@bucket_start_{index}, 'hour', @host_{index}, @path_pattern_{index},
-                         @request_type_{index}, @request_count_{index}, @error_count_{index},
-                         @duration_sum_ms_{index}, @duration_max_ms_{index}, NULL, NULL, NULL)
-                        """);
-                    var row = rows[index];
-                    AddParameter(command, $"bucket_start_{index}", row.BucketStart);
-                    AddParameter(command, $"host_{index}", row.Host);
-                    AddParameter(command, $"path_pattern_{index}", row.PathPattern);
-                    AddParameter(command, $"request_type_{index}", row.RequestType);
-                    AddParameter(command, $"request_count_{index}", row.RequestCount);
-                    AddParameter(command, $"error_count_{index}", row.ErrorCount);
-                    AddParameter(command, $"duration_sum_ms_{index}", row.DurationSumMilliseconds);
-                    AddParameter(command, $"duration_max_ms_{index}", row.DurationMaxMilliseconds);
-                }
-
-                sql.Append(
-                    """
-
-                    ON CONFLICT (bucket_start, granularity, host, path_pattern, request_type)
-                    DO UPDATE SET
-                        request_count =
-                            caddy_ui.route_performance_aggregates.request_count +
-                            EXCLUDED.request_count,
-                        error_count =
-                            caddy_ui.route_performance_aggregates.error_count +
-                            EXCLUDED.error_count,
-                        duration_sum_ms =
-                            caddy_ui.route_performance_aggregates.duration_sum_ms +
-                            EXCLUDED.duration_sum_ms,
-                        duration_max_ms = GREATEST(
-                            caddy_ui.route_performance_aggregates.duration_max_ms,
-                            EXCLUDED.duration_max_ms)
-                    """);
-                return sql.ToString();
-            },
-            cancellationToken);
-    }
-
-    private static DateTimeOffset GetHourBucket(DateTimeOffset occurredAt)
-    {
-        var utc = occurredAt.ToUniversalTime();
-        return new DateTimeOffset(
-            utc.Year,
-            utc.Month,
-            utc.Day,
-            utc.Hour,
-            0,
-            0,
-            TimeSpan.Zero);
-    }
-
-    private static DateOnly GetDayBucket(DateTimeOffset occurredAt)
-    {
-        var utc = occurredAt.ToUniversalTime();
-        return new DateOnly(utc.Year, utc.Month, utc.Day);
-    }
-
-    private static DateOnly GetMonthBucket(DateTimeOffset occurredAt)
-    {
-        var utc = occurredAt.ToUniversalTime();
-        return new DateOnly(utc.Year, utc.Month, 1);
-    }
-
-    private static string GetStatusClass(int status)
-    {
-        return status is >= 100 and <= 599
-            ? string.Create(CultureInfo.InvariantCulture, $"{status / 100}xx")
-            : "other";
-    }
-
-    private static Task InsertFailureAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        string source,
-        AnalyticsIngestionFailure failure,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteAsync(
-            connection,
-            transaction,
-            """
-            INSERT INTO caddy_ui.ingestion_failures(
-                source, source_offset, occurred_at, raw_line, error, resolved_at)
-            VALUES(
-                @source, @source_offset, @occurred_at, @raw_line, @error, NULL)
-            """,
-            command =>
-            {
-                AddParameter(command, "source", source);
-                AddParameter(command, "source_offset", failure.SourceOffset);
-                AddParameter(command, "occurred_at", DateTimeOffset.UtcNow);
-                AddParameter(command, "raw_line", failure.SafeRawLine);
-                AddParameter(command, "error", failure.Error);
-            },
-            cancellationToken);
-    }
-
     private static Task UpsertCheckpointAsync(
         DbConnection connection,
         DbTransaction transaction,
@@ -1271,20 +406,6 @@ public sealed class AnalyticsIngestionStore
             cancellationToken);
     }
 
-    private static Task EnsurePartitionAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        DateOnly month,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteAsync(
-            connection,
-            transaction,
-            "SELECT caddy_ui.ensure_request_event_partition(@month)",
-            command => AddParameter(command, "month", month),
-            cancellationToken);
-    }
-
     private static async Task ExecuteAsync(
         DbConnection connection,
         DbTransaction transaction,
@@ -1296,18 +417,6 @@ public sealed class AnalyticsIngestionStore
         command.Transaction = transaction;
         command.CommandText = sql;
         bind(command);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private static async Task ExecuteDynamicAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        Func<DbCommand, string> buildSql,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = buildSql(command);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -1345,58 +454,5 @@ public sealed class AnalyticsIngestionStore
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
     }
-
-    private sealed record PreparedAnalyticsRequest(
-        ClassifiedRequest Classified,
-        AnalyticsClientIdentity? Identity);
-
-    private readonly record struct SessionCacheKey(Guid ClientId, string Host);
-
-    private sealed record SessionCacheEntry(
-        Guid? SessionId,
-        DateTimeOffset LastActivityAt);
-
-    private sealed record SessionDelta(
-        DateTimeOffset LastActivityAt,
-        long RequestCount,
-        int PageViewCount);
-
-    private sealed record PageLoadRequest(
-        Guid ClientId,
-        ClassifiedRequest Classified);
-
-    private sealed record TrafficAggregateKey(
-        object BucketStart,
-        string Host,
-        string StatusClass,
-        string ActorType,
-        string RequestType);
-
-    private sealed record TrafficAggregateRow(
-        object BucketStart,
-        string Host,
-        string StatusClass,
-        string ActorType,
-        string RequestType,
-        long Requests,
-        long PageViews,
-        long BytesSent,
-        double DurationSumMilliseconds,
-        double DurationMaxMilliseconds);
-
-    private sealed record RouteAggregateKey(
-        DateTimeOffset BucketStart,
-        string Host,
-        string PathPattern,
-        string RequestType);
-
-    private sealed record RouteAggregateRow(
-        DateTimeOffset BucketStart,
-        string Host,
-        string PathPattern,
-        string RequestType,
-        long RequestCount,
-        long ErrorCount,
-        double DurationSumMilliseconds,
-        double DurationMaxMilliseconds);
+    private sealed record PreparedAnalyticsRequest(ClassifiedRequest Classified, AnalyticsClientIdentity? Identity);
 }

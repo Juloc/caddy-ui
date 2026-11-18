@@ -100,13 +100,13 @@ public sealed class IpIntelligenceStore
                    @now,
                    0,
                    ''
-            FROM caddy_ui.request_events AS requests
+            FROM caddy_ui.client_activity_buckets AS requests
             LEFT JOIN caddy_ui.ip_intelligence_cache AS cache
               ON cache.address = requests.remote_address
             LEFT JOIN caddy_ui.ip_intelligence_refresh_queue AS queue
               ON queue.address = requests.remote_address
             WHERE requests.remote_address IS NOT NULL
-              AND requests.occurred_at >= @cutoff
+              AND requests.last_seen_at >= @cutoff
               AND queue.address IS NULL
               AND (cache.address IS NULL OR cache.expires_at <= @now)
             ON CONFLICT (address) DO NOTHING

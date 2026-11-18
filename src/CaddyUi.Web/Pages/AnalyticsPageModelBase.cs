@@ -18,6 +18,11 @@ public abstract class AnalyticsPageModelBase : LocalizedPageModel
 
     protected TimeProvider TimeProvider { get; }
 
+    public virtual bool IsLiveView => false;
+
+    [BindProperty(SupportsGet = true)]
+    public int RefreshSeconds { get; set; } = 30;
+
     [BindProperty(SupportsGet = true)]
     public string Range { get; set; } = "24h";
 
@@ -46,6 +51,7 @@ public abstract class AnalyticsPageModelBase : LocalizedPageModel
         CancellationToken cancellationToken)
     {
         var now = TimeProvider.GetUtcNow();
+        RefreshSeconds = RefreshSeconds == 0 ? 0 : Math.Clamp(RefreshSeconds, 5, 300);
         var from = NormalizeRange(Range, now);
         Filter = AnalyticsReadFilter.Create(
             from,

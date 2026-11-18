@@ -35,6 +35,10 @@ Die Bewertung ist deterministisch und versioniert. `risk-v1` verwendet unter and
 
 Jede Gewichtung wird als eigener Reason-Datensatz mit Evidenz gespeichert. Gleiche Eingabedaten und dieselbe Engine-Version ergeben dieselbe Bewertung. Eine Bewertung ist keine sichere Identifikation einer Person.
 
+## Compact security evidence
+
+The lightweight ingestion path supplies risk scoring and IP discovery from compact per-client minute buckets instead of raw request history. Buckets retain counts, error ratios, timing moments, scanner counts, a bounded set of path hashes and host names, and the latest technical address/user-agent. Path samples are capped at 64 and host samples at 8, above the engine's respective detection thresholds of 50 and 6. The configured risk/discovery windows remain authoritative; evidence expires after those windows plus the maintenance interval. DDNS, request-guard enforcement, manual blocks and risk scoring do not depend on any open UI page.
+
 ## Manuelle Sperren
 
 Jede Sperre benötigt:
@@ -61,4 +65,4 @@ Die Blocklist wird in eine temporäre Datei geschrieben, auf Platte synchronisie
 - `shadow`: separate Preview-Blocklist, keine produktive Sperrwirkung
 - `active`: schreibt die konfigurierte Caddy-Guard-Blocklist
 
-Standard ist `disabled`. Der bestehende Python-Produktivpfad bleibt bis zur kontrollierten Umschaltung zuständig.
+The default is `disabled`; production Compose enables `active` enforcement through the Caddy request guard.

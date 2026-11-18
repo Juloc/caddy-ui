@@ -26,7 +26,7 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task OneDocumentAndOneHundredAssets_ProduceOnePageView()
+    public async Task Batch_AggregatesRequestsWithoutVisitorHistory()
     {
         var factory = new RuntimeDbContextFactory(_postgres.GetConnectionString());
         await using (var database = factory.CreateDbContext())
@@ -63,8 +63,6 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
         var options = new AnalyticsIngestionOptions
         {
             Enabled = true,
-            SessionIdleMinutes = 30,
-            PageLoadWindowSeconds = 15,
         };
         var key = Enumerable.Range(1, 32).Select(value => (byte)value).ToArray();
 
@@ -85,77 +83,77 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
             key,
             options);
 
-        Assert.Equal(101, first.RequestsInserted);
-        Assert.Equal(1, first.PageViewsInserted);
-        Assert.Equal(0, second.RequestsInserted);
-        Assert.Equal(0, second.PageViewsInserted);
+        Assert.Equal(101, first.RequestsProcessed);
+        Assert.Equal(1, first.TrafficBucketsWritten);
+        Assert.Equal(0, second.RequestsProcessed);
+        Assert.Equal(0, second.TrafficBucketsWritten);
 
         await using var verification = factory.CreateDbContext();
-        Assert.Equal(101, await CountAsync(verification, "caddy_ui.request_events"));
-        Assert.Equal(1, await CountAsync(verification, "caddy_ui.navigation_events"));
-        Assert.Equal(1, await CountAsync(verification, "caddy_ui.page_views"));
-        Assert.Equal(1, await CountAsync(verification, "caddy_ui.analytics_sessions"));
+        Assert.Equal(0, await CountAsync(verification, "caddy_ui.request_events"));
+        Assert.Equal(0, await CountAsync(verification, "caddy_ui.navigation_events"));
+        Assert.Equal(0, await CountAsync(verification, "caddy_ui.page_views"));
+        Assert.Equal(0, await CountAsync(verification, "caddy_ui.analytics_sessions"));
 
         Assert.Equal(
             101,
             await verification.Database
                 .SqlQueryRaw<long>(
-                    "SELECT request_count AS \"Value\" FROM caddy_ui.analytics_sessions")
+                    "SELECT SUM(requests)::bigint AS \"Value\" FROM caddy_ui.traffic_buckets")
                 .SingleAsync());
         Assert.Equal(
             1,
             await verification.Database
                 .SqlQueryRaw<int>(
-                    "SELECT page_view_count AS \"Value\" FROM caddy_ui.analytics_sessions")
+                    "SELECT COUNT(*)::integer AS \"Value\" FROM caddy_ui.client_activity_buckets")
                 .SingleAsync());
         Assert.Equal(
             101,
             await verification.Database
                 .SqlQueryRaw<int>(
-                    "SELECT request_count AS \"Value\" FROM caddy_ui.page_loads")
-                .SingleAsync());
-        Assert.Equal(
-            100,
-            await verification.Database
-                .SqlQueryRaw<int>(
-                    "SELECT asset_request_count AS \"Value\" FROM caddy_ui.page_loads")
+                    "SELECT SUM(request_count)::integer AS \"Value\" FROM caddy_ui.client_activity_buckets")
                 .SingleAsync());
         Assert.Equal(
             0,
             await verification.Database
                 .SqlQueryRaw<int>(
-                    "SELECT api_request_count AS \"Value\" FROM caddy_ui.page_loads")
+                    "SELECT COUNT(*)::integer AS \"Value\" FROM caddy_ui.page_loads")
                 .SingleAsync());
         Assert.Equal(
-            101,
+            0,
+            await verification.Database
+                .SqlQueryRaw<int>(
+                    "SELECT COUNT(*)::integer AS \"Value\" FROM caddy_ui.route_performance_aggregates")
+                .SingleAsync());
+        Assert.Equal(
+            0,
             await AggregateRequestCountAsync(
                 verification,
                 "caddy_ui.hourly_traffic_aggregates"));
         Assert.Equal(
-            101,
+            0,
             await AggregateRequestCountAsync(
                 verification,
                 "caddy_ui.daily_traffic_aggregates"));
         Assert.Equal(
-            101,
+            0,
             await AggregateRequestCountAsync(
                 verification,
                 "caddy_ui.monthly_traffic_aggregates"));
         Assert.Equal(
-            1,
+            0,
             await verification.Database
                 .SqlQueryRaw<long>(
                     """
-                    SELECT SUM(page_views)::bigint AS "Value"
+                    SELECT COALESCE(SUM(page_views), 0)::bigint AS "Value"
                     FROM caddy_ui.hourly_traffic_aggregates
                     """)
                 .SingleAsync());
         Assert.Equal(
-            101,
+            0,
             await verification.Database
                 .SqlQueryRaw<long>(
                     """
-                    SELECT SUM(request_count)::bigint AS "Value"
+                    SELECT COALESCE(SUM(request_count), 0)::bigint AS "Value"
                     FROM caddy_ui.route_performance_aggregates
                     """)
                 .SingleAsync());
@@ -179,7 +177,7 @@ public sealed class AnalyticsIngestionStoreTests : IAsyncLifetime
 #pragma warning disable EF1002
         return await database.Database
             .SqlQueryRaw<long>(
-                $"SELECT SUM(requests)::bigint AS \"Value\" FROM {table}")
+                    $"SELECT COALESCE(SUM(requests), 0)::bigint AS \"Value\" FROM {table}")
             .SingleAsync();
 #pragma warning restore EF1002
     }

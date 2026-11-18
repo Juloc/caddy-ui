@@ -1,0 +1,21 @@
+@model CaddyUi.Infrastructure.Analytics.AnalyticsDashboardSnapshot
+<section class="metric-grid">
+    <article class="metric-card"><span class="metric-label">@T["Requests"]</span><strong class="metric-value">@Model.Requests.ToString("N0")</strong></article>
+    <article class="metric-card"><span class="metric-label">@T["Bot requests"]</span><strong class="metric-value">@Model.BotRequests.ToString("N0")</strong><span class="metric-detail">@Model.BotSharePercent.ToString("N1") %</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Errors"]</span><strong class="metric-value">@Model.Errors.ToString("N0")</strong><span class="metric-detail">@Model.ErrorRatePercent.ToString("N1") %</span></article>
+    <article class="metric-card"><span class="metric-label">@T["Traffic"]</span><strong class="metric-value">@AnalyticsPageModelBase.FormatBytes(Model.BytesSent)</strong></article>
+</section>
+<section class="panel panel--wide">
+    <header class="panel-header"><div><h2>@T["Domains"]</h2></div></header>
+    <div class="panel-body table-wrap"><table class="data-table">
+        <thead><tr><th>@T["Host"]</th><th>@T["Requests"]</th><th>@T["Bot requests"]</th><th>@T["Errors"]</th><th>@T["Traffic"]</th></tr></thead>
+        <tbody>
+        @foreach (var domain in Model.Domains)
+        {
+            <tr><td><a asp-page="/Traffic/Index" asp-route-host="@domain.Host">@domain.Host</a></td><td>@domain.Requests.ToString("N0")</td><td>@domain.BotRequests.ToString("N0")</td><td>@domain.Errors.ToString("N0")</td><td>@AnalyticsPageModelBase.FormatBytes(domain.BytesSent)</td></tr>
+        }
+        </tbody>
+    </table>
+    @if (Model.Domains.Count == 0) { <p class="empty-state">@T["No data matches the filter."]</p> }
+    </div>
+</section>

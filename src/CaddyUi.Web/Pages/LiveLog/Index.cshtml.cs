@@ -6,25 +6,31 @@ namespace CaddyUi.Web.Pages.LiveLog;
 [Authorize(Policy = "Viewer")]
 public sealed class IndexModel : AnalyticsPageModelBase
 {
-    public IndexModel(AnalyticsReadStore store, TimeProvider timeProvider)
+    private readonly bool _ingestionEnabled;
+
+    public IndexModel(AnalyticsReadStore store, TimeProvider timeProvider, AnalyticsIngestionOptions options)
         : base(store, timeProvider)
     {
+        _ingestionEnabled = options.Enabled;
     }
-
-    public IReadOnlyList<RequestAnalyticsRow> Requests { get; private set; } =
-        Array.Empty<RequestAnalyticsRow>();
 
     public string? EventStreamUrl { get; private set; }
 
     public string? LoadError { get; private set; }
 
+    public override bool IsLiveView => true;
+
     public async Task OnGetAsync()
     {
+        if (!_ingestionEnabled)
+        {
+            LoadError = Text("Analytics ingestion is disabled.");
+            return;
+        }
         try
         {
             Limit = Math.Clamp(Limit, 1, 100);
-            var filter = await PrepareFilterAsync(HttpContext.RequestAborted);
-            Requests = await Store.GetRequestsAsync(filter, cancellationToken: HttpContext.RequestAborted);
+            await PrepareFilterAsync(HttpContext.RequestAborted);
             var query = QueryString.Create(
                 new Dictionary<string, string?>
                 {
@@ -40,9 +46,8 @@ public sealed class IndexModel : AnalyticsPageModelBase
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Requests = Array.Empty<RequestAnalyticsRow>();
             EventStreamUrl = null;
-            LoadError = $"Live-Log konnte nicht gestartet werden: {exception.Message}";
+            LoadError = Text("Live log is currently unavailable");
         }
     }
 }

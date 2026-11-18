@@ -47,7 +47,7 @@ public sealed class AnalyticsReadStoreTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Dashboard_SeparatesOnePageViewFromAssetRequests()
+    public async Task Dashboard_ReadsCompactDomainCounters()
     {
         var factory = new RuntimeDbContextFactory(_postgres.GetConnectionString());
         await using (var database = factory.CreateDbContext())
@@ -77,8 +77,6 @@ public sealed class AnalyticsReadStoreTests : IAsyncLifetime
             new AnalyticsIngestionOptions
             {
                 Enabled = true,
-                SessionIdleMinutes = 30,
-                PageLoadWindowSeconds = 15,
             });
 
         var readStore = new AnalyticsReadStore(
@@ -91,22 +89,14 @@ public sealed class AnalyticsReadStoreTests : IAsyncLifetime
                 DateTimeOffset.FromUnixTimeSeconds(1785261700),
                 host: "mealie.example.com"));
 
-        var requestsWithoutCursor = await readStore.GetRequestsAsync(
-            AnalyticsReadFilter.Create(
-                DateTimeOffset.FromUnixTimeSeconds(1785261500),
-                DateTimeOffset.FromUnixTimeSeconds(1785261700),
-                host: "mealie.example.com"));
-
-        Assert.Equal(3, requestsWithoutCursor.Count);
-
         Assert.Equal(3, dashboard.Requests);
-        Assert.Equal(1, dashboard.PageViews);
-        Assert.Equal(3, dashboard.RequestsPerPageView);
-        Assert.Single(dashboard.TopPages);
-        Assert.Equal("/", dashboard.TopPages[0].Path);
-        Assert.Contains(
-            dashboard.LargestAssets,
-            item => item.Path == "/_nuxt/{token}.js" || item.Path.StartsWith("/_nuxt/", StringComparison.Ordinal));
+        Assert.Equal(0, dashboard.BotRequests);
+        Assert.Equal(0, dashboard.Errors);
+        Assert.Equal(2048, dashboard.BytesSent);
+        Assert.Equal("mealie.example.com", Assert.Single(dashboard.Domains).Host);
+        var series = await readStore.GetTrafficAsync(AnalyticsReadFilter.Create(
+            DateTimeOffset.FromUnixTimeSeconds(1785261500), DateTimeOffset.FromUnixTimeSeconds(1785261700), host: "mealie.example.com"));
+        Assert.Equal(3, Assert.Single(series).Requests);
     }
 
     private static ClassifiedRequest Parse(

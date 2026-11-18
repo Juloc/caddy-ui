@@ -39,10 +39,10 @@ public sealed class AnalyticsIngestionWorkerTests : IAsyncLifetime
         var store = new AnalyticsIngestionStore(counted);
         using var keyProvider = new AnalyticsClientKeyProvider(factory, new EphemeralDataProtectionProvider());
         var path = Path.Combine(_directory, "access.log");
-        var options = new AnalyticsIngestionOptions { Enabled = true, LogPaths = new[] { path }, PollIntervalMilliseconds = 10, BatchSize = 10 };
+        var options = new AnalyticsIngestionOptions { Enabled = true, LogPaths = new[] { path }, PollIntervalMilliseconds = 10, BatchSize = 10, FlushIntervalSeconds = 1 };
         var metrics = new AnalyticsIngestionRuntimeMetrics();
 
-        AnalyticsIngestionWorker CreateWorker() => new(options, new AnalyticsLogTailer(), new CaddyAccessLogParser(), new RequestClassifier(), store, metrics, keyProvider, NullLogger<AnalyticsIngestionWorker>.Instance);
+        AnalyticsIngestionWorker CreateWorker() => new(options, new AnalyticsLogTailer(), new CaddyAccessLogParser(), new RequestClassifier(), store, metrics, keyProvider, new AnalyticsLiveStream(TimeProvider.System), NullLogger<AnalyticsIngestionWorker>.Instance);
 
         using (var worker = CreateWorker())
         {
@@ -101,6 +101,42 @@ public sealed class AnalyticsIngestionWorkerTests : IAsyncLifetime
             await Task.Delay(10);
         }
         Assert.True(condition());
+    }
+
+    [Fact]
+    public async Task Worker_PublishesLiveBeforeFlushAndCommitsPendingCountersOnShutdown()
+    {
+        var factory = new RuntimeDbContextFactory(_postgres.GetConnectionString());
+        await using (var context = factory.CreateDbContext())
+        {
+            await context.Database.MigrateAsync();
+        }
+        var path = Path.Combine(_directory, "live.log");
+        await File.WriteAllTextAsync(path,
+            """{"ts":1785261600,"request":{"client_ip":"203.0.113.5","method":"GET","host":"example.test","uri":"/live-test"},"status":200,"size":128}""" + "\n");
+        var stream = new AnalyticsLiveStream(TimeProvider.System);
+        var viewer = stream.Subscribe();
+        var filter = AnalyticsReadFilter.Create(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow);
+        using var keyProvider = new AnalyticsClientKeyProvider(factory, new EphemeralDataProtectionProvider());
+        var store = new AnalyticsIngestionStore(factory);
+        using var worker = new AnalyticsIngestionWorker(
+            new AnalyticsIngestionOptions { Enabled = true, LogPaths = new[] { path }, PollIntervalMilliseconds = 10, FlushIntervalSeconds = 300 },
+            new AnalyticsLogTailer(), new CaddyAccessLogParser(), new RequestClassifier(), store, new AnalyticsIngestionRuntimeMetrics(), keyProvider,
+            stream, NullLogger<AnalyticsIngestionWorker>.Instance);
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitUntilAsync(() => stream.Read(viewer, 0, filter).Count == 1);
+            Assert.Null(await store.GetCheckpointAsync(path));
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+        Assert.Equal(new FileInfo(path).Length, (await store.GetCheckpointAsync(path))?.ByteOffset);
+        await using var verification = factory.CreateDbContext();
+        Assert.Equal(1, await verification.Database.SqlQueryRaw<long>("SELECT SUM(requests)::bigint AS \"Value\" FROM caddy_ui.traffic_buckets").SingleAsync());
+        Assert.Equal(0, await verification.Database.SqlQueryRaw<long>("SELECT COUNT(*) AS \"Value\" FROM caddy_ui.request_events").SingleAsync());
     }
 
     private sealed class CountingContextFactory(IDbContextFactory<CaddyUiDbContext> inner) : IDbContextFactory<CaddyUiDbContext>

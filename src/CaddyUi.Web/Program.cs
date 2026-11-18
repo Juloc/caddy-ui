@@ -91,7 +91,7 @@ app.MapGet(
         "/events/live",
         async (
             HttpContext context,
-            AnalyticsReadStore store,
+            AnalyticsLiveStream stream,
             TimeProvider timeProvider) =>
         {
             context.Response.ContentType = "text/event-stream";
@@ -99,20 +99,30 @@ app.MapGet(
             context.Response.Headers.Append("X-Accel-Buffering", "no");
 
             var initialFilter = CreateLiveFilter(context, timeProvider.GetUtcNow());
-            var after = timeProvider.GetUtcNow();
+            var after = long.TryParse(context.Request.Query["after"], out var cursor) ? Math.Max(0, cursor) : 0;
+            if (long.TryParse(context.Request.Headers["Last-Event-ID"], out var lastEventId))
+                after = Math.Max(0, lastEventId);
             var once = bool.TryParse(context.Request.Query["once"], out var parsedOnce) && parsedOnce;
+            Guid viewer;
+            try
+            {
+                viewer = stream.Subscribe();
+            }
+            catch (InvalidOperationException)
+            {
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                return;
+            }
 
             try
             {
                 do
                 {
                     var filter = initialFilter with { To = timeProvider.GetUtcNow() };
-                    var requests = await store.GetRequestsAsync(
-                        filter,
-                        after,
-                        context.RequestAborted);
-                    foreach (var request in requests.OrderBy(item => item.OccurredAt))
+                    var requests = stream.Read(viewer, after, filter);
+                    foreach (var item in requests)
                     {
+                        var request = item.Request;
                         var payload = JsonSerializer.Serialize(
                             new
                             {
@@ -127,15 +137,15 @@ app.MapGet(
                                 request.BytesSent,
                                 request.RemoteAddress,
                                 request.ClientId,
-                            });
+                            }, JsonSerializerOptions.Web);
                         await context.Response.WriteAsync(
-                            $"event: request\ndata: {payload}\n\n",
+                            $"id: {item.Sequence}\nevent: request\ndata: {payload}\n\n",
                             context.RequestAborted);
                     }
 
                     if (requests.Count > 0)
                     {
-                        after = requests.Max(item => item.OccurredAt);
+                        after = requests[^1].Sequence;
                     }
 
                     await context.Response.WriteAsync(": keepalive\n\n", context.RequestAborted);
@@ -149,6 +159,10 @@ app.MapGet(
             }
             catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
             {
+            }
+            finally
+            {
+                stream.Unsubscribe(viewer);
             }
         })
     .RequireAuthorization("Viewer");

@@ -3,7 +3,6 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using CaddyUi.Domain.Analytics;
 
 namespace CaddyUi.Application.Analytics;
@@ -43,7 +42,7 @@ public sealed class CaddyAccessLogParser
             var method = (ReadString(request, "method") ?? string.Empty).Trim().ToUpperInvariant();
             var host = NormalizeHost(ReadString(request, "host") ?? string.Empty);
             var rawUri = ReadString(request, "uri") ?? "/";
-            var (path, queryString) = SplitUri(rawUri);
+            var path = ReadPath(rawUri);
             var headers = request.TryGetProperty("headers", out var requestHeaders)
                 ? requestHeaders
                 : default;
@@ -58,14 +57,11 @@ public sealed class CaddyAccessLogParser
             var durationMilliseconds = Math.Max(0, ReadDouble(root, "duration") * 1000);
             var bytesSent = Math.Max(0, ReadInt64(root, "size"));
             var userAgent = ReadHeader(headers, "User-Agent");
-            var referer = ReadHeader(headers, "Referer");
             var accept = ReadHeader(headers, "Accept");
             var secFetchDest = ReadHeader(headers, "Sec-Fetch-Dest");
             var upgrade = ReadHeader(headers, "Upgrade");
             var firstPartyClientIdentifier = ReadHeader(headers, "X-Caddy-Ui-Client");
             var contentType = ReadHeader(responseHeaders, "Content-Type");
-            var sanitizedQuery = RedactQueryString(queryString);
-            var sanitizedJson = RedactRawJson(line);
 
             if (occurredAt is null)
             {
@@ -80,28 +76,24 @@ public sealed class CaddyAccessLogParser
             }
 
             requestEvent = new NormalizedRequestEvent(
-                Guid.NewGuid(),
                 occurredAt.Value.ToUniversalTime(),
                 sourceFile,
                 sourceOffset,
-                host,
-                method,
-                path,
-                sanitizedQuery,
+                host[..Math.Min(host.Length, 253)],
+                method[..Math.Min(method.Length, 32)],
+                path[..Math.Min(path.Length, 2048)],
                 status,
                 durationMilliseconds,
                 bytesSent,
                 remoteAddress,
-                userAgent,
-                referer,
-                accept,
-                contentType,
-                secFetchDest,
-                upgrade,
+                userAgent[..Math.Min(userAgent.Length, 512)],
+                accept[..Math.Min(accept.Length, 512)],
+                contentType[..Math.Min(contentType.Length, 256)],
+                secFetchDest[..Math.Min(secFetchDest.Length, 64)],
+                upgrade[..Math.Min(upgrade.Length, 64)],
                 string.IsNullOrWhiteSpace(firstPartyClientIdentifier)
                     ? null
-                    : firstPartyClientIdentifier.Trim(),
-                sanitizedJson);
+                    : firstPartyClientIdentifier.Trim()[..Math.Min(firstPartyClientIdentifier.Trim().Length, 512)]);
             return true;
         }
         catch (JsonException exception)
@@ -278,7 +270,7 @@ public sealed class CaddyAccessLogParser
         return null;
     }
 
-    private static (string Path, string QueryString) SplitUri(string value)
+    private static string ReadPath(string value)
     {
         var candidate = value.Trim();
         if (candidate.Contains("://", StringComparison.Ordinal) &&
@@ -289,99 +281,18 @@ public sealed class CaddyAccessLogParser
 
         if (candidate.Length == 0)
         {
-            return ("/", string.Empty);
+            return "/";
         }
 
         var separator = candidate.IndexOf('?');
         var path = separator < 0 ? candidate : candidate[..separator];
-        var query = separator < 0 ? string.Empty : candidate[(separator + 1)..];
 
         if (!path.StartsWith("/", StringComparison.Ordinal))
         {
             path = $"/{path}";
         }
 
-        return (path, query);
+        return path;
     }
 
-    private static string RedactRawJson(string line)
-    {
-        var node = JsonNode.Parse(line);
-        if (node is not JsonObject root)
-        {
-            return "{}";
-        }
-
-        RedactHeaders(root["request"]?["headers"] as JsonObject);
-        RedactHeaders(root["resp_headers"] as JsonObject);
-
-        if (root["request"] is JsonObject request &&
-            request["uri"] is JsonValue uriValue &&
-            uriValue.TryGetValue<string>(out var uri))
-        {
-            var (path, query) = SplitUri(uri);
-            request["uri"] = string.IsNullOrEmpty(query)
-                ? path
-                : $"{path}?{RedactQueryString(query)}";
-        }
-
-        return root.ToJsonString();
-    }
-
-    private static void RedactHeaders(JsonObject? headers)
-    {
-        if (headers is null)
-        {
-            return;
-        }
-
-        foreach (var key in headers.Select(item => item.Key).ToArray())
-        {
-            if (IsSensitiveName(key))
-            {
-                headers[key] = JsonValue.Create("[redacted]");
-            }
-        }
-    }
-
-    private static string RedactQueryString(string queryString)
-    {
-        if (string.IsNullOrWhiteSpace(queryString))
-        {
-            return string.Empty;
-        }
-
-        return string.Join(
-            "&",
-            queryString
-                .Split('&', StringSplitOptions.RemoveEmptyEntries)
-                .Select(part =>
-                {
-                    var separator = part.IndexOf('=');
-                    var key = separator < 0 ? part : part[..separator];
-                    if (!IsSensitiveName(Uri.UnescapeDataString(key.Replace('+', ' '))))
-                    {
-                        return part;
-                    }
-
-                    return $"{key}=[redacted]";
-                }));
-    }
-
-    private static bool IsSensitiveName(string name)
-    {
-        var normalized = name
-            .Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace("_", string.Empty, StringComparison.Ordinal)
-            .Trim();
-
-        return normalized.Contains("authorization", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("cookie", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("password", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("secret", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("token", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("apikey", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("signature", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "code", StringComparison.OrdinalIgnoreCase);
-    }
 }
